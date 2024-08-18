@@ -6,8 +6,9 @@ $accordion-button-color: var(--#{$prefix}body-color);
 $accordion-button-bg: var(--#{$prefix}accordion-bg);
 $accordion-button-active-bg: var(--#{$prefix}bg-success);
 $accordion-button-active-color: var(--#{$prefix}success-text-emphasis);
-@import "bootstrap/scss/bootstrap";
 $bootstrap-icons-font-dir: "../../../node_modules/bootstrap-icons/font/fonts";
+
+@import "bootstrap/scss/bootstrap";
 @import "bootstrap-icons/font/bootstrap-icons";
 
 @font-face {

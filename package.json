@@ -1,12 +1,17 @@
 {
     "targets": {
         "default": {
-            "distDir": "src/vtesrulings/static/dist/"
+            "distDir": "src/vtesrulings/static/dist/",
+            "source": [
+                "src/front/js/index.ts",
+                "src/front/js/groups.ts",
+                "src/front/css/layout.scss"
+            ]
         }
     },
     "scripts": {
-        "watch": "parcel watch src/front/js/*.ts src/front/css/*.scss --dist-dir src/vtesrulings/static/dist/ -p 1234",
-        "build": "parcel build src/front/js/*.ts src/front/css/*.scss --dist-dir src/vtesrulings/static/dist/"
+        "watch": "parcel watch -p 1234",
+        "build": "parcel build"
     },
     "dependencies": {
         "@popperjs/core": "^2.11",
