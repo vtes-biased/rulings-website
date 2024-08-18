@@ -1,0 +1,14 @@
+{
+    "compilerOptions": {
+        "module": "NodeNext",
+        "target": "ES2023",
+        "lib": [
+            "es2023",
+            "dom",
+            "dom.iterable"
+        ],
+        "moduleResolution": "nodenext",
+        "outDir": "src/vtesrulings/static/dist",
+        "rootDir": "src/front/js",
+    }
+}

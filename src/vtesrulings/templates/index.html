@@ -1,0 +1,71 @@
+{% extends "layout.html" %}
+
+{% block scripts %}
+<script async src="{{ url_for('static', filename='dist/js/index.js') }}" type="module"></script>
+{% endblock%}
+
+{% block content %}
+<div id="SearchByCard" class="row my-3">
+    <search>
+        <form id="cardSearchForm" class="col-md-4">
+            <input type="search" id="cardSearchInput" list="cardOptions" placeholder="Card name"
+                class="form-control autocomplete" data-server="http://127.0.0.1:5000/api/complete/"
+                data-live-server="true" data-suggestions-threshold="3" autocomplete="off" autocapitalize="off"
+                spellcheck=false>
+        </form>
+    </search>
+</div>
+{% if current %}
+<div id="cardDisplay" class="row my-3" data-data='{{ current | tojson }}'>
+    <div class="col-md-auto" id="column">
+        <img src="{{ current.img }}" alt="{{ current.printed_name }} card image" class="h-90">
+    </div>
+    <div class="col-md">
+        <div class="d-flex align-items-center">
+            <div class="badge bg-info-subtle text-info-emphasis">{{current.uid}}</div>
+            <h2 class="px-3">{{current.printed_name}}</h2>
+            {% if current.group %}
+            {% if current.group == "ANY "%}
+            <div class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis">ANY</div>
+            {% else %}
+            <div class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis">G{{current.group}}</div>
+            {% endif %}
+            {% endif %}
+            {% if current.advanced %}
+            <div class="krcg-icon">|</div>
+            {% endif %}
+        </div>
+        <div class="row justify-content-start">
+            <p class="col-8" id="cardText">{{current.text | symbolreplace(current.text_symbols) }}</p>
+        </div>
+    </div>
+</div>
+<div class="container-fluid my-3" id="rulingsDiv">
+    <h4>Rulings</h4>
+    {% if current.rulings %}
+    <div id="rulingsList">
+        {% for ruling in current.rulings %}
+        <div class="card my-1 krcg-ruling" data-source="{{current.uid}}" data-ruling='{{ruling | tojson}}'>
+            <!-- Content added by JS -->
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div id="rulingsList">No Ruling.</div>
+    {% endif %}
+</div>
+{% if current.backrefs %}
+<div class="container-fluid my-3" id="backrefTitle">
+    <h4>Referenced by</h4>
+</div>
+{% endif %}
+<div class="row my-3 gx-0" id="backrefList">
+    {% for backref in current.backrefs %}
+    <a class="card m-1 bg-primary-subtle link-underline link-underline-opacity-0 backref" href="?uid={{ current.uid }}">
+        <img class="card-img-top backref-img" src="{{ current.img }}" alt="{{ current.name }}">
+        <p>{{ current.name }}</p>
+    </a>
+    {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

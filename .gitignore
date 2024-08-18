@@ -1,0 +1,10 @@
+__pycache__/
+node_modules/
+.env
+.vscode/
+*.DS_Store
+*.egg-info/
+.*cache/
+src/vtesrulings/static/dist/
+.venv/
+package-lock.json

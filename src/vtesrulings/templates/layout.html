@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en-US">
+
+<head>
+    {% block head %}
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Vampire: the Eternal Struggle (VTES) rulings database">
+    <meta name="keywords" content="Vampire, the Eternal Struggle, VtES, CCG">
+    {% block meta %}{% endblock %}
+    <link rel="shortcut icon" href="{{ url_for('static', filename='img/favicon.ico') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='dist/css/layout.css', v=version) }}">
+    <script async src="https://static.krcg.org/web/krcg.js"></script>
+    {#
+    <script async src="{{ url_for('static', filename='dist/js/layout.js') }}" type="module"></script> #}
+    {% block scripts %}{% endblock %}
+    <title>V:TES Rulings Database</title>
+    {% endblock %}
+</head>
+
+<body>
+    <header role="banner">
+        <nav id="navigation" class="navbar bg-dark navbar-expand-sm" data-bs-theme="dark">
+            <div class="container-fluid">
+                <a class="navbar-brand" href="#">
+                    <img src="{{ url_for('static', filename='img/black-chantry-icon.webp') }}" alt="BCP logo"
+                        width="48px">
+                </a>
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="index.html">Card</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="groups.html">Group</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link disabled" aria-disabled="true">Login</a>
+                    </li>
+                </ul>
+                <button type="button" class="btn btn-primary" id="proposalButton">
+                    {% if proposal %}
+                    {% if proposal.channel_id %}
+                    Approve proposal
+                    {% else %}
+                    Submit proposal
+                    {% endif %}
+                    {% else %}
+                    Start proposal
+                    {% endif %}
+                </button>
+            </div>
+        </nav>
+    </header>
+    <div class="modal fade" id="proposalModal" tabindex="-1" aria-hidden="true" aria-labelledby="proposalModalLabel">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h1 class="modal-title fs-5" id="proposalModalLabel">
+                        {% if proposal %}
+                        {% if proposal.channel_id %}
+                        Approve proposal
+                        {% else %}
+                        Submit proposal
+                        {% endif %}
+                        {% else %}
+                        Start proposal
+                        {% endif %}
+                    </h1>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form class="modal-body" id="proposalForm" method="post" action="http://127.0.0.1:5000/proposal">
+                    <input type="text" class="form-control my-2" placeholder="Name" id="proposalName" name="name"
+                        value="{{ proposal.name if proposal else ''}}">
+                    {% if proposal %}
+                    <textarea class="form-control my-2" id="proposalDescription"
+                        name="description">{{ proposal.description }}</textarea>
+                    {% else %}
+                    <textarea class="form-control" id="proposalDescription" placeholder="Description"
+                        name="description"></textarea>
+                    {% endif %}
+                </form>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    {% if proposal %}
+                    {% if proposal.channel_id %}
+                    <button type="button" class="btn btn-success" id="proposalApprove" form="proposalForm">
+                        Approve
+                    </button>
+                    {% else %}
+                    <button type="button" class="btn btn-primary" id="proposalSubmit" form="proposalForm">
+                        Submit
+                    </button>
+                    {% endif %}
+                    {% else %}
+                    <button type="button" class="btn btn-primary" id="proposalStart" form="proposalForm">
+                        Start
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal fade" id="referenceModal" tabindex="-1" aria-hidden="true" aria-labelledby="referenceModalLabel">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h1 class="modal-title fs-5" id="referenceModalLabel">
+                        New reference
+                    </h1>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form class="modal-body" id="referenceForm">
+                    <input type="text" class="form-control my-2" placeholder="Name" id="referenceName" name="uid">
+                    <input type="text" class="form-control my-2" placeholder="URL" id="referenceURL" name="url">
+                </form>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="referenceNewButton" form="referenceForm">
+                        Add
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="container" id="contentContainer">
+        {% if proposal %}
+        <div class="accordion" id="proposalAcc" data-data='{{ proposal | tojson }}'>
+            <div class="accordion-item">
+                <h2 class="accordion-header">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                        data-bs-target="#collapseOne" aria-expanded="true" aria-controls="collapseOne">
+                        <h4>Proposal: {{ proposal.name }}</h4>
+                    </button>
+                </h2>
+                <div id="collapseOne" class="accordion-collapse collapse" data-bs-parent="#proposalAcc">
+                    <div id="proposalAccBody" class="accordion-body">
+                        <div id="proposalDescription">{{ proposal.description }}</div>
+                        <div id="proposalGroups" class="invisible"><!-- Content managed by JS --></div>
+                        <div id="proposalCards" class="invisible"><!-- Content managed by JS --></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        {% block content %}{% endblock %}
+        <div id="editControls" class="container d-flex flex-row invisible">
+            <div class="btn-group">
+                <button type="button" data-bs-toggle="dropdown" aria-expanded="false"
+                    class="btn btn-secondary btn-sm dropdown-toggle">Icon</button>
+                <ul class="dropdown-menu"><!-- Icons added by JS --></ul>
+            </div>
+            <form>
+                <input class="form-control autocomplete mx-2" type="search" placeholder="Card name"
+                    data-server="http://127.0.0.1:5000/api/complete/" data-live-server="true"
+                    data-suggestions-threshold="3" autocomplete="off" autocapitalize="off" spellcheck=false>
+            </form>
+        </div>
+    </div>
+    <div aria-live="polite" aria-atomic="true" class="position-static">
+        <div class="toast-container bottom-0 end-0 p-3">
+            <div id="errorToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+                <div class="toast-header">
+                    <i class="bi-exclamation-circle-fill text-danger"></i>
+                    <strong class="me-auto">Error</strong>
+                    <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+                <div class="toast-body">
+                    Error
+                </div>
+            </div>
+        </div>
+    </div>
+    <footer class="container-fluid">
+        {% block footer %}{% endblock %}
+    </footer>
+</body>
+
+</html>
