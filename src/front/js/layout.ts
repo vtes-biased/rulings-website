@@ -360,7 +360,7 @@ function mapProposalModal() {
 }
 
 
-export async function common_load() {
+export async function load() {
     Autocomplete.init()
     navActivateCurrent()
     mapProposalModal()

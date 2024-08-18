@@ -55,5 +55,5 @@ async function load() {
     }
 }
 
-window.addEventListener("load", base.common_load)
+window.addEventListener("load", base.load)
 window.addEventListener("load", load)

@@ -59,14 +59,20 @@ def symbol_replace(s: str, d: list):
         s = s.replace(
             symbol["text"], f'<span class="krcg-icon">{symbol["symbol"]}</span>'
         )
-    return markupsafe.Markup(s)
+    return s
 
 
 @app.template_filter("cardreplace")
 def card_replace(s: str, d: list):
     for card in d:
         s = s.replace(card["text"], f'<span class="krcg-card">{card["name"]}</span>')
-    return markupsafe.Markup(s)
+    return s
+
+
+@app.template_filter("newlines")
+def newlines(s: str):
+    s = s.replace("\n", "<br>")
+    return s
 
 
 # Default route
