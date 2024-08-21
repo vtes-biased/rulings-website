@@ -1,11 +1,9 @@
-import aiohttp
 import base64
 import collections
 import dataclasses
 import datetime
 import enum
 import functools
-import git
 import hashlib
 import itertools
 import logging
@@ -15,13 +13,15 @@ import re
 import tempfile
 import typing
 import urllib.parse
+
+import aiohttp
+import git
+import krcg.cards
+import krcg.utils
 import yaml
 import yamlfix
 import yamlfix.config
 import yamlfix.model
-
-import krcg.cards
-import krcg.utils
 
 logger = logging.getLogger()
 RULINGS_GIT = "git@github.com:vtes-biased/vtes-rulings.git"
@@ -45,6 +45,7 @@ ANKHA_SYMBOLS = {
     "nec": "n",
     "obe": "b",
     "obf": "o",
+    "obl": "ø",
     "obt": "$",
     "pot": "p",
     "pre": "r",
@@ -75,6 +76,7 @@ ANKHA_SYMBOLS = {
     "NEC": "N",
     "OBE": "B",
     "OBF": "O",
+    "OBL": "Ø",
     "OBT": "£",
     "POT": "P",
     "PRE": "R",
@@ -159,10 +161,10 @@ RULINGS_COMMENT = """# ## Design notes
 #
 # #### List of symbols
 #
-# - Inferior disciplines: abo, ani, aus, cel, chi, dai, dem, dom, for, mal, mel, myt, nec, obe, obf, obt, pot, pre, pro,
-#   qui, san, ser, spi, str, tem, thn, tha, val, vic, vis
-# - Superior disciplines: ABO, ANI, AUS, CEL, CHI, DAI, DEM, DOM, FOR, MAL, MEL, MYT, NEC, OBE, OBF, OBT, POT, PRE, PRO,
-#   QUI, SAN, SER, SPI, STR, TEM, THN, THA, VAL, VIC, VIS
+# - Inferior disciplines: abo, ani, aus, cel, chi, dai, dem, dom, for, mal, mel, myt, nec, obe, obf, obl, obt, pot, pre,
+#   pro, qui, san, ser, spi, str, tem, thn, tha, val, vic, vis
+# - Superior disciplines: ABO, ANI, AUS, CEL, CHI, DAI, DEM, DOM, FOR, MAL, MEL, MYT, NEC, OBE, OBF, OBL, OBT, POT, PRE,
+#   PRO, QUI, SAN, SER, SPI, STR, TEM, THN, THA, VAL, VIC, VIS
 # - Virtues: vin, def, jus, inn, mar, ven, red
 # - Card types: ACTION, POLITICAL, ALLY, RETAINER, EQUIPMENT, MODIFIER, REACTION, COMBAT, REFLEX, POWER
 # - Other: FLIGHT, MERGED, CONVICTION
