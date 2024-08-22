@@ -25,7 +25,7 @@ import yamlfix.model
 
 logger = logging.getLogger()
 RULINGS_GIT = "git@github.com:vtes-biased/vtes-rulings.git"
-RULINGS_FILES_PATH = "src/vtesrulings/data/"
+RULINGS_FILES_PATH = "rulings/"
 DISCORD_WEBHOOK = os.getenv("DISCORD_WEBHOOK")
 GUILD_ID = os.getenv("GUILD_ID")
 GIT_SSH_COMMAND = os.getenv("GIT_SSH_COMMAND", "ssh -i ~/.ssh/id_rsa")
@@ -121,8 +121,9 @@ REFERENCES_COMMENT = """# Rulings always have a reference, they come from somewh
 # Each reference should be a valid URL, with a key indicating the source and date.
 # The only valid sources are the successive Rules Director, the Ruling Team and the rulebook:
 #
-# - TOM: Thomas R Wylie, from 1994
-# - SFC: Shawn F. Carnes, occasionnaly before 1998
+# - TOM: Thomas R Wylie, from 1994-12-15 onward
+# - SFC: Shawn F. Carnes, from 1996-07-29 onward
+# - JON: Jon Wilkie, from 1996-10-18 onward
 # - LSJ: L. Scott Johnson, from 1998-06-22 onward
 # - PIB: Pascal Bertrand, from 2011-07-06 onward
 # - ANK: Vincent Ripoll aka. "Ankha", from 2016-12-04 onward
@@ -193,11 +194,24 @@ RULINGS_COMMENT = """# ## Design notes
 YAML_PARAMS = {"width": 120, "allow_unicode": True, "indent": 2}
 
 RULING_SOURCES = {
-    "TOM": ("Thomas R Wylie", None, datetime.date.fromisoformat("1998-06-22")),
-    "SFC": ("Shawn F. Carnes", None, datetime.date.fromisoformat("1998-06-22")),
+    "TOM": (
+        "Thomas R Wylie",
+        datetime.date.fromisoformat("1994-12-15"),
+        datetime.date.fromisoformat("1996-07-29"),
+    ),
+    "SFC": (
+        "Shawn F. Carnes",
+        datetime.date.fromisoformat("1996-07-29"),
+        datetime.date.fromisoformat("1996-10-18"),
+    ),
+    "JON": (
+        "Jon Wilkie",
+        datetime.date.fromisoformat("1996-10-18"),
+        datetime.date.fromisoformat("1997-02-24"),
+    ),
     "LSJ": (
         "L. Scott Johnson",
-        datetime.date.fromisoformat("1998-06-22"),
+        datetime.date.fromisoformat("1997-02-24"),
         datetime.date.fromisoformat("2011-07-06"),
     ),
     "PIB": (
@@ -210,7 +224,9 @@ RULING_SOURCES = {
     "RBK": ("Rulebook", None, None),
 }
 
-RE_RULING_REFERENCE = re.compile(r"\[(?:" + r"|".join(RULING_SOURCES) + r")\s[0-9-]+\]")
+RE_RULING_REFERENCE = re.compile(
+    r"\[(?:" + r"|".join(RULING_SOURCES) + r")\s[\w0-9-]+\]"
+)
 RE_SYMBOL = re.compile(r"\[(?:" + r"|".join(ANKHA_SYMBOLS) + r")\]")
 RE_CARD = re.compile(r"{[^}]+}")
 
@@ -285,7 +301,12 @@ class Reference(UID):
     def from_uid(cls, **kwargs):
         uid = kwargs["uid"]
         kwargs.setdefault("source", uid[:3])
-        kwargs.setdefault("date", datetime.date.fromisoformat(uid[4:12]).isoformat())
+        if uid[:3] == "RBK":
+            kwargs.setdefault("date", None)
+        else:
+            kwargs.setdefault(
+                "date", datetime.date.fromisoformat(uid[4:12]).isoformat()
+            )
         return cls(**kwargs)
 
     def check_url(self) -> None:

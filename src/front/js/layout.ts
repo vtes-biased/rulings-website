@@ -359,10 +359,30 @@ function mapProposalModal() {
     }
 }
 
+function loginManagement() {
+    const loginModal = new bootstrap.Modal("#loginModal")
+    const loginButton = document.getElementById('loginButton') as HTMLButtonElement
+    const logoutButton = document.getElementById('logoutButton') as HTMLButtonElement
+    const loginForm = document.getElementById('loginForm') as HTMLFormElement
+    const next = encodeURIComponent(window.location.pathname + window.location.search)
+    console.log(loginButton)
+    console.log(logoutButton)
+    if (loginButton) {
+        const loginSubmit = document.getElementById('loginSubmit') as HTMLFormElement
+        loginButton.addEventListener("click", () => loginModal.show())
+        loginForm.action = `/api/login?next=${next}`
+        loginSubmit.addEventListener("click", () => loginForm.submit())
+    }
+    if (logoutButton) {
+        loginForm.action = `/api/logout?next=${next}`
+        logoutButton.addEventListener("click", () => loginForm.submit())
+    }
+}
 
 export async function load() {
     Autocomplete.init()
     navActivateCurrent()
+    loginManagement()
     mapProposalModal()
     const proposalAcc = document.getElementById('proposalAcc') as HTMLDivElement
     if (proposalAcc) {

@@ -83,6 +83,8 @@ async def index(page=None):
     if not page:
         return flask.redirect("index.html", 301)
     context = {}
+    if "user" in flask.session:
+        context["user"] = flask.session["user"]
     if "proposal" in flask.session:
         proposal = INDEX.proposals.get(flask.session["proposal"], None)
         proposal_dict = {

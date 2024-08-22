@@ -1,3 +1,4 @@
+import aiohttp
 import flask
 import functools
 import urllib
@@ -49,6 +50,33 @@ async def complete_card():
         for card, _ in sorted(ret.items(), key=lambda x: (-x[1], x[0]))
     ]
     return ret
+
+
+@api.route("/login/", methods=["POST"])
+async def login():
+    next = flask.request.args.get("next", "index.html")
+    data = flask.request.form or flask.request.get_json(force=True, silent=True) or {}
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            "https://www.vekn.net/api/vekn/login",
+            data=data,
+        ) as response:
+            result = await response.json()
+            try:
+                token = result["data"]["auth"]
+            except:  # noqa: E722
+                token = None
+        if not token:
+            flask.abort(401)
+    flask.session["user"] = data["username"]
+    return flask.redirect(next, 302)
+
+
+@api.route("/logout/", methods=["POST"])
+async def logout():
+    next = flask.request.args.get("next", "index.html")
+    flask.session.pop("user", None)
+    return flask.redirect(next, 302)
 
 
 @api.route("/card/<int:card_id>")
