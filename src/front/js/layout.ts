@@ -206,6 +206,7 @@ export function displayRulingCard(elem: HTMLDivElement, edit_mode: boolean, posi
     let card_text = document.createElement("p")
     card_text.classList.add("card-text", "my-2")
     if (edit_mode) {
+        card_text.classList.add("p-2", "bg-primary", "bg-opacity-10")
         card_text.contentEditable = "true"
         card_text.addEventListener("focusin", (ev) => displayEditTools(ev, position))
         card_text.addEventListener("input", debounce(async () => { await rulingSave(elem) }))
@@ -386,6 +387,7 @@ function mapProposalModal() {
     const proposalApprove = document.getElementById('proposalApprove') as HTMLButtonElement
     const proposalModal = new bootstrap.Modal('#proposalModal')
     const proposalButton = document.getElementById('proposalButton') as HTMLButtonElement
+    if (!proposalButton) { return }
     const proposalForm = document.getElementById('proposalForm') as HTMLFormElement
     proposalButton.addEventListener("click", () => proposalModal.show())
     const next = encodeURIComponent(window.location.pathname + window.location.search)
@@ -478,7 +480,7 @@ export async function load() {
     }
     if (edit_mode) {
         const addRulingButton = document.createElement("button")
-        addRulingButton.classList.add("btn", "mx-2", "text-bg-primary")
+        addRulingButton.classList.add("btn", "text-bg-primary")
         addRulingButton.type = "button"
         addRulingButton.innerHTML = '<i class="bi-plus-lg"></i>'
         addRulingButton.addEventListener("click", (ev) => addRulingCard(ev, position))

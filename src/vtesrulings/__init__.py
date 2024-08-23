@@ -57,7 +57,9 @@ def linker():
 def symbol_replace(s: str, d: list):
     for symbol in d:
         s = s.replace(
-            symbol["text"], f'<span class="krcg-icon">{symbol["symbol"]}</span>'
+            symbol["text"],
+            '<span class="krcg-icon" contenteditable="false">'
+            f'{symbol["symbol"]}</span>',
         )
     return s
 

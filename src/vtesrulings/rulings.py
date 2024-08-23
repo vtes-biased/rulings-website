@@ -973,16 +973,16 @@ class Index:
         the group will get a stable text UID starting with "P"
         """
         cards = cards or {}
-        if name and name in itertools.chain(
-            [g.name for g in self.base_groups.values()],
-            [g.name for g in self.proposal.groups.values()],
-        ):
-            raise FormatError("Group name already taken")
         if uid:
             group = self.get_group(uid)
             if name:
                 group.name = name
         else:
+            if name and name in itertools.chain(
+                [g.name for g in self.base_groups.values()],
+                [g.name for g in self.proposal.groups.values()],
+            ):
+                raise FormatError("Group name already taken")
             if not name:
                 raise FormatError("New group must be given a name")
             group = Group(
