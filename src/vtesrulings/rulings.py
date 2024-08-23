@@ -23,6 +23,7 @@ import yamlfix
 import yamlfix.config
 import yamlfix.model
 
+random.seed()
 logger = logging.getLogger()
 RULINGS_GIT = "git@github.com:vtes-biased/vtes-rulings.git"
 RULINGS_FILES_PATH = "rulings/"
@@ -255,6 +256,10 @@ def stable_hash(s: str) -> str:
     """
     h = hashlib.shake_128(s.encode("utf-8")).digest(5)
     return base64.b32encode(h).decode("utf-8")
+
+
+def random_uid8() -> str:
+    return base64.b32encode(random.randbytes(5)).decode("utf-8")
 
 
 @dataclasses.dataclass
@@ -526,14 +531,13 @@ class Index:
     def build_ruling(self, text: str, target: NID, uid: str = "") -> Ruling:
         """Build a Ruling object from text.
         If uid is not provided, it's computed from the text using stable_hash()
+        If text is empty, a random 8-char uid is provided
         """
-        uid = uid or stable_hash(text)
+        uid = uid or (stable_hash(text) if text else random_uid8())
         ruling = Ruling(target=target, uid=uid, text=text)
         ruling.symbols.extend(parse_symbols(text))
         ruling.cards.extend(parse_cards(text))
         ruling.references.extend(self.parse_references(text))
-        if not ruling.references:
-            raise FormatError(f'No reference found in <{target}> ruling: "{text}"')
         return ruling
 
     def start_proposal(self, name: str = "", description: str = "") -> str:
@@ -939,10 +943,8 @@ class Index:
         return ruling
 
     def insert_ruling(self, target_uid: str, text: str) -> Ruling:
-        """Any new reference must be inserted first with insert_reference()."""
+        """Can be empty."""
         target = self.get_nid(target_uid)
-        if not text:
-            raise FormatError("Cannot insert an empty ruling")
         ruling = self.build_ruling(text, target=target)
         self.proposal.rulings[target_uid][ruling.uid] = ruling
         return ruling

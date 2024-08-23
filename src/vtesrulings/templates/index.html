@@ -43,7 +43,7 @@
 <div class="container-fluid my-3" id="rulingsDiv">
     <h4>Rulings</h4>
     {% if current.rulings %}
-    <div id="rulingsList">
+    <div id="rulingsList" data-source="{{current.uid}}">
         {% for ruling in current.rulings %}
         <div class="card my-1 krcg-ruling" data-source="{{current.uid}}" data-ruling='{{ruling | tojson}}'>
             <!-- Content added by JS -->

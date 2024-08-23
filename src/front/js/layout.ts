@@ -155,10 +155,32 @@ export function displayRulingCard(elem: HTMLDivElement, edit_mode: boolean, posi
     console.log(elem)
     const ruling = JSON.parse(elem.dataset.ruling)
     const source = elem.dataset.source
-
+    edit_mode = edit_mode && ruling.target.uid === source
+    let root = undefined
+    if (edit_mode) {
+        const card_row = document.createElement("div")
+        card_row.classList.add("row", "g-0")
+        elem.append(card_row)
+        const row_1 = document.createElement("div")
+        row_1.classList.add("col-sm-1", "d-flex", "align-items-center", "justify-content-center", "bg-light", "border-end")
+        card_row.append(row_1)
+        const remove_button = document.createElement("button")
+        remove_button.classList.add("btn", "text-bg-danger")
+        remove_button.type = "button"
+        remove_button.innerHTML = '<i class="bi-trash3"></i>'
+        remove_button.addEventListener("click", async () => { await rulingDelete(elem) })
+        row_1.append(remove_button)
+        const row_11 = document.createElement("div")
+        row_11.classList.add("col-sm-11")
+        card_row.append(row_11)
+        root = row_11
+    }
+    else {
+        root = elem
+    }
     const body = document.createElement("div")
     body.classList.add("card-body", "d-flex", "flex-column", "align-items-start")
-    elem.append(body)
+    root.append(body)
     if (ruling.target.uid != source) {
         let group = document.createElement("a")
         group.classList.add("badge", "rounded-pill", "bg-primary-subtle", "text-primary-emphasis", "text-decoration-none")
@@ -166,7 +188,6 @@ export function displayRulingCard(elem: HTMLDivElement, edit_mode: boolean, posi
         group.innerText = ruling.target.name
         body.append(group)
     }
-    edit_mode = edit_mode && ruling.target.uid === source
     // rework ruling text
     let text = ruling.text
     for (const symbol of ruling.symbols) {
@@ -192,7 +213,7 @@ export function displayRulingCard(elem: HTMLDivElement, edit_mode: boolean, posi
     body.append(card_text)
     let footer = document.createElement("div")
     footer.classList.add("card-footer", "text-body-secondary")
-    elem.append(footer)
+    root.append(footer)
     for (const reference of ruling.references) {
         text = text.replace(reference.text, "")
         addRulingReference(elem, footer, reference, edit_mode, false)
@@ -202,8 +223,8 @@ export function displayRulingCard(elem: HTMLDivElement, edit_mode: boolean, posi
         plus_button.classList.add("badge", "btn", "mx-2", "text-bg-primary")
         plus_button.type = "button"
         plus_button.innerHTML = '<i class="bi-plus-lg"></i>'
-        footer.append(plus_button)
         plus_button.addEventListener("click", (ev) => clickAddLink(ev, position))
+        footer.append(plus_button)
     }
     card_text.innerHTML = text
     for (const elem of card_text.querySelectorAll("span.krcg-card") as NodeListOf<HTMLSpanElement>) {
@@ -268,6 +289,29 @@ async function rulingSave(elem: HTMLDivElement) {
     }
     else {
         console.log("Ruling unchanged", ruling.uid)
+    }
+}
+
+async function rulingDelete(elem: HTMLDivElement) {
+    console.log("in rulingDelete", elem)
+    if (!elem.classList.contains("krcg-ruling")) {
+        console.log("Div is not a krcg-ruling", elem)
+        return
+    }
+    const ruling = JSON.parse(elem.dataset.ruling) as Ruling
+    try {
+        const response = await fetch(
+            `http://127.0.0.1:5000/api/ruling/${elem.dataset.source}/${ruling.uid}`,
+            { method: "delete" }
+        )
+        if (!response.ok) {
+            throw new Error((await response.json())[0])
+        }
+        elem.remove()
+    }
+    catch (error) {
+        console.log("Error updating ruling", error.message)
+        displayError(error.message)
     }
 }
 
@@ -379,6 +423,33 @@ function loginManagement() {
     }
 }
 
+async function addRulingCard(ev: MouseEvent, position: Position) {
+    const button = ev.currentTarget as HTMLButtonElement
+    console.log(button, button.parentElement)
+    const source = button.parentElement.dataset.source
+    const card = document.createElement("div")
+    card.classList.add("card", "my-1", "krcg-ruling")
+    card.dataset.source = button.parentElement.dataset.source
+    console.log("Creating ruling", source)
+    try {
+        const response = await fetch(
+            `http://127.0.0.1:5000/api/ruling/${source}`,
+            { method: "post", body: JSON.stringify({ text: "" }) }
+        )
+        if (!response.ok) {
+            throw new Error((await response.json())[0])
+        }
+        const new_ruling = await response.json() as Ruling
+        card.dataset.ruling = JSON.stringify(new_ruling)
+        button.before(card)
+        displayRulingCard(card, true, position)
+    }
+    catch (error) {
+        console.log("Error updating ruling", error.message)
+        displayError(error.message)
+    }
+}
+
 export async function load() {
     Autocomplete.init()
     navActivateCurrent()
@@ -399,9 +470,19 @@ export async function load() {
     const new_ref_button = document.getElementById('referenceNewButton') as HTMLButtonElement
     new_ref_button.addEventListener("click", async (ev) => { await createAndAddLink(ev, position) })
     setupEditTools(position)
+    const rulingsList = document.getElementById("rulingsList") as HTMLDivElement
     const ruling_cards = document.querySelectorAll("div.krcg-ruling") as NodeListOf<HTMLDivElement>
+    const edit_mode = Boolean(proposalAcc)
     for (const ruling_card of ruling_cards) {
-        displayRulingCard(ruling_card, Boolean(proposalAcc), position)
+        displayRulingCard(ruling_card, edit_mode, position)
+    }
+    if (edit_mode) {
+        const addRulingButton = document.createElement("button")
+        addRulingButton.classList.add("btn", "mx-2", "text-bg-primary")
+        addRulingButton.type = "button"
+        addRulingButton.innerHTML = '<i class="bi-plus-lg"></i>'
+        addRulingButton.addEventListener("click", (ev) => addRulingCard(ev, position))
+        rulingsList.append(addRulingButton)
     }
     document.addEventListener("selectionchange", (ev) => memorizePosition(ev, position))
 }
