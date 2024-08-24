@@ -7,6 +7,11 @@
 {% block content %}
 <div class="row my-2 mx-0">
     {% if current %}
+    <div id="cardEditControls" class="btn-group" hidden="true">
+        <button type="button" data-bs-toggle="dropdown" aria-expanded="false"
+            class="btn badge btn-secondary btn-sm dropdown-toggle">Icon</button>
+        <ul class="dropdown-menu"><!-- Icons added by JS --></ul>
+    </div>
     <div class="col-md" id="groupDisplay" data-uid="{{ current.uid }}">
         <h2 id="groupName">{{ current.name }}</h2>
         <div class="list-group">
@@ -16,14 +21,7 @@
                     <a href="/index.html?uid={{ card.uid }}" class="krcg-card" data-noclick="true"
                         data-uid="{{ card.uid }}">{{ card.name }}</a>
                 </div>
-                <div class="invisible px-2">
-                    {% if loop.first %}
-                    <div id="cardEditControls" class="btn-group">
-                        <button type="button" data-bs-toggle="dropdown" aria-expanded="false"
-                            class="btn badge btn-secondary btn-sm dropdown-toggle">Icon</button>
-                        <ul class="dropdown-menu"><!-- Icons added by JS --></ul>
-                    </div>
-                    {% endif %}
+                <div class="px-2">
                 </div>
                 <div class="krcg-prefix w-25 px-2">
                     {{ card.prefix | symbolreplace(card.symbols) | safe }}
@@ -32,22 +30,24 @@
             {% endfor %}
         </div>
         <h3 class="my-2">Rulings</h3>
-        {% if current.rulings %}
-        <div id="rulingsList" data-source="{{current.uid}}">
+        <div id="rulingsList" data-source="{{ current.uid }}">
             {% for ruling in current.rulings %}
             <div class="card my-1 krcg-ruling" data-source="{{current.uid}}" data-ruling='{{ruling | tojson}}'>
                 <!-- Content added by JS -->
             </div>
             {% endfor %}
         </div>
-        {% else %}
-        <div id="rulingsList">No Ruling.</div>
-        {% endif %}
     </div>
     {% else %}
     <div class="col-md"></div>
     {% endif %}
     <div class="col-md list-group p-0" id="groupsList">
+        {% if proposal %}
+        <form action="/api/group" method="post">
+            <input type="text" name="name" hidden="true" value="<unnamed>">
+            <button class="btn text-bg-primary my-2" type="submit"><i class="bi bi-plus-lg"></i> Add group</button>
+        </form>
+        {% endif %}
         {% for group in groups %}
         {% if current and group.uid == current.uid %}
         <a href="?uid={{ group.uid }}"

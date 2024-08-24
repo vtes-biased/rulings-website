@@ -93,8 +93,8 @@
                     <input type="text" class="form-control my-2" placeholder="Name" id="proposalName" name="name"
                         value="{{ proposal.name if proposal else ''}}">
                     {% if proposal %}
-                    <textarea class="form-control my-2" id="proposalDescription"
-                        name="description">{{ proposal.description }}</textarea>
+                    <textarea class="form-control my-2" id="proposalDescription" name="description"
+                        placeholder="Description">{{ proposal.description }}</textarea>
                     {% else %}
                     <textarea class="form-control" id="proposalDescription" placeholder="Description"
                         name="description"></textarea>
@@ -121,28 +121,58 @@
             </div>
         </div>
     </div>
+    {% if proposal %}
     <div class="modal fade" id="referenceModal" tabindex="-1" aria-hidden="true" aria-labelledby="referenceModalLabel">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
                     <h1 class="modal-title fs-5" id="referenceModalLabel">
-                        New reference
+                        Add reference
                     </h1>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <form class="modal-body" id="referenceForm">
-                    <input type="text" class="form-control my-2" placeholder="Name" id="referenceName" name="uid">
-                    <input type="text" class="form-control my-2" placeholder="URL" id="referenceURL" name="url">
-                </form>
+                <div class="modal-body">
+                    <form id="referenceForm">
+                        <p class="mb-3">Provide URL or name to search for an existing reference</p>
+                        <div class="mb-3">
+                            <input type="text" class="form-control my-2" placeholder="URL" id="referenceURL" name="url"
+                                data-bs-toggle="tooltip" title="Direct link to a rules director meessage">
+                            <div id="referenceUrlError" class="form-text invisible text-danger"></div>
+                        </div>
+                        <div class="mb-3">
+                            <input type="text" class="form-control my-2" placeholder="Label" id="referenceName"
+                                name="uid" data-bs-toggle="tooltip" title="Author trigram followed by date (YYYYMMDD)">
+                            <div id="referenceNameHelp" class="form-text">
+                                Example: "ANK 20240224" (suffix, if any, will be computed)
+                            </div>
+                        </div>
+                    </form>
+                    <hr>
+                    <div>
+                        <select id="selectRulebookRef" class="form-select" aria-label="Select Rulebook reference">
+                            <option value="" selected>--Or choose a Rulebook reference--</option>
+                            {% for reference in rbk_references %}
+                            <option value="{{ reference.uid }}" data-reference='{{ reference | tojson }}'>{{
+                                reference.uid[4:]
+                                }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-primary" id="referenceNewButton" form="referenceForm">
-                        Add
+                    <button type="button" class="btn btn-primary" id="referenceAddNewButton" form="referenceForm">
+                        Add new reference
+                    </button>
+                    <button type="button" class="btn btn-success" id="referenceAddExistingButton" form="referenceForm"
+                        hidden="true">
+                        Add existing reference
                     </button>
                 </div>
             </div>
         </div>
     </div>
+    {% endif %}
     <div class="container" id="contentContainer">
         {% if proposal %}
         <div class="accordion" id="proposalAcc" data-data='{{ proposal | tojson }}'>

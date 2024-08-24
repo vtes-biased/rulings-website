@@ -81,10 +81,9 @@ function setupCardEditTools(groupDisplay: HTMLDivElement) {
 
 function displayCardEditTools(ev: FocusEvent) {
     const buttons = document.getElementById("cardEditControls") as HTMLDivElement
+    buttons.hidden = false
     const elem = ev.currentTarget as HTMLDivElement
-    buttons.parentElement.classList.add("invisible")
     elem.previousElementSibling.appendChild(buttons)
-    buttons.parentElement.classList.remove("invisible")
 }
 
 function hideCardEditTools(ev: FocusEvent) {
@@ -102,7 +101,7 @@ function hideCardEditTools(ev: FocusEvent) {
         }
     }
     const buttons = document.getElementById("cardEditControls") as HTMLDivElement
-    buttons.parentElement.classList.add("invisible")
+    buttons.hidden = true
 }
 
 function makePrefixEditable(prefix: HTMLDivElement, groupDisplay: HTMLDivElement) {
@@ -140,7 +139,7 @@ async function insertCardInGroup(groupDisplay: HTMLDivElement, item: base.Select
     cardName.addEventListener("mouseout", outCard)
     nameDiv.append(cardName)
     const editControlContainer = document.createElement("div")
-    editControlContainer.classList.add("invisible", "px-2")
+    editControlContainer.classList.add("px-2")
     listItem.append(editControlContainer)
     const prefix = document.createElement("div")
     prefix.classList.add("krcg-prefix", "w-25", "px-2")
@@ -196,6 +195,7 @@ async function load() {
     if (proposalAcc) {
         const groupName = document.getElementById("groupName")
         groupName.contentEditable = "true"
+        groupName.classList.add("bg-primary", "bg-opacity-10")
         groupName.addEventListener("input", base.debounce(async () => { await groupSave(groupDisplay) }))
         const cards = groupDisplay.querySelectorAll(".list-group-item") as NodeListOf<HTMLDivElement>
         for (const card of cards) {

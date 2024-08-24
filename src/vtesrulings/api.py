@@ -6,6 +6,7 @@ from dataclasses import asdict
 import jinja2
 
 from . import rulings
+from . import scraper
 
 api = flask.Blueprint("api", __name__, template_folder="templates")
 INDEX = rulings.INDEX
@@ -76,6 +77,7 @@ async def login():
 async def logout():
     next = flask.request.args.get("next", "index.html")
     flask.session.pop("user", None)
+    flask.session.pop("proposal", None)
     return flask.redirect(next, 302)
 
 
@@ -152,11 +154,37 @@ async def list_proposals():
     return flask.jsonify(ret)
 
 
+@api.route("/reference", methods=["GET"])
+@proposal_required
+async def get_reference():
+    ret = [asdict(ref) for ref in INDEX.all_references()]
+    return asdict(ret)
+
+
+@api.route("/reference/search", methods=["POST"])
+@proposal_facultative
+async def search_reference():
+    data = flask.request.form or flask.request.get_json(force=True)
+    try:
+        ret = {"reference": asdict(INDEX.get_reference(**data))}
+    except KeyError:
+        if data.get("url", "").startswith("https://www.vekn.net/forum/"):
+            try:
+                uid = await scraper.get_vekn_reference(data["url"])
+                return {"computed_uid": uid}
+            except Exception as e:
+                ret = flask.jsonify(e.args[:1])
+                ret.status_code = 400
+                return ret
+        flask.abort(404)
+    return ret
+
+
 @api.route("/reference", methods=["POST"])
 @proposal_required
 async def post_reference():
     data = flask.request.form or flask.request.get_json(force=True)
-    ret = INDEX.insert_reference(**data)
+    ret = await INDEX.insert_reference(**data)
     return asdict(ret)
 
 
@@ -210,7 +238,7 @@ async def delete_ruling(target_id: str, ruling_id: str):
 async def post_group():
     data = flask.request.form or flask.request.get_json(force=True)
     ret = INDEX.upsert_group(**data)
-    return asdict(ret)
+    return flask.redirect(f"/groups.html?uid={ret.uid}", 302)
 
 
 @api.route("/group/<group_id>", methods=["PUT"])

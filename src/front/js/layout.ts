@@ -87,8 +87,9 @@ function memorizePosition(ev: Event, position: Position) {
 
 function clickAddLink(ev: MouseEvent, position: Position) {
     const plus_button = ev.currentTarget as HTMLButtonElement
-    if (position.card != plus_button.parentElement.parentElement) {
-        position.card = plus_button.parentElement.parentElement as HTMLDivElement
+    const card = plus_button.closest(".krcg-ruling") as HTMLDivElement
+    if (position.card != card) {
+        position.card = card
         position.paragraph = undefined
         position.node = undefined
         position.offset = 0
@@ -130,10 +131,11 @@ function addRulingReference(
 }
 
 async function createAndAddLink(ev: MouseEvent, position: Position) {
+    const form = (ev.target as HTMLButtonElement).form
     try {
         const response = await fetch("http://127.0.0.1:5000/api/reference", {
             method: "post",
-            body: new FormData((ev.target as HTMLButtonElement).form)
+            body: new FormData(form)
         })
         if (!response.ok) {
             throw new Error((await response.json())[0])
@@ -144,6 +146,22 @@ async function createAndAddLink(ev: MouseEvent, position: Position) {
     }
     catch (error) {
         console.log("Error posting reference", error.message)
+        displayError(error.message)
+    }
+    finally {
+        position.modal.hide()
+    }
+}
+
+async function addExistingLink(ev: MouseEvent, position: Position) {
+    const form = (ev.target as HTMLButtonElement).form
+    const data = JSON.parse(form.dataset.existing)
+    addRulingReference(position.card, position.card.querySelector("div.card-footer"), data, true, true)
+    try {
+        await rulingSave(position.card)
+    }
+    catch (error) {
+        console.log("Error adding reference", error.message)
         displayError(error.message)
     }
     finally {
@@ -452,7 +470,213 @@ async function addRulingCard(ev: MouseEvent, position: Position) {
     }
 }
 
+async function changeReferenceName(ev: InputEvent) {
+    const referenceURL = document.getElementById("referenceURL") as HTMLInputElement
+    if (!referenceURL.disabled && referenceURL.value) { return }
+    const referenceName = document.getElementById("referenceName") as HTMLInputElement
+    const form = referenceName.form
+    const referenceAddNewButton = document.getElementById('referenceAddNewButton') as HTMLButtonElement
+    const referenceAddExistingButton = document.getElementById('referenceAddExistingButton') as HTMLButtonElement
+    const selectRulebookRef = document.getElementById('selectRulebookRef') as HTMLSelectElement
+    selectRulebookRef.selectedIndex = 0
+    const body = new FormData()
+    body.append("uid", referenceName.value)
+    try {
+        const response = await fetch("http://127.0.0.1:5000/api/reference/search", {
+            method: "post",
+            body: body
+        })
+        console.log("Search UID", response)
+        if (response.ok) {
+            const data = await response.json() as SearchResponse
+            referenceURL.value = data.reference.url
+            referenceURL.disabled = true
+            form.dataset.existing = JSON.stringify(data.reference)
+            referenceAddNewButton.hidden = true
+            referenceAddExistingButton.hidden = false
+        } else {
+            if (referenceURL.disabled) {
+                referenceURL.disabled = false
+                referenceURL.value = ""
+            }
+            form.dataset.existing = undefined
+            referenceAddNewButton.hidden = false
+            referenceAddExistingButton.hidden = true
+        }
+    }
+    catch (error) {
+        console.log("Error searching reference", error.message)
+        displayError(error.message)
+    }
+}
+
+async function changeReferenceURL(ev: InputEvent) {
+    const referenceURL = document.getElementById("referenceURL") as HTMLInputElement
+    const referenceName = document.getElementById("referenceName") as HTMLInputElement
+    const form = referenceName.form
+    const referenceAddNewButton = document.getElementById('referenceAddNewButton') as HTMLButtonElement
+    const referenceAddExistingButton = document.getElementById('referenceAddExistingButton') as HTMLButtonElement
+    const referenceUrlError = form.querySelector("#referenceUrlError") as HTMLDivElement
+    referenceUrlError.classList.add("invisible")
+    const body = new FormData()
+    body.append("url", referenceURL.value)
+    try {
+        const response = await fetch("http://127.0.0.1:5000/api/reference/search", {
+            method: "post",
+            body: body
+        })
+        console.log("Search URL", response)
+        if (response.ok) {
+            const data = await response.json() as SearchResponse
+            if (data.computed_uid) {
+                referenceName.value = data.computed_uid
+                referenceName.disabled = true
+                referenceAddNewButton.hidden = false
+                referenceAddExistingButton.hidden = true
+            }
+            else {
+                referenceName.value = data.reference.uid
+                referenceName.disabled = true
+                form.dataset.existing = JSON.stringify(data.reference)
+                referenceAddNewButton.hidden = true
+                referenceAddExistingButton.hidden = false
+            }
+        } else {
+            if (response.status === 400) {
+                const error = await response.json() as Array<string>
+                if (error.length) {
+                    referenceUrlError.innerText = error[0]
+                    referenceUrlError.classList.remove("invisible")
+                    referenceName.disabled = true
+                    referenceName.value = ""
+                }
+            } else {
+                if (referenceName.disabled) {
+                    referenceName.disabled = false
+                    referenceName.value = ""
+                }
+                form.dataset.existing = undefined
+                referenceAddNewButton.hidden = false
+                referenceAddExistingButton.hidden = true
+            }
+        }
+    }
+    catch (error) {
+        console.log("Error searching reference", error.message)
+        displayError(error.message)
+    }
+}
+
+function changeRulebookRef(ev: InputEvent) {
+    const referenceURL = document.getElementById("referenceURL") as HTMLInputElement
+    const referenceName = document.getElementById("referenceName") as HTMLInputElement
+    const form = referenceName.form
+    const referenceAddNewButton = document.getElementById('referenceAddNewButton') as HTMLButtonElement
+    const referenceAddExistingButton = document.getElementById('referenceAddExistingButton') as HTMLButtonElement
+    const selectRulebookRef = document.getElementById('selectRulebookRef') as HTMLSelectElement
+    const selectedOption = selectRulebookRef.options[selectRulebookRef.selectedIndex]
+    if (selectedOption.value) {
+        referenceName.value = selectedOption.value
+        referenceName.disabled = false
+        referenceURL.value = JSON.parse(selectedOption.dataset.reference).url
+        referenceURL.disabled = true
+        referenceAddNewButton.hidden = true
+        referenceAddExistingButton.hidden = false
+        form.dataset.existing = selectedOption.dataset.reference
+    } else {
+        if (referenceName.value.startsWith("RBK")) {
+            referenceName.value = ""
+        }
+        if (referenceURL.disabled) {
+            referenceURL.value = ""
+            referenceURL.disabled = false
+            referenceAddNewButton.hidden = false
+            referenceAddExistingButton.hidden = true
+        }
+    }
+    // const body = new FormData()
+    // body.append("url", referenceURL.value)
+    // try {
+    //     const response = await fetch("http://127.0.0.1:5000/api/reference/search", {
+    //         method: "post",
+    //         body: body
+    //     })
+    //     console.log("Search URL", response)
+    //     if (response.ok) {
+    //         const data = await response.json() as SearchResponse
+    //         if (data.computed_uid) {
+    //             referenceName.value = data.computed_uid
+    //             referenceName.disabled = true
+    //             referenceAddNewButton.hidden = false
+    //             referenceAddExistingButton.hidden = true
+    //         }
+    //         else {
+    //             referenceName.value = data.reference.uid
+    //             referenceName.disabled = true
+    //             form.dataset.existing = JSON.stringify(data.reference)
+    //             referenceAddNewButton.hidden = true
+    //             referenceAddExistingButton.hidden = false
+    //         }
+    //     } else {
+    //         if (response.status === 400) {
+    //             const error = await response.json() as Array<string>
+    //             if (error.length) {
+    //                 referenceUrlError.innerText = error[0]
+    //                 referenceUrlError.classList.remove("invisible")
+    //                 referenceName.disabled = true
+    //                 referenceName.value = ""
+    //             }
+    //         } else {
+    //             if (referenceName.disabled) {
+    //                 referenceName.disabled = false
+    //                 referenceName.value = ""
+    //             }
+    //             form.dataset.existing = undefined
+    //             referenceAddNewButton.hidden = false
+    //             referenceAddExistingButton.hidden = true
+    //         }
+    //     }
+    // }
+    // catch (error) {
+    //     console.log("Error searching reference", error.message)
+    //     displayError(error.message)
+    // }
+}
+
+function setupReferenceModal(position: Position) {
+    const referenceModal = document.getElementById('referenceModal') as HTMLButtonElement
+    const form = referenceModal.querySelector("form")
+    console.log(referenceModal)
+    console.log(form)
+    position.modal = new bootstrap.Modal(referenceModal)
+    referenceModal.addEventListener('hidden.bs.modal', function (event) {
+        selectRulebookRef.selectedIndex = 0
+        form.reset()
+        form.querySelector("#referenceUrlError").classList.add("invisible")
+        for (const input of form.querySelectorAll("input")) {
+            input.disabled = false
+        }
+    })
+    const referenceAddNewButton = referenceModal.querySelector('#referenceAddNewButton') as HTMLButtonElement
+    const referenceAddExistingButton = referenceModal.querySelector('#referenceAddExistingButton') as HTMLButtonElement
+    const referenceName = referenceModal.querySelector('#referenceName') as HTMLInputElement
+    const referenceURL = referenceModal.querySelector('#referenceURL') as HTMLInputElement
+    const selectRulebookRef = referenceModal.querySelector('#selectRulebookRef') as HTMLSelectElement
+
+    referenceAddNewButton.addEventListener("click", async (ev) => { await createAndAddLink(ev, position) })
+    referenceAddExistingButton.addEventListener("click", async (ev) => { await addExistingLink(ev, position) })
+    referenceName.addEventListener("input", debounce(changeReferenceName))
+    referenceURL.addEventListener("input", debounce(changeReferenceURL))
+    selectRulebookRef.addEventListener("input", changeRulebookRef)
+}
+
 export async function load() {
+    // activate tooltips
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl)
+    })
+    // other stuff
     Autocomplete.init()
     navActivateCurrent()
     loginManagement()
@@ -463,15 +687,16 @@ export async function load() {
     }
     let position: Position = {
         controls: document.getElementById("editControls") as HTMLDivElement,
-        modal: new bootstrap.Modal('#referenceModal'),
+        modal: undefined,
         card: undefined,
         paragraph: undefined,
         node: undefined,
         offset: 0
     }
-    const new_ref_button = document.getElementById('referenceNewButton') as HTMLButtonElement
-    new_ref_button.addEventListener("click", async (ev) => { await createAndAddLink(ev, position) })
-    setupEditTools(position)
+    if (proposalAcc) {
+        setupEditTools(position)
+        setupReferenceModal(position)
+    }
     const rulingsList = document.getElementById("rulingsList") as HTMLDivElement
     const ruling_cards = document.querySelectorAll("div.krcg-ruling") as NodeListOf<HTMLDivElement>
     const edit_mode = Boolean(proposalAcc)
@@ -482,7 +707,7 @@ export async function load() {
         const addRulingButton = document.createElement("button")
         addRulingButton.classList.add("btn", "text-bg-primary")
         addRulingButton.type = "button"
-        addRulingButton.innerHTML = '<i class="bi-plus-lg"></i>'
+        addRulingButton.innerHTML = '<i class="bi-plus-lg"></i> Add ruling'
         addRulingButton.addEventListener("click", (ev) => addRulingCard(ev, position))
         rulingsList.append(addRulingButton)
     }
@@ -507,6 +732,11 @@ interface Reference extends UID {
     url: string,
     source: string,
     date: string
+}
+
+interface SearchResponse {
+    computed_uid: string | undefined
+    reference: Reference | undefined
 }
 
 interface SymbolSubstitution {

@@ -23,6 +23,8 @@ import yamlfix
 import yamlfix.config
 import yamlfix.model
 
+from . import scraper
+
 random.seed()
 logger = logging.getLogger()
 RULINGS_GIT = "git@github.com:vtes-biased/vtes-rulings.git"
@@ -262,6 +264,13 @@ def random_uid8() -> str:
     return base64.b32encode(random.randbytes(5)).decode("utf-8")
 
 
+class State(enum.StrEnum):
+    ORIGINAL = "ORIGINAL"
+    NEW = "NEW"
+    MODIFIED = "MODIFIED"
+    DELETED = "DELETED"
+
+
 @dataclasses.dataclass
 class UID:
     uid: str
@@ -301,6 +310,7 @@ class Reference(UID):
     url: str
     source: str
     date: str
+    state: State
 
     @classmethod
     def from_uid(cls, **kwargs):
@@ -498,7 +508,9 @@ class Index:
         self.backrefs: dict[str, set[str]] = collections.defaultdict(set)
         # build references index
         for uid, url in YAML_REFERENCES.items():
-            self.base_references[uid] = Reference.from_uid(uid=uid, url=url)
+            self.base_references[uid] = Reference.from_uid(
+                uid=uid, url=url, state=State.ORIGINAL
+            )
         # build groups index
         for nid, cards_list in YAML_GROUPS.items():
             group = Group(uid=nid.uid, name=nid.name)
@@ -690,14 +702,33 @@ class Index:
                 continue
             yield ref
 
-    def get_reference(self, uid: str) -> Reference:
+    def get_reference(self, uid: str = "", url: str = "") -> Reference:
         """Return the ruling Reference object if it exists. Raise KeyError otherwise."""
-        if self.proposal and uid in self.proposal.references:
-            ret = self.proposal.references[uid]
-            if ret is None:
-                raise KeyError()
-            return ret
-        return self.base_references[uid]
+        if uid:
+            if self.proposal and uid in self.proposal.references:
+                ret = self.proposal.references[uid]
+                if ret is None:
+                    raise KeyError()
+                return ret
+            return self.base_references[uid]
+        elif url:
+            remove = set()
+            if self.proposal:
+                remove = set(
+                    uid for uid, ref in self.proposal.references.items() if ref is None
+                )
+                rev_proposal = {
+                    ref.url: ref for ref in self.proposal.references.values() if ref
+                }
+                if url in rev_proposal:
+                    return rev_proposal[url]
+            rev_base = {
+                ref.url: ref
+                for ref in self.base_references.values()
+                if ref.uid not in remove
+            }
+            return rev_base[url]
+        raise KeyError()
 
     def all_groups(self) -> typing.Generator[None, None, Group]:
         if self.proposal:
@@ -926,7 +957,7 @@ class Index:
         return ret
 
     def update_ruling(self, target_uid: str, uid: str, text: str) -> Ruling:
-        """Not in this case the ruling uid matches the old text, not the new text.
+        """Note in this case the ruling uid matches the old text, not the new text.
         If the text is switched back to the old text, drop the update from proposal.
         """
         target = self.get_nid(target_uid)
@@ -939,6 +970,7 @@ class Index:
             self.proposal.rulings[target_uid].pop(ruling.uid, None)
             return self.base_rulings[target_uid][uid]
         ruling.uid = uid
+        ruling.state = State.MODIFIED
         self.proposal.rulings[target_uid][ruling.uid] = ruling
         return ruling
 
@@ -946,11 +978,15 @@ class Index:
         """Can be empty."""
         target = self.get_nid(target_uid)
         ruling = self.build_ruling(text, target=target)
+        if ruling.uid in self.base_rulings:
+            raise ConsistencyError("Ruling exists already")
+        ruling.state = State.NEW
         self.proposal.rulings[target_uid][ruling.uid] = ruling
         return ruling
 
     def delete_ruling(self, target_uid: str, uid: str):
         """Deletes the given ruling. Yield KeyError if not found."""
+        # TODO use State.DELETED instead of None
         if (
             uid in self.proposal.rulings[target_uid]
             and uid not in self.base_rulings[target_uid]
@@ -985,8 +1021,9 @@ class Index:
                 raise FormatError("Group name already taken")
             if not name:
                 raise FormatError("New group must be given a name")
+            uid = f"P{stable_hash(name)}"
             group = Group(
-                uid=f"P{stable_hash(name)}",
+                uid=uid,
                 name=name,
             )
         group.cards.clear()
@@ -1018,22 +1055,43 @@ class Index:
                 raise ConsistencyError(f"Unknown group {uid}")
             self.proposal.groups[uid] = None
 
-    def insert_reference(self, uid: str, url: str) -> Reference:
-        """Insert a new reference.
-        Yield FormatError or ConsistencyError if there are issues with it.
+    async def insert_reference(self, uid: str = "", url: str = "") -> Reference:
+        """Insert a new reference. uid suffixes are handled automatically.
+        If the URL is from www.vekn.net, the UID is computed automatically.
+        Raise ValueError in case of issues, aiohttp.HTTPException on bad VEKN urls.
         It checks the URL domains are valid reference domains,
-        the reference prefix matches a valid reference prefix,
-        and that the dates make sense depending on the source. (see RULING_SOURCES)
+        the reference prefix matches a valid source,
+        and that the dates make sense depending on the source.
+        See RULING_SOURCES
         """
-        if uid in self.base_references:
-            raise FormatError(f"Reference already listed: {uid}, use a suffix")
-        if self.proposal and uid in self.proposal.references:
-            raise FormatError(f"Reference already listed: {uid}, use a suffix")
+        if not uid:
+            raise FormatError(f"A reference ID is required")
         if uid[3] != " ":
             raise FormatError(f"Reference must have a space after prefix: {uid}")
-        reference = Reference.from_uid(uid=uid, url=url)
+        if uid in self.base_references or (
+            self.proposal and uid in self.proposal.references
+        ):
+            try_uid = uid
+            for i in range(2, 100):
+                try_uid = f"{uid}-{i}"
+                if try_uid in self.base_references:
+                    if self.base_references[try_uid].url == url:
+                        raise ConsistencyError("Reference exists already")
+                    continue
+                if self.proposal and try_uid in self.proposal.references:
+                    assert self.proposal.references[try_uid] is not None
+                    if self.proposal.references[try_uid].url == url:
+                        raise ConsistencyError("Reference exists already")
+                    continue
+                break
+            else:
+                raise ConsistencyError("Too many references on that day already")
+            uid = try_uid
+        reference = Reference.from_uid(uid=uid, url=url, state=State.NEW)
         reference.check_url()
         reference.check_source_and_date()
+        if reference.source == "RBK":
+            raise ValueError("New RBK references cannot be added, they are all listed already.")
         self.proposal.references[uid] = reference
         return reference
 
@@ -1046,7 +1104,9 @@ class Index:
             reference.url = url
         else:
             base = self.base_references[uid]
-            reference = Reference(uid=base.uid, url=url, source=base.source)
+            reference = Reference(
+                uid=base.uid, url=url, source=base.source, state=State.MODIFIED
+            )
             self.proposal.references[uid] = reference
         reference.check_url()
         return reference
@@ -1056,6 +1116,7 @@ class Index:
         check_references() should be used to list where the reference was being used:
         additional modifications might be necessary for consistency before submission.
         """
+        # TODO: use State.DELETED instead of None
         if uid in self.proposal.references and uid not in self.base_references:
             del self.proposal.references[uid]
         else:
@@ -1110,6 +1171,7 @@ class Index:
             yield ReferencesSubstitution(
                 uid=reference.uid,
                 url=reference.url,
+                state=reference.state,
                 source=reference.source,
                 date=reference.date,
                 text=token,

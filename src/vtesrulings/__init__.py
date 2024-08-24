@@ -27,11 +27,10 @@ def page_not_found(error):
     return flask.render_template("404.html"), 404
 
 
-@app.errorhandler(rulings.FormatError)
-@app.errorhandler(rulings.ConsistencyError)
+@app.errorhandler(ValueError)
 def data_error(error: Exception):
     logger.exception(str(error))
-    return flask.jsonify([error.args[0]]), 400
+    return flask.jsonify(error.args[:1]), 400
 
 
 # Helper for hyperlinks
@@ -110,6 +109,9 @@ async def index(page=None):
                 continue
             proposal_dict["groups"].append({"uid": group_id, "name": group.name})
         context["proposal"] = proposal_dict
+        context["rbk_references"] = [
+            ref for ref in INDEX.base_references.values() if ref.uid.startswith("RBK ")
+        ]
     if page == "groups.html":
         context["groups"] = list(asdict(g) for g in INDEX.all_groups())
         uid = flask.request.args.get("uid", None)

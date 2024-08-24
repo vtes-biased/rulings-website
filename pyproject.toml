@@ -23,6 +23,7 @@ classifiers = [
 ]
 dependencies = [
     "aiohttp>=3",
+    "arrow",
     "flask[async]>=3",
     "flask-babel>=4",
     "gitpython>=3",
