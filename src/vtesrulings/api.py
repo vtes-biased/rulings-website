@@ -66,7 +66,7 @@ async def logout():
 def use_proposal():
     """Non-async function to make sure we use the right context"""
     proposal = flask.request.args.get("prop", None) or flask.session.get("proposal")
-    if proposal:
+    if proposal and flask.session.get("user"):
         try:
             flask.g.proposal = rulings.INDEX.use_proposal(proposal)
             flask.session["proposal"] = proposal
