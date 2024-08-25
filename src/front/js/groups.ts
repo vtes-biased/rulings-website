@@ -188,24 +188,48 @@ function addRemoveCardButton(listItem: HTMLDivElement, groupDisplay: HTMLDivElem
     listItem.prepend(removeButton)
 }
 
+async function deleteGroup(ev: MouseEvent, groupDisplay: HTMLDivElement) {
+    try {
+        const response = await fetch(
+            `/api/group/${groupDisplay.dataset.uid}`,
+            { method: "delete" }
+        )
+        if (!response.ok) {
+            throw new Error((await response.json())[0])
+        }
+        window.location.replace("/groups.html")
+    }
+    catch (error) {
+        console.log("Error deleting group", error.message)
+        base.displayError(error.message)
+    }
+}
+
 async function load() {
     const groupDisplay = document.getElementById('groupDisplay') as HTMLDivElement
     if (!groupDisplay) { return }
     const proposalAcc = document.getElementById('proposalAcc') as HTMLDivElement
     if (proposalAcc) {
+        // editable group name
         const groupName = document.getElementById("groupName")
         groupName.contentEditable = "true"
         groupName.classList.add("bg-primary", "bg-opacity-10")
         groupName.addEventListener("input", base.debounce(async () => { await groupSave(groupDisplay) }))
+        // delete group button
+        const groupDeleteButton = document.getElementById("groupDeleteButton") as HTMLButtonElement
+        groupDeleteButton.addEventListener("click", async (ev) => await deleteGroup(ev, groupDisplay))
+        // removable cards
         const cards = groupDisplay.querySelectorAll(".list-group-item") as NodeListOf<HTMLDivElement>
         for (const card of cards) {
             addRemoveCardButton(card, groupDisplay)
         }
+        // editable cards prefixes
         const prefixes = groupDisplay.querySelectorAll(".krcg-prefix") as NodeListOf<HTMLDivElement>
         setupCardEditTools(groupDisplay)
         for (const prefix of prefixes) {
             makePrefixEditable(prefix, groupDisplay)
         }
+        // add new card
         setupCardAdd(groupDisplay)
     }
 }
@@ -214,6 +238,5 @@ window.addEventListener("load", base.load)
 window.addEventListener("load", load)
 
 // krcg.js functions
-declare function clickCard(): void
 declare function overCard(): void
 declare function outCard(): void

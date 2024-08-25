@@ -14,6 +14,12 @@
     </div>
     <div class="col-md" id="groupDisplay" data-uid="{{ current.uid }}">
         <h2 id="groupName">{{ current.name }}</h2>
+        {% if proposal %}
+        <div class="d-flex justify-content-center">
+            <button id="groupDeleteButton" class="btn text-bg-danger my-5" type="submit"><i class="bi bi-trash3"></i>
+                Delete group</button>
+        </div>
+        {% endif %}
         <div class="list-group">
             {% for card in current.cards %}
             <div class="list-group-item d-flex flex-wrap align-items-center" data-uid="{{ card.uid }}">

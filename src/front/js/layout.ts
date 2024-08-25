@@ -143,14 +143,14 @@ async function createAndAddLink(ev: MouseEvent, position: Position) {
         const data = await response.json() as Reference
         addRulingReference(position.card, position.card.querySelector("div.card-footer"), data, true, true)
         await rulingSave(position.card)
+        position.modal.hide()
     }
     catch (error) {
         console.log("Error posting reference", error.message)
         displayError(error.message)
     }
-    finally {
-        position.modal.hide()
-    }
+    // finally {
+    // }
 }
 
 async function addExistingLink(ev: MouseEvent, position: Position) {
