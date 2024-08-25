@@ -12,11 +12,11 @@
             class="btn badge btn-secondary btn-sm dropdown-toggle">Icon</button>
         <ul class="dropdown-menu"><!-- Icons added by JS --></ul>
     </div>
-    <div class="col-md" id="groupDisplay" data-uid="{{ current.uid }}">
+    <div class="col-md krcg-current" id="groupDisplay" data-uid="{{ current.uid }}" data-data='{{ current | tojson }}''>
         <h2 id="groupName">{{ current.name }}</h2>
         {% if proposal %}
         <div class="d-flex justify-content-center">
-            <button id="groupDeleteButton" class="btn text-bg-danger my-5" type="submit"><i class="bi bi-trash3"></i>
+            <button id="groupDeleteButton" class="btn text-bg-danger my-3" type="submit"><i class="bi bi-trash3"></i>
                 Delete group</button>
         </div>
         {% endif %}
@@ -38,7 +38,7 @@
         <h3 class="my-2">Rulings</h3>
         <div id="rulingsList" data-source="{{ current.uid }}">
             {% for ruling in current.rulings %}
-            <div class="card my-1 krcg-ruling" data-source="{{current.uid}}" data-ruling='{{ruling | tojson}}'>
+            <div class="card my-1 krcg-ruling" data-source="{{current.uid}}" data-ruling='{{ ruling | tojson }}'>
                 <!-- Content added by JS -->
             </div>
             {% endfor %}

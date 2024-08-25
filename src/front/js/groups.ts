@@ -29,7 +29,7 @@ async function groupSave(groupDisplay: HTMLDivElement) {
     console.log("Updating group", body)
     try {
         const response = await fetch(
-            `http://127.0.0.1:5000/api/group/${groupDisplay.dataset.uid}`,
+            `/api/group/${groupDisplay.dataset.uid}`,
             {
                 method: "put",
                 body: JSON.stringify(body)
@@ -46,6 +46,7 @@ async function groupSave(groupDisplay: HTMLDivElement) {
             const counter = current.querySelector("span.badge") as HTMLSpanElement
             counter.innerText = cards.length.toString()
         }
+        base.updateProposal()
     }
     catch (error) {
         console.log("Error updating group", error.message)

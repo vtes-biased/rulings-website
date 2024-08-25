@@ -39,11 +39,7 @@
                 <button type="button" class="btn btn-primary mx-2" id="logoutButton">Logout</button>
                 <button type="button" class="btn btn-primary mx-2" id="proposalButton">
                     {% if proposal %}
-                    {% if proposal.channel_id %}
-                    Approve proposal
-                    {% else %}
-                    Submit proposal
-                    {% endif %}
+                    Proposal
                     {% else %}
                     Start proposal
                     {% endif %}
@@ -78,11 +74,7 @@
                 <div class="modal-header">
                     <h1 class="modal-title fs-5" id="proposalModalLabel">
                         {% if proposal %}
-                        {% if proposal.channel_id %}
-                        Approve proposal
-                        {% else %}
-                        Submit proposal
-                        {% endif %}
+                        Proposal
                         {% else %}
                         Start proposal
                         {% endif %}
@@ -101,19 +93,22 @@
                     {% endif %}
                 </form>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                     {% if proposal %}
+                    <button type="button" class="btn btn-secondary" id="proposalLeave" form="proposalForm">Leave</button>
+                    <button type="button" class="btn btn-primary" id="proposalSave" form="proposalForm">
+                        Save
+                    </button>
                     {% if proposal.channel_id %}
                     <button type="button" class="btn btn-success" id="proposalApprove" form="proposalForm">
                         Approve
                     </button>
                     {% else %}
-                    <button type="button" class="btn btn-primary" id="proposalSubmit" form="proposalForm">
+                    <button type="button" class="btn btn-success" id="proposalSubmit" form="proposalForm">
                         Submit
                     </button>
                     {% endif %}
                     {% else %}
-                    <button type="button" class="btn btn-primary" id="proposalStart" form="proposalForm">
+                    <button type="button" class="btn btn-success" id="proposalStart" form="proposalForm">
                         Start
                     </button>
                     {% endif %}
@@ -186,8 +181,12 @@
                 <div id="collapseOne" class="accordion-collapse collapse" data-bs-parent="#proposalAcc">
                     <div id="proposalAccBody" class="accordion-body">
                         <div id="proposalDescription">{{ proposal.description }}</div>
-                        <div id="proposalGroups" class="invisible"><!-- Content managed by JS --></div>
-                        <div id="proposalCards" class="invisible"><!-- Content managed by JS --></div>
+                        <div id="proposalGroups" class="d-flex align-items-center invisible">
+                            <!-- Content managed by JS -->
+                        </div>
+                        <div id="proposalCards" class="d-flex align-items-center invisible">
+                            <!-- Content managed by JS -->
+                        </div>
                     </div>
                 </div>
             </div>
@@ -202,8 +201,8 @@
             </div>
             <form>
                 <input class="form-control autocomplete mx-2" type="search" placeholder="Card name"
-                    data-server="http://127.0.0.1:5000/api/complete/" data-live-server="true"
-                    data-suggestions-threshold="3" autocomplete="off" autocapitalize="off" spellcheck=false>
+                    data-server="/api/complete/" data-live-server="true" data-suggestions-threshold="3"
+                    autocomplete="off" autocapitalize="off" spellcheck=false>
             </form>
         </div>
     </div>

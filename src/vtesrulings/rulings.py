@@ -29,8 +29,6 @@ random.seed()
 logger = logging.getLogger()
 RULINGS_GIT = "git@github.com:vtes-biased/vtes-rulings.git"
 RULINGS_FILES_PATH = "rulings/"
-DISCORD_WEBHOOK = os.getenv("DISCORD_WEBHOOK")
-GUILD_ID = os.getenv("GUILD_ID")
 GIT_SSH_COMMAND = os.getenv("GIT_SSH_COMMAND", "ssh -i ~/.ssh/id_rsa")
 ANKHA_SYMBOLS = {
     "abo": "w",
@@ -506,6 +504,9 @@ class Index:
         # additional indexes for convenience
         self.groups_of_card: dict[str, set[str]] = collections.defaultdict(set)
         self.backrefs: dict[str, set[str]] = collections.defaultdict(set)
+        self._load_yaml()
+
+    def _load_yaml(self):
         # build references index
         for uid, url in YAML_REFERENCES.items():
             self.base_references[uid] = Reference.from_uid(
@@ -557,81 +558,30 @@ class Index:
         ret = gen_proposal_id()
         while ret in self.proposals:
             ret = gen_proposal_id()
-        proposal = Proposal(uid=ret, name=name, description=description)
+        proposal = Proposal(uid=ret, name=name.strip(), description=description.strip())
         self.proposals[ret] = proposal
         self.proposal = proposal
         return ret
 
-    def use_proposal(self, uid: str) -> None:
+    def use_proposal(self, uid: str) -> Proposal:
         """Use an existing proposal. This allows modifications."""
         self.proposal = self.proposals[uid]
+        return self.proposal
 
-    def update_proposal(self, name: str = "", description: str = "") -> None:
+    def update_proposal(self, name: str = "", description: str = "") -> Proposal:
         if not self.proposal:
             raise ConsistencyError("No active proposal")
         if name:
-            self.proposal.name = name
+            self.proposal.name = name.strip()
         if description:
             self.proposal.description = description
+        return self.proposal
 
     def off_proposals(self) -> None:
         """Turn the proposal off, if any. This prevents modifications.
         Data retrieved thereafter is the clean official YAML content.
         """
         self.proposal = None
-
-    async def submit_proposal(self) -> None:
-        # TODO: improve embed
-        if not self.proposal:
-            raise ConsistencyError("No active proposal")
-        if not self.proposal.name.strip():
-            raise FormatError("Proposal needs a name for submission")
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                DISCORD_WEBHOOK + "?wait=true",
-                json={
-                    "embeds": [
-                        {
-                            "title": self.proposal.name,
-                            "description": self.proposal.description,
-                            "url": f"http://127.0.0.1:5000/index.html?prop={self.proposal.uid}",
-                            "fields": [
-                                {
-                                    "name": "Groups",
-                                    "inline": True,
-                                    "value": (
-                                        f"{len(self.proposal.groups)} change(s)"
-                                        if self.proposal.groups
-                                        else "No change"
-                                    ),
-                                },
-                                {
-                                    "name": "Rulings",
-                                    "inline": True,
-                                    "value": (
-                                        f"{len(self.proposal.rulings)} change(s)"
-                                        if self.proposal.rulings
-                                        else "No change"
-                                    ),
-                                },
-                                {
-                                    "name": "References",
-                                    "inline": True,
-                                    "value": (
-                                        f"{len(self.proposal.references)} change(s)"
-                                        if self.proposal.references
-                                        else "No change"
-                                    ),
-                                },
-                            ],
-                        }
-                    ],
-                    "thread_name": f"Proposal: {self.proposal.name}",
-                },
-            ) as resp:
-                resp.raise_for_status()
-                data = await resp.json()
-                self.proposal.channel_id = data["channel_id"]
 
     def approve_proposal(self) -> None:
         """YAML generation and github commit"""
@@ -650,8 +600,14 @@ class Index:
             yaml.dump(data, f, **YAML_PARAMS)
         with open(groups_file, "w", encoding="utf-8") as f:
             data = {}
+            group_counter = (
+                max(int(g.uid[1:]) for g in all_groups if g.uid.startswith("G")) + 1
+            )
             for group in all_groups:
-                group_nid = f"{group.uid}|{group.name}"
+                group_uid = group.uid
+                if group_uid.startswith("P"):
+                    group_uid = f"G{group_counter:0>5}"
+                group_nid = f"{group_uid}|{group.name}"
                 data[group_nid] = {}
                 for card in group.cards:
                     krcg_card = KRCG_CARDS[int(card.uid)]
@@ -691,8 +647,8 @@ class Index:
         )
         REPO.index.commit(self.proposal.name)
         REPO.git.push()
+        self._load_yaml()
         del self.proposals[self.proposal.uid]
-        self.off_proposals()
 
     def all_references(self) -> typing.Generator[None, None, Reference]:
         if self.proposal:
@@ -1055,7 +1011,7 @@ class Index:
                 raise ConsistencyError(f"Unknown group {uid}")
             self.proposal.groups[uid] = None
 
-    async def insert_reference(self, uid: str = "", url: str = "") -> Reference:
+    def insert_reference(self, uid: str = "", url: str = "") -> Reference:
         """Insert a new reference. uid suffixes are handled automatically.
         If the URL is from www.vekn.net, the UID is computed automatically.
         Raise ValueError in case of issues, aiohttp.HTTPException on bad VEKN urls.
@@ -1091,7 +1047,9 @@ class Index:
         reference.check_url()
         reference.check_source_and_date()
         if reference.source == "RBK":
-            raise ValueError("New RBK references cannot be added, they are all listed already.")
+            raise ValueError(
+                "New RBK references cannot be added, they are all listed already."
+            )
         self.proposal.references[uid] = reference
         return reference
 

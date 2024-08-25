@@ -133,7 +133,7 @@ function addRulingReference(
 async function createAndAddLink(ev: MouseEvent, position: Position) {
     const form = (ev.target as HTMLButtonElement).form
     try {
-        const response = await fetch("http://127.0.0.1:5000/api/reference", {
+        const response = await fetch("/api/reference", {
             method: "post",
             body: new FormData(form)
         })
@@ -149,8 +149,6 @@ async function createAndAddLink(ev: MouseEvent, position: Position) {
         console.log("Error posting reference", error.message)
         displayError(error.message)
     }
-    // finally {
-    // }
 }
 
 async function addExistingLink(ev: MouseEvent, position: Position) {
@@ -170,7 +168,6 @@ async function addExistingLink(ev: MouseEvent, position: Position) {
 }
 
 export function displayRulingCard(elem: HTMLDivElement, edit_mode: boolean, position: Position) {
-    console.log(elem)
     const ruling = JSON.parse(elem.dataset.ruling)
     const source = elem.dataset.source
     edit_mode = edit_mode && ruling.target.uid === source
@@ -282,6 +279,7 @@ async function rulingSave(elem: HTMLDivElement) {
             }
         }
     }
+    new_text = new_text.trim()
     for (const reference of elem.querySelectorAll("a.krcg-reference")) {
         new_text += ` [${(reference as HTMLAnchorElement).innerText}]`
     }
@@ -289,7 +287,7 @@ async function rulingSave(elem: HTMLDivElement) {
         console.log("Updating ruling", ruling.uid, ruling.text, new_text)
         try {
             const response = await fetch(
-                `http://127.0.0.1:5000/api/ruling/${elem.dataset.source}/${ruling.uid}`,
+                `/api/ruling/${elem.dataset.source}/${ruling.uid}`,
                 {
                     method: "put",
                     body: JSON.stringify({ text: new_text })
@@ -300,6 +298,7 @@ async function rulingSave(elem: HTMLDivElement) {
             }
             const new_ruling = await response.json() as Ruling
             elem.dataset.ruling = JSON.stringify(new_ruling)
+            updateProposal()
         }
         catch (error) {
             console.log("Error updating ruling", error.message)
@@ -320,13 +319,14 @@ async function rulingDelete(elem: HTMLDivElement) {
     const ruling = JSON.parse(elem.dataset.ruling) as Ruling
     try {
         const response = await fetch(
-            `http://127.0.0.1:5000/api/ruling/${elem.dataset.source}/${ruling.uid}`,
+            `/api/ruling/${elem.dataset.source}/${ruling.uid}`,
             { method: "delete" }
         )
         if (!response.ok) {
             throw new Error((await response.json())[0])
         }
         elem.remove()
+        updateProposal()
     }
     catch (error) {
         console.log("Error updating ruling", error.message)
@@ -342,7 +342,7 @@ export function displayError(msg: string) {
 }
 
 export function displayProposal(data: Proposal | undefined) {
-    const proposalAcc = document.getElementById("proposalAcc")
+    const proposalAcc = document.getElementById("proposalAcc") as HTMLDivElement
     console.log(proposalAcc)
     console.log(proposalAcc.dataset.data)
     if (data === undefined) {
@@ -352,6 +352,9 @@ export function displayProposal(data: Proposal | undefined) {
     }
     const groupsDiv = document.getElementById("proposalGroups") as HTMLDivElement
     groupsDiv.replaceChildren()
+    const groupsHead = document.createElement("strong")
+    groupsHead.innerText = "Groups:"
+    groupsDiv.append(groupsHead)
     if (data.groups && data.groups.length > 0) {
         groupsDiv.classList.remove("invisible")
     } else {
@@ -359,13 +362,16 @@ export function displayProposal(data: Proposal | undefined) {
     }
     for (const group of data.groups) {
         const link = document.createElement("a")
-        link.classList.add("mx-2")
+        link.classList.add("m-2", "badge", "bg-secondary", "text-decoration-none")
         groupsDiv.append(link)
         link.href = `/groups.html?uid=${group.uid}`
         link.innerHTML = group.name
     }
     const cardsDiv = document.getElementById("proposalCards") as HTMLDivElement
     cardsDiv.replaceChildren()
+    const cardsHead = document.createElement("strong")
+    cardsHead.innerText = "Cards:"
+    cardsDiv.append(cardsHead)
     if (data.cards && data.cards.length > 0) {
         cardsDiv.classList.remove("invisible")
     } else {
@@ -373,17 +379,30 @@ export function displayProposal(data: Proposal | undefined) {
     }
     for (const card of data.cards) {
         const link = document.createElement("a")
-        link.classList.add("mx-2")
+        link.classList.add("m-2", "badge", "bg-secondary", "text-decoration-none")
         cardsDiv.append(link)
         link.href = `/index.html?uid=${card.uid}`
         link.innerHTML = card.name
     }
 }
 
-export function updateProposal(data) {
-
+export function updateProposal() {
+    const current = document.querySelector(".krcg-current") as HTMLDivElement
+    const current_data = JSON.parse(current.dataset.data) as NID
+    const nid = { uid: current_data.uid, name: current_data.name }
+    const proposalAcc = document.getElementById("proposalAcc") as HTMLDivElement
+    const prop_data = JSON.parse(proposalAcc.dataset.data) as Proposal
+    if (nid.uid.startsWith("G") || nid.uid.startsWith("P")) {
+        if (!prop_data.groups.some((v) => { return v.uid === nid.uid })) {
+            prop_data.groups.push(nid)
+        }
+    } else {
+        if (!prop_data.cards.some((v) => { return v.uid === nid.uid })) {
+            prop_data.cards.push(nid)
+        }
+    }
+    displayProposal(prop_data)
 }
-
 
 function navActivateCurrent() {
     for (let elem of document.getElementsByClassName("nav-link")) {
@@ -401,8 +420,10 @@ function navActivateCurrent() {
 
 function mapProposalModal() {
     const proposalStart = document.getElementById("proposalStart") as HTMLButtonElement
+    const proposalLeave = document.getElementById('proposalLeave') as HTMLButtonElement
     const proposalSubmit = document.getElementById('proposalSubmit') as HTMLButtonElement
     const proposalApprove = document.getElementById('proposalApprove') as HTMLButtonElement
+    const proposalSave = document.getElementById('proposalSave') as HTMLButtonElement
     const proposalModal = new bootstrap.Modal('#proposalModal')
     const proposalButton = document.getElementById('proposalButton') as HTMLButtonElement
     if (!proposalButton) { return }
@@ -410,16 +431,34 @@ function mapProposalModal() {
     proposalButton.addEventListener("click", () => proposalModal.show())
     const next = encodeURIComponent(window.location.pathname + window.location.search)
     if (proposalStart) {
-        proposalForm.action = `http://127.0.0.1:5000/api/proposal?next=${next}`
-        proposalStart.addEventListener("click", () => proposalForm.submit())
+        proposalStart.addEventListener("click", () => {
+            proposalForm.action = `/api/proposal?next=${next}`
+            proposalForm.submit()
+        })
+    }
+    if (proposalLeave) {
+        proposalLeave.addEventListener("click", () => {
+            proposalForm.action = `/api/proposal/leave?next=${next}`
+            proposalForm.submit()
+        })
     }
     if (proposalSubmit) {
-        proposalForm.action = `http://127.0.0.1:5000/api/proposal/submit?next=${next}`
-        proposalSubmit.addEventListener("click", () => proposalForm.submit())
+        proposalSubmit.addEventListener("click", () => {
+            proposalForm.action = `/api/proposal/submit?next=${next}`
+            proposalForm.submit()
+        })
     }
     if (proposalApprove) {
-        proposalForm.action = `http://127.0.0.1:5000/api/proposal/approve?next=${next}`
-        proposalApprove.addEventListener("click", () => proposalForm.submit())
+        proposalApprove.addEventListener("click", () => {
+            proposalForm.action = `/api/proposal/approve?next=${next}`
+            proposalForm.submit()
+        })
+    }
+    if (proposalSave) {
+        proposalSave.addEventListener("click", () => {
+            proposalForm.action = `/api/proposal/update?next=${next}`
+            proposalForm.submit()
+        })
     }
 }
 
@@ -429,8 +468,6 @@ function loginManagement() {
     const logoutButton = document.getElementById('logoutButton') as HTMLButtonElement
     const loginForm = document.getElementById('loginForm') as HTMLFormElement
     const next = encodeURIComponent(window.location.pathname + window.location.search)
-    console.log(loginButton)
-    console.log(logoutButton)
     if (loginButton) {
         const loginSubmit = document.getElementById('loginSubmit') as HTMLFormElement
         loginButton.addEventListener("click", () => loginModal.show())
@@ -445,7 +482,6 @@ function loginManagement() {
 
 async function addRulingCard(ev: MouseEvent, position: Position) {
     const button = ev.currentTarget as HTMLButtonElement
-    console.log(button, button.parentElement)
     const source = button.parentElement.dataset.source
     const card = document.createElement("div")
     card.classList.add("card", "my-1", "krcg-ruling")
@@ -453,7 +489,7 @@ async function addRulingCard(ev: MouseEvent, position: Position) {
     console.log("Creating ruling", source)
     try {
         const response = await fetch(
-            `http://127.0.0.1:5000/api/ruling/${source}`,
+            `/api/ruling/${source}`,
             { method: "post", body: JSON.stringify({ text: "" }) }
         )
         if (!response.ok) {
@@ -463,6 +499,7 @@ async function addRulingCard(ev: MouseEvent, position: Position) {
         card.dataset.ruling = JSON.stringify(new_ruling)
         button.before(card)
         displayRulingCard(card, true, position)
+        updateProposal()
     }
     catch (error) {
         console.log("Error updating ruling", error.message)
@@ -482,7 +519,7 @@ async function changeReferenceName(ev: InputEvent) {
     const body = new FormData()
     body.append("uid", referenceName.value)
     try {
-        const response = await fetch("http://127.0.0.1:5000/api/reference/search", {
+        const response = await fetch("/api/reference/search", {
             method: "post",
             body: body
         })
@@ -521,7 +558,7 @@ async function changeReferenceURL(ev: InputEvent) {
     const body = new FormData()
     body.append("url", referenceURL.value)
     try {
-        const response = await fetch("http://127.0.0.1:5000/api/reference/search", {
+        const response = await fetch("/api/reference/search", {
             method: "post",
             body: body
         })
@@ -594,60 +631,11 @@ function changeRulebookRef(ev: InputEvent) {
             referenceAddExistingButton.hidden = true
         }
     }
-    // const body = new FormData()
-    // body.append("url", referenceURL.value)
-    // try {
-    //     const response = await fetch("http://127.0.0.1:5000/api/reference/search", {
-    //         method: "post",
-    //         body: body
-    //     })
-    //     console.log("Search URL", response)
-    //     if (response.ok) {
-    //         const data = await response.json() as SearchResponse
-    //         if (data.computed_uid) {
-    //             referenceName.value = data.computed_uid
-    //             referenceName.disabled = true
-    //             referenceAddNewButton.hidden = false
-    //             referenceAddExistingButton.hidden = true
-    //         }
-    //         else {
-    //             referenceName.value = data.reference.uid
-    //             referenceName.disabled = true
-    //             form.dataset.existing = JSON.stringify(data.reference)
-    //             referenceAddNewButton.hidden = true
-    //             referenceAddExistingButton.hidden = false
-    //         }
-    //     } else {
-    //         if (response.status === 400) {
-    //             const error = await response.json() as Array<string>
-    //             if (error.length) {
-    //                 referenceUrlError.innerText = error[0]
-    //                 referenceUrlError.classList.remove("invisible")
-    //                 referenceName.disabled = true
-    //                 referenceName.value = ""
-    //             }
-    //         } else {
-    //             if (referenceName.disabled) {
-    //                 referenceName.disabled = false
-    //                 referenceName.value = ""
-    //             }
-    //             form.dataset.existing = undefined
-    //             referenceAddNewButton.hidden = false
-    //             referenceAddExistingButton.hidden = true
-    //         }
-    //     }
-    // }
-    // catch (error) {
-    //     console.log("Error searching reference", error.message)
-    //     displayError(error.message)
-    // }
 }
 
 function setupReferenceModal(position: Position) {
     const referenceModal = document.getElementById('referenceModal') as HTMLButtonElement
     const form = referenceModal.querySelector("form")
-    console.log(referenceModal)
-    console.log(form)
     position.modal = new bootstrap.Modal(referenceModal)
     referenceModal.addEventListener('hidden.bs.modal', function (event) {
         selectRulebookRef.selectedIndex = 0

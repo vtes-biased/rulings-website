@@ -5,6 +5,7 @@ import urllib
 from dataclasses import asdict
 import jinja2
 
+from . import discord
 from . import rulings
 from . import scraper
 
@@ -17,25 +18,6 @@ def proposal_required(f):
     async def decorated_function(*args, **kwargs):
         if "proposal" not in flask.session:
             flask.abort(405)
-        rulings.INDEX.use_proposal(flask.session["proposal"])
-        return await f(*args, **kwargs)
-
-    return decorated_function
-
-
-def proposal_facultative(f):
-    @functools.wraps(f)
-    async def decorated_function(*args, **kwargs):
-        proposal = flask.request.args.get("prop", None) or flask.session.get("proposal")
-        if proposal:
-            try:
-                rulings.INDEX.use_proposal(proposal)
-                flask.session["proposal"] = proposal
-            except KeyError:
-                flask.session.pop("proposal", None)
-                rulings.INDEX.off_proposals()
-        else:
-            rulings.INDEX.off_proposals()
         return await f(*args, **kwargs)
 
     return decorated_function
@@ -81,9 +63,25 @@ async def logout():
     return flask.redirect(next, 302)
 
 
+def use_proposal():
+    """Non-async function to make sure we use the right context"""
+    proposal = flask.request.args.get("prop", None) or flask.session.get("proposal")
+    if proposal:
+        try:
+            flask.g.proposal = rulings.INDEX.use_proposal(proposal)
+            flask.session["proposal"] = proposal
+        except KeyError:
+            flask.session.pop("proposal", None)
+            rulings.INDEX.off_proposals()
+            flask.g.pop("proposal", None)
+    else:
+        rulings.INDEX.off_proposals()
+        flask.g.pop("proposal", None)
+
+
 @api.route("/card/<int:card_id>")
-@proposal_facultative
 async def get_card(card_id: int):
+    use_proposal()
     try:
         ret = asdict(INDEX.get_card(card_id))
         card_id = str(card_id)
@@ -96,15 +94,15 @@ async def get_card(card_id: int):
 
 
 @api.route("/group")
-@proposal_facultative
 async def list_groups():
+    use_proposal()
     ret = list(asdict(g) for g in INDEX.all_groups())
     return flask.jsonify(ret)
 
 
 @api.route("/group/<group_id>")
-@proposal_facultative
 async def get_group(group_id: str):
+    use_proposal()
     try:
         ret = asdict(INDEX.get_group(group_id))
         ret["rulings"] = [asdict(r) for r in INDEX.get_rulings(group_id)]
@@ -122,28 +120,45 @@ async def start_proposal():
     return flask.redirect(next, 302)
 
 
-@api.route("/proposal", methods=["PUT"])
+@api.route("/proposal/update", methods=["POST"])
 @proposal_required
 async def update_proposal():
+    use_proposal()
+    next = flask.request.args.get("next", "index.html")
     data = flask.request.form or flask.request.get_json(force=True)
-    ret = INDEX.update_proposal(**data)
-    flask.session["proposal"] = ret
-    return {"proposal_id": ret}
+    INDEX.update_proposal(**data)
+    return flask.redirect(next, 302)
+
+
+@api.route("/proposal/leave", methods=["POST"])
+@proposal_required
+async def leave_proposal():
+    flask.session.pop("proposal", None)
+    return flask.redirect(next, 302)
 
 
 @api.route("/proposal/submit", methods=["POST"])
 @proposal_required
 async def submit_proposal():
+    use_proposal()
     next = flask.request.args.get("next", "index.html")
-    await INDEX.submit_proposal()
+    data = flask.request.form or flask.request.get_json(force=True)
+    proposal = INDEX.update_proposal(**data)
+    if not proposal.name:
+        raise rulings.FormatError("Proposal needs a name for submission")
+    await discord.submit_proposal(proposal)
     return flask.redirect(next, 302)
 
 
 @api.route("/proposal/approve", methods=["POST"])
 @proposal_required
 async def approve_proposal():
+    use_proposal()
     next = flask.request.args.get("next", "index.html")
+    data = flask.request.form or flask.request.get_json(force=True)
+    proposal = INDEX.update_proposal(**data)
     INDEX.approve_proposal()
+    await discord.proposal_approved(proposal)
     del flask.session["proposal"]
     return flask.redirect(next, 302)
 
@@ -155,15 +170,15 @@ async def list_proposals():
 
 
 @api.route("/reference", methods=["GET"])
-@proposal_required
 async def get_reference():
+    use_proposal()
     ret = [asdict(ref) for ref in INDEX.all_references()]
     return asdict(ret)
 
 
 @api.route("/reference/search", methods=["POST"])
-@proposal_facultative
 async def search_reference():
+    use_proposal()
     data = flask.request.form or flask.request.get_json(force=True)
     try:
         ret = {"reference": asdict(INDEX.get_reference(**data))}
@@ -183,6 +198,7 @@ async def search_reference():
 @api.route("/reference", methods=["POST"])
 @proposal_required
 async def post_reference():
+    use_proposal()
     data = flask.request.form or flask.request.get_json(force=True)
     ret = await INDEX.insert_reference(**data)
     return asdict(ret)
@@ -191,6 +207,7 @@ async def post_reference():
 @api.route("/reference/<reference_id>", methods=["PUT"])
 @proposal_required
 async def put_reference(reference_id: str):
+    use_proposal()
     data = flask.request.form or flask.request.get_json(force=True)
     ret = INDEX.update_reference(reference_id, **data)
     return asdict(ret)
@@ -199,13 +216,14 @@ async def put_reference(reference_id: str):
 @api.route("/reference/<reference_id>", methods=["DELETE"])
 @proposal_required
 async def delete_reference(reference_id: str):
+    use_proposal()
     INDEX.delete_reference(reference_id)
     return {}
 
 
 @api.route("/check-references", methods=["GET"])
-@proposal_facultative
 async def check_references():
+    use_proposal()
     ret = [e.args[0] for e in INDEX.check_references()]
     return ret
 
@@ -213,6 +231,7 @@ async def check_references():
 @api.route("/ruling/<target_id>", methods=["POST"])
 @proposal_required
 async def post_ruling(target_id: str):
+    use_proposal()
     data = flask.request.form or flask.request.get_json(force=True)
     ret = INDEX.insert_ruling(target_id, **data)
     return asdict(ret)
@@ -221,6 +240,7 @@ async def post_ruling(target_id: str):
 @api.route("/ruling/<target_id>/<ruling_id>", methods=["PUT"])
 @proposal_required
 async def put_ruling(target_id: str, ruling_id: str):
+    use_proposal()
     data = flask.request.form or flask.request.get_json(force=True)
     ret = INDEX.update_ruling(target_id, ruling_id, **data)
     return asdict(ret)
@@ -229,6 +249,7 @@ async def put_ruling(target_id: str, ruling_id: str):
 @api.route("/ruling/<target_id>/<ruling_id>", methods=["DELETE"])
 @proposal_required
 async def delete_ruling(target_id: str, ruling_id: str):
+    use_proposal()
     INDEX.delete_ruling(target_id, ruling_id)
     return {}
 
@@ -236,6 +257,7 @@ async def delete_ruling(target_id: str, ruling_id: str):
 @api.route("/group", methods=["POST"])
 @proposal_required
 async def post_group():
+    use_proposal()
     data = flask.request.form or flask.request.get_json(force=True)
     ret = INDEX.upsert_group(**data)
     return flask.redirect(f"/groups.html?uid={ret.uid}", 302)
@@ -244,6 +266,7 @@ async def post_group():
 @api.route("/group/<group_id>", methods=["PUT"])
 @proposal_required
 async def put_group(group_id: str):
+    use_proposal()
     data = flask.request.form or flask.request.get_json(force=True)
     ret = INDEX.upsert_group(uid=group_id, **data)
     return asdict(ret)
@@ -252,5 +275,6 @@ async def put_group(group_id: str):
 @api.route("/group/<group_id>", methods=["DELETE"])
 @proposal_required
 async def delete_group(group_id: str):
+    use_proposal()
     INDEX.delete_group(group_id)
     return {}
