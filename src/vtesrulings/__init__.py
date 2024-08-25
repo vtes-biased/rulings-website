@@ -79,15 +79,15 @@ def newlines(s: str):
 # Default route
 @app.route("/")
 @app.route("/<path:page>")
-@api.proposal_facultative
 async def index(page=None):
+    api.use_proposal()
     if not page:
         return flask.redirect("index.html", 301)
     context = {}
     if "user" in flask.session:
         context["user"] = flask.session["user"]
-    if "proposal" in flask.session:
-        proposal = INDEX.proposals.get(flask.session["proposal"], None)
+    if hasattr(flask.g, "proposal"):
+        proposal = flask.g.proposal
         proposal_dict = {
             "channel_id": proposal.channel_id,
             "name": proposal.name,

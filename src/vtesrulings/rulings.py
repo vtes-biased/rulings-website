@@ -454,27 +454,11 @@ class Proposal(UID):
     channel_id: str = ""
 
 
-repo_dir = tempfile.TemporaryDirectory()
-logger.warn("Using tmp repo: %s", repo_dir.name)
-# TODO: use a separated repo with just the rulings YAML files
+REPO_DIR = tempfile.TemporaryDirectory()
+logger.warn("Using tmp repo: %s", REPO_DIR.name)
 REPO = git.Repo.clone_from(
-    RULINGS_GIT, repo_dir.name, env={"GIT_SSH_COMMAND": GIT_SSH_COMMAND}
+    RULINGS_GIT, REPO_DIR.name, env={"GIT_SSH_COMMAND": GIT_SSH_COMMAND}
 )
-YAML_REFERENCES = yaml.safe_load(
-    open(os.path.join(repo_dir.name, RULINGS_FILES_PATH, "references.yaml"))
-)
-YAML_GROUPS = {
-    NID.from_str(k): {NID.from_str(kk): vv for kk, vv in v.items()}
-    for k, v in yaml.safe_load(
-        open(os.path.join(repo_dir.name, RULINGS_FILES_PATH, "groups.yaml"))
-    ).items()
-}
-YAML_RULINGS = {
-    NID.from_str(k): v
-    for k, v in yaml.safe_load(
-        open(os.path.join(repo_dir.name, RULINGS_FILES_PATH, "rulings.yaml"))
-    ).items()
-}
 
 
 class Index:
@@ -507,13 +491,23 @@ class Index:
         self._load_yaml()
 
     def _load_yaml(self):
+        rulings_dir = os.path.join(REPO_DIR.name, RULINGS_FILES_PATH)
         # build references index
-        for uid, url in YAML_REFERENCES.items():
+        self.base_references.clear()
+        with open(os.path.join(rulings_dir, "references.yaml")) as f:
+            yaml_references = yaml.safe_load(f)
+        for uid, url in yaml_references.items():
             self.base_references[uid] = Reference.from_uid(
                 uid=uid, url=url, state=State.ORIGINAL
             )
         # build groups index
-        for nid, cards_list in YAML_GROUPS.items():
+        self.base_groups.clear()
+        with open(os.path.join(rulings_dir, "groups.yaml")) as f:
+            yaml_groups = {
+                NID.from_str(k): {NID.from_str(kk): vv for kk, vv in v.items()}
+                for k, v in yaml.safe_load(f).items()
+            }
+        for nid, cards_list in yaml_groups.items():
             group = Group(uid=nid.uid, name=nid.name)
             for card_ref, prefix in cards_list.items():
                 card = KRCG_CARDS[int(card_ref.uid)]
@@ -530,7 +524,10 @@ class Index:
                 self.groups_of_card[card_ref.uid].add(nid.uid)
             self.base_groups[group.uid] = group
         # build rulings index
-        for nid, rulings in YAML_RULINGS.items():
+        self.base_rulings.clear()
+        with open(os.path.join(rulings_dir, "rulings.yaml")) as f:
+            yaml_rulings = {NID.from_str(k): v for k, v in yaml.safe_load(f).items()}
+        for nid, rulings in yaml_rulings.items():
             if not nid.uid.startswith("G"):
                 nid = NID(uid=nid.uid, name=KRCG_CARDS[int(nid.uid)].name)
             self.base_rulings[nid.uid] = {}
@@ -587,9 +584,9 @@ class Index:
         """YAML generation and github commit"""
         if not self.proposal.channel_id:
             raise ConsistencyError("Proposal has not been submitted yet")
-        ref_file = os.path.join(repo_dir.name, RULINGS_FILES_PATH, "references.yaml")
-        groups_file = os.path.join(repo_dir.name, RULINGS_FILES_PATH, "groups.yaml")
-        rulings_file = os.path.join(repo_dir.name, RULINGS_FILES_PATH, "rulings.yaml")
+        ref_file = os.path.join(REPO_DIR.name, RULINGS_FILES_PATH, "references.yaml")
+        groups_file = os.path.join(REPO_DIR.name, RULINGS_FILES_PATH, "groups.yaml")
+        rulings_file = os.path.join(REPO_DIR.name, RULINGS_FILES_PATH, "rulings.yaml")
         all_groups = sorted(self.all_groups(), key=lambda x: x.uid)
         with open(ref_file, "w", encoding="utf-8") as f:
             f.write(REFERENCES_COMMENT)
