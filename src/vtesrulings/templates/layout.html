@@ -26,10 +26,10 @@
                 </a>
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
-                        <a class="nav-link" href="index.html">Card</a>
+                        <a class="nav-link" href="index.html{{ search_params }}">Card</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="groups.html">Group</a>
+                        <a class="nav-link" href="groups.html{{ search_params }}">Group</a>
                     </li>
                 </ul>
                 {% if user %}
@@ -78,7 +78,7 @@
                     </h1>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <form class="modal-body" id="proposalForm" method="post" action="/api/proposal">
+                <form class="modal-body" id="proposalForm" onsubmit="return false;"><!-- form sent to API via JS -->
                     <input type="text" class="form-control my-2" placeholder="Name" id="proposalName" name="name"
                         value="{{ proposal.name if proposal else ''}}">
                     {% if proposal %}
@@ -91,7 +91,9 @@
                 </form>
                 <div class="modal-footer">
                     {% if proposal %}
-                    <button type="button" class="btn btn-secondary" id="proposalLeave" form="proposalForm">Leave</button>
+                    <button type="button" class="btn btn-secondary" id="proposalLeave" form="proposalForm">
+                        Leave
+                    </button>
                     <button type="button" class="btn btn-primary" id="proposalSave" form="proposalForm">
                         Save
                     </button>

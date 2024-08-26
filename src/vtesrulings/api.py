@@ -65,11 +65,10 @@ async def logout():
 
 def use_proposal():
     """Non-async function to make sure we use the right context"""
-    proposal = flask.request.args.get("prop", None) or flask.session.get("proposal")
+    proposal = flask.session.get("proposal")
     if proposal and flask.session.get("user"):
         try:
             flask.g.proposal = rulings.INDEX.use_proposal(proposal)
-            flask.session["proposal"] = proposal
         except KeyError:
             flask.session.pop("proposal", None)
             rulings.INDEX.off_proposals()
@@ -113,54 +112,41 @@ async def get_group(group_id: str):
 
 @api.route("/proposal", methods=["POST"])
 async def start_proposal():
-    next = flask.request.args.get("next", "index.html")
     data = flask.request.form or flask.request.get_json(force=True, silent=True) or {}
     ret = INDEX.start_proposal(**data)
-    flask.session["proposal"] = ret
-    return flask.redirect(next, 302)
+    return {"uid": ret}
 
 
-@api.route("/proposal/update", methods=["POST"])
+@api.route("/proposal", methods=["PUT"])
 @proposal_required
 async def update_proposal():
     use_proposal()
-    next = flask.request.args.get("next", "index.html")
     data = flask.request.form or flask.request.get_json(force=True)
     INDEX.update_proposal(**data)
-    return flask.redirect(next, 302)
-
-
-@api.route("/proposal/leave", methods=["POST"])
-@proposal_required
-async def leave_proposal():
-    flask.session.pop("proposal", None)
-    return flask.redirect(next, 302)
+    return "OK"
 
 
 @api.route("/proposal/submit", methods=["POST"])
 @proposal_required
 async def submit_proposal():
     use_proposal()
-    next = flask.request.args.get("next", "index.html")
     data = flask.request.form or flask.request.get_json(force=True)
     proposal = INDEX.update_proposal(**data)
     if not proposal.name:
         raise rulings.FormatError("Proposal needs a name for submission")
     await discord.submit_proposal(proposal)
-    return flask.redirect(next, 302)
+    return "OK"
 
 
 @api.route("/proposal/approve", methods=["POST"])
 @proposal_required
 async def approve_proposal():
     use_proposal()
-    next = flask.request.args.get("next", "index.html")
     data = flask.request.form or flask.request.get_json(force=True)
     proposal = INDEX.update_proposal(**data)
     INDEX.approve_proposal()
     await discord.proposal_approved(proposal)
-    del flask.session["proposal"]
-    return flask.redirect(next, 302)
+    return "OK"
 
 
 @api.route("/proposal", methods=["GET"])
@@ -217,6 +203,8 @@ async def put_reference(reference_id: str):
 @proposal_required
 async def delete_reference(reference_id: str):
     use_proposal()
+    if reference_id.startswith("RBK"):
+        flask.abort(403)
     INDEX.delete_reference(reference_id)
     return {}
 

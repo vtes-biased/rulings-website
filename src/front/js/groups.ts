@@ -198,7 +198,9 @@ async function deleteGroup(ev: MouseEvent, groupDisplay: HTMLDivElement) {
         if (!response.ok) {
             throw new Error((await response.json())[0])
         }
-        window.location.replace("/groups.html")
+        const url = new URL(window.location.href)
+        url.searchParams.delete("uid")
+        window.location.replace(url.href)
     }
     catch (error) {
         console.log("Error deleting group", error.message)

@@ -24,6 +24,20 @@ function addCardEvents(elem: HTMLElement) {
     }
 }
 
+async function do_fetch(url: string, options: Object) {
+    try {
+        const response = await fetch(url, options)
+        if (!response.ok) {
+            throw new Error((await response.json())[0])
+        }
+        return response
+    }
+    catch (error) {
+        console.log(`Error fetching ${url}`, error.message)
+        displayError(error.message)
+    }
+}
+
 function getRange(position: Position) {
     const range = new Range()
     range.setStart(position.node, position.offset)
@@ -132,39 +146,23 @@ function addRulingReference(
 
 async function createAndAddLink(ev: MouseEvent, position: Position) {
     const form = (ev.target as HTMLButtonElement).form
-    try {
-        const response = await fetch("/api/reference", {
-            method: "post",
-            body: new FormData(form)
-        })
-        if (!response.ok) {
-            throw new Error((await response.json())[0])
-        }
-        const data = await response.json() as Reference
-        addRulingReference(position.card, position.card.querySelector("div.card-footer"), data, true, true)
-        await rulingSave(position.card)
-        position.modal.hide()
-    }
-    catch (error) {
-        console.log("Error posting reference", error.message)
-        displayError(error.message)
-    }
+    const response = await do_fetch("/api/reference", {
+        method: "post",
+        body: new FormData(form)
+    })
+    const data = await response.json() as Reference
+    addRulingReference(position.card, position.card.querySelector("div.card-footer"), data, true, true)
+    await rulingSave(position.card)
+    position.modal.hide()
+
 }
 
 async function addExistingLink(ev: MouseEvent, position: Position) {
     const form = (ev.target as HTMLButtonElement).form
     const data = JSON.parse(form.dataset.existing)
     addRulingReference(position.card, position.card.querySelector("div.card-footer"), data, true, true)
-    try {
-        await rulingSave(position.card)
-    }
-    catch (error) {
-        console.log("Error adding reference", error.message)
-        displayError(error.message)
-    }
-    finally {
-        position.modal.hide()
-    }
+    await rulingSave(position.card)
+    position.modal.hide()
 }
 
 export function displayRulingCard(elem: HTMLDivElement, edit_mode: boolean, position: Position) {
@@ -199,7 +197,11 @@ export function displayRulingCard(elem: HTMLDivElement, edit_mode: boolean, posi
     if (ruling.target.uid != source) {
         let group = document.createElement("a")
         group.classList.add("badge", "rounded-pill", "bg-primary-subtle", "text-primary-emphasis", "text-decoration-none")
-        group.href = `groups.html?uid=${ruling.target.uid}`
+        const url = new URL(window.location.href)
+        url.searchParams.delete("uid")
+        url.searchParams.append("uid", ruling.target.uid)
+        url.pathname = "groups.html"
+        group.href = url.href
         group.innerText = ruling.target.name
         body.append(group)
     }
@@ -285,25 +287,16 @@ async function rulingSave(elem: HTMLDivElement) {
     }
     if (new_text != ruling.text) {
         console.log("Updating ruling", ruling.uid, ruling.text, new_text)
-        try {
-            const response = await fetch(
-                `/api/ruling/${elem.dataset.source}/${ruling.uid}`,
-                {
-                    method: "put",
-                    body: JSON.stringify({ text: new_text })
-                }
-            )
-            if (!response.ok) {
-                throw new Error((await response.json())[0])
+        const response = await do_fetch(
+            `/api/ruling/${elem.dataset.source}/${ruling.uid}`,
+            {
+                method: "put",
+                body: JSON.stringify({ text: new_text })
             }
-            const new_ruling = await response.json() as Ruling
-            elem.dataset.ruling = JSON.stringify(new_ruling)
-            updateProposal()
-        }
-        catch (error) {
-            console.log("Error updating ruling", error.message)
-            displayError(error.message)
-        }
+        )
+        const new_ruling = await response.json() as Ruling
+        elem.dataset.ruling = JSON.stringify(new_ruling)
+        updateProposal()
     }
     else {
         console.log("Ruling unchanged", ruling.uid)
@@ -317,21 +310,12 @@ async function rulingDelete(elem: HTMLDivElement) {
         return
     }
     const ruling = JSON.parse(elem.dataset.ruling) as Ruling
-    try {
-        const response = await fetch(
-            `/api/ruling/${elem.dataset.source}/${ruling.uid}`,
-            { method: "delete" }
-        )
-        if (!response.ok) {
-            throw new Error((await response.json())[0])
-        }
-        elem.remove()
-        updateProposal()
-    }
-    catch (error) {
-        console.log("Error updating ruling", error.message)
-        displayError(error.message)
-    }
+    await do_fetch(
+        `/api/ruling/${elem.dataset.source}/${ruling.uid}`,
+        { method: "delete" }
+    )
+    elem.remove()
+    updateProposal()
 }
 
 export function displayError(msg: string) {
@@ -343,8 +327,6 @@ export function displayError(msg: string) {
 
 export function displayProposal(data: Proposal | undefined) {
     const proposalAcc = document.getElementById("proposalAcc") as HTMLDivElement
-    console.log(proposalAcc)
-    console.log(proposalAcc.dataset.data)
     if (data === undefined) {
         data = JSON.parse(proposalAcc.dataset.data) as Proposal
     } else {
@@ -364,7 +346,11 @@ export function displayProposal(data: Proposal | undefined) {
         const link = document.createElement("a")
         link.classList.add("m-2", "badge", "bg-secondary", "text-decoration-none")
         groupsDiv.append(link)
-        link.href = `/groups.html?uid=${group.uid}`
+        const url = new URL(window.location.href)
+        url.searchParams.delete("uid")
+        url.searchParams.append("uid", group.uid)
+        url.pathname = "groups.html"
+        link.href = url.href
         link.innerHTML = group.name
     }
     const cardsDiv = document.getElementById("proposalCards") as HTMLDivElement
@@ -381,7 +367,11 @@ export function displayProposal(data: Proposal | undefined) {
         const link = document.createElement("a")
         link.classList.add("m-2", "badge", "bg-secondary", "text-decoration-none")
         cardsDiv.append(link)
-        link.href = `/index.html?uid=${card.uid}`
+        const url = new URL(window.location.href)
+        url.searchParams.delete("uid")
+        url.searchParams.append("uid", card.uid)
+        url.pathname = "index.html"
+        link.href = url.href
         link.innerHTML = card.name
     }
 }
@@ -407,7 +397,7 @@ export function updateProposal() {
 function navActivateCurrent() {
     for (let elem of document.getElementsByClassName("nav-link")) {
         if (elem.tagName === "A") {
-            if ((elem as HTMLAnchorElement).href === window.location.href.split('?')[0]) {
+            if ((elem as HTMLAnchorElement).href.split('?')[0] === window.location.href.split('?')[0]) {
                 elem.classList.add("active")
                 elem.ariaCurrent = "page"
             } else {
@@ -416,6 +406,63 @@ function navActivateCurrent() {
             }
         }
     }
+}
+
+async function startProposal(event: MouseEvent) {
+    const form = (event.currentTarget as HTMLButtonElement).form
+    const response = await do_fetch("/api/proposal", { method: "post", body: new FormData(form) })
+    if (!response) { return }
+    const data = await response.json()
+    const uid = data.uid
+    const url = new URL(window.location.href)
+    url.searchParams.delete("prop")
+    url.searchParams.append("prop", uid)
+    window.location.href = url.href
+}
+
+async function submitProposal(event: MouseEvent, proposalModal: bootstrap.Modal) {
+    const form = (event.currentTarget as HTMLButtonElement).form
+    const response = await do_fetch("/api/check-references", { method: "get" })
+    console.log(response)
+    if (!response) { console.log("nooooo"); return }
+    const errors = await response.json()
+    console.log(errors)
+    for (const error of errors) {
+        displayError(error)
+    }
+    if (errors.length > 0) { return }
+    await do_fetch("/api/proposal/submit", { method: "post", body: new FormData(form) })
+    window.location.reload()
+}
+
+async function approveProposal(event: MouseEvent, proposalModal: bootstrap.Modal) {
+    // TODO: add spinner
+    const form = (event.currentTarget as HTMLButtonElement).form
+    const response = await do_fetch("/api/check-references", { method: "post", body: new FormData(form) })
+    if (!response) { return }
+    const errors = await response.json()
+    console.log(errors)
+    for (const error in errors) {
+        displayError(error)
+    }
+    if (errors) { return }
+    await do_fetch("/api/proposal/approve", { method: "post", body: new FormData(form) })
+    const url = new URL(window.location.href)
+    url.searchParams.delete("prop")
+    window.location.href = url.href
+}
+
+async function saveProposal(event: MouseEvent) {
+    const form = (event.currentTarget as HTMLButtonElement).form
+    const response = await do_fetch("/api/proposal", { method: "put", body: new FormData(form) })
+    if (!response) { return }
+    window.location.reload()
+}
+
+async function leaveProposal() {
+    const url = new URL(window.location.href)
+    url.searchParams.delete("prop")
+    window.location.href = url.href
 }
 
 function mapProposalModal() {
@@ -428,37 +475,22 @@ function mapProposalModal() {
     const proposalButton = document.getElementById('proposalButton') as HTMLButtonElement
     if (!proposalButton) { return }
     const proposalForm = document.getElementById('proposalForm') as HTMLFormElement
+
     proposalButton.addEventListener("click", () => proposalModal.show())
-    const next = encodeURIComponent(window.location.pathname + window.location.search)
     if (proposalStart) {
-        proposalStart.addEventListener("click", () => {
-            proposalForm.action = `/api/proposal?next=${next}`
-            proposalForm.submit()
-        })
+        proposalStart.addEventListener("click", startProposal)
     }
     if (proposalLeave) {
-        proposalLeave.addEventListener("click", () => {
-            proposalForm.action = `/api/proposal/leave?next=${next}`
-            proposalForm.submit()
-        })
+        proposalLeave.addEventListener("click", leaveProposal)
     }
     if (proposalSubmit) {
-        proposalSubmit.addEventListener("click", () => {
-            proposalForm.action = `/api/proposal/submit?next=${next}`
-            proposalForm.submit()
-        })
+        proposalSubmit.addEventListener("click", (ev) => submitProposal(ev, proposalModal))
     }
     if (proposalApprove) {
-        proposalApprove.addEventListener("click", () => {
-            proposalForm.action = `/api/proposal/approve?next=${next}`
-            proposalForm.submit()
-        })
+        proposalApprove.addEventListener("click", (ev) => approveProposal(ev, proposalModal))
     }
     if (proposalSave) {
-        proposalSave.addEventListener("click", () => {
-            proposalForm.action = `/api/proposal/update?next=${next}`
-            proposalForm.submit()
-        })
+        proposalSave.addEventListener("click", saveProposal)
     }
 }
 
@@ -487,24 +519,16 @@ async function addRulingCard(ev: MouseEvent, position: Position) {
     card.classList.add("card", "my-1", "krcg-ruling")
     card.dataset.source = button.parentElement.dataset.source
     console.log("Creating ruling", source)
-    try {
-        const response = await fetch(
-            `/api/ruling/${source}`,
-            { method: "post", body: JSON.stringify({ text: "" }) }
-        )
-        if (!response.ok) {
-            throw new Error((await response.json())[0])
-        }
-        const new_ruling = await response.json() as Ruling
-        card.dataset.ruling = JSON.stringify(new_ruling)
-        button.before(card)
-        displayRulingCard(card, true, position)
-        updateProposal()
-    }
-    catch (error) {
-        console.log("Error updating ruling", error.message)
-        displayError(error.message)
-    }
+    const response = await do_fetch(
+        `/api/ruling/${source}`,
+        { method: "post", body: JSON.stringify({ text: "" }) }
+    )
+    if (!response) { return }
+    const new_ruling = await response.json() as Ruling
+    card.dataset.ruling = JSON.stringify(new_ruling)
+    button.before(card)
+    displayRulingCard(card, true, position)
+    updateProposal()
 }
 
 async function changeReferenceName(ev: InputEvent) {
@@ -523,7 +547,6 @@ async function changeReferenceName(ev: InputEvent) {
             method: "post",
             body: body
         })
-        console.log("Search UID", response)
         if (response.ok) {
             const data = await response.json() as SearchResponse
             referenceURL.value = data.reference.url
@@ -562,7 +585,6 @@ async function changeReferenceURL(ev: InputEvent) {
             method: "post",
             body: body
         })
-        console.log("Search URL", response)
         if (response.ok) {
             const data = await response.json() as SearchResponse
             if (data.computed_uid) {
@@ -686,18 +708,20 @@ export async function load() {
         setupReferenceModal(position)
     }
     const rulingsList = document.getElementById("rulingsList") as HTMLDivElement
-    const ruling_cards = document.querySelectorAll("div.krcg-ruling") as NodeListOf<HTMLDivElement>
-    const edit_mode = Boolean(proposalAcc)
-    for (const ruling_card of ruling_cards) {
-        displayRulingCard(ruling_card, edit_mode, position)
-    }
-    if (edit_mode) {
-        const addRulingButton = document.createElement("button")
-        addRulingButton.classList.add("btn", "text-bg-primary")
-        addRulingButton.type = "button"
-        addRulingButton.innerHTML = '<i class="bi-plus-lg"></i> Add ruling'
-        addRulingButton.addEventListener("click", (ev) => addRulingCard(ev, position))
-        rulingsList.append(addRulingButton)
+    if (rulingsList) {
+        const ruling_cards = rulingsList.querySelectorAll("div.krcg-ruling") as NodeListOf<HTMLDivElement>
+        const edit_mode = Boolean(proposalAcc)
+        for (const ruling_card of ruling_cards) {
+            displayRulingCard(ruling_card, edit_mode, position)
+        }
+        if (edit_mode) {
+            const addRulingButton = document.createElement("button")
+            addRulingButton.classList.add("btn", "text-bg-primary")
+            addRulingButton.type = "button"
+            addRulingButton.innerHTML = '<i class="bi-plus-lg"></i> Add ruling'
+            addRulingButton.addEventListener("click", (ev) => addRulingCard(ev, position))
+            rulingsList.append(addRulingButton)
+        }
     }
     document.addEventListener("selectionchange", (ev) => memorizePosition(ev, position))
 }

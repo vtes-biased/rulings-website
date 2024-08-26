@@ -649,11 +649,13 @@ class Index:
 
     def all_references(self) -> typing.Generator[None, None, Reference]:
         if self.proposal:
-            yield from self.proposal.references.values()
-        for ref in self.base_references.values():
-            if self.proposal and ref.uid in self.proposal.references:
+            for reference in self.proposal.references.values():
+                if reference:
+                    yield reference
+        for reference in self.base_references.values():
+            if self.proposal and reference.uid in self.proposal.references:
                 continue
-            yield ref
+            yield reference
 
     def get_reference(self, uid: str = "", url: str = "") -> Reference:
         """Return the ruling Reference object if it exists. Raise KeyError otherwise."""
@@ -708,15 +710,18 @@ class Index:
     def all_rulings(self) -> typing.Generator[None, None, Ruling]:
         """Allows iteration on all Ruling objects"""
         for uid in self.base_rulings:
-            yield from self.get_rulings(uid)
+            yield from self.get_rulings(uid, False)
         if self.proposal:
             for uid in self.proposal.rulings:
                 if uid not in self.base_rulings:
-                    yield from self.get_rulings(uid)
+                    yield from self.get_rulings(uid, False)
 
-    def get_rulings(self, uid: str) -> typing.Generator[None, None, Ruling]:
+    def get_rulings(
+        self, uid: str, group: bool = True
+    ) -> typing.Generator[None, None, Ruling]:
         """Yields all Ruling currently listed for the card or group.
-        If it's a card, this includes rulings from groups the card is part of.
+        If it's a card, this includes rulings from groups the card is part of,
+        except if group is False.
         """
         if self.proposal and uid in self.proposal.rulings:
             proposal = self.proposal.rulings[uid]
@@ -735,7 +740,7 @@ class Index:
             if ruling_uid not in base:
                 assert ruling is not None
                 yield ruling
-        if uid.startswith(("G", "P")):
+        if uid.startswith(("G", "P")) or not group:
             return
         for group, card_in_group in self.get_groups_of(uid):
             for ruling in self.get_rulings(group.uid):
@@ -1072,6 +1077,7 @@ class Index:
         additional modifications might be necessary for consistency before submission.
         """
         # TODO: use State.DELETED instead of None
+        assert not uid.startswith("RBK")
         if uid in self.proposal.references and uid not in self.base_references:
             del self.proposal.references[uid]
         else:
@@ -1079,39 +1085,47 @@ class Index:
                 raise ConsistencyError(f"Unknown reference {uid}")
             self.proposal.references[uid] = None
 
-    def check_references(self) -> typing.Generator[None, None, ConsistencyError]:
+    def check_references(self) -> list[ConsistencyError]:
         """Check if reference URLs are all used and listed only once,
         and if rulings don't use a reference that has been removed.
         Yield all the inconsistencies found.
+        Remove unused references if there's none.
         """
-        listed_refs = set(self.base_references.keys())
-        if self.proposal:
-            for k, v in self.proposal.references.items():
-                if v is None:
-                    listed_refs.discard(k)
-                else:
-                    listed_refs.add(k)
+        errors = []
+        listed_refs = set(r.uid for r in self.all_references())
         used_references = set()
         for ruling in self.all_rulings():
             ruling_refs = set(r.uid for r in ruling.references)
+            if not ruling_refs:
+                errors.append(
+                    ConsistencyError(
+                        f"{ruling.target} ruling #{ruling.uid} has no reference"
+                    )
+                )
             if ruling_refs - listed_refs:
-                yield ConsistencyError(
-                    f"{ruling.target} ruling #{ruling.uid} has invalid reference(s): "
-                    f"{ruling_refs - listed_refs}"
+                errors.append(
+                    ConsistencyError(
+                        f"{ruling.target} ruling #{ruling.uid} has invalid reference(s): "
+                        f"{ruling_refs - listed_refs}"
+                    )
                 )
             used_references |= ruling_refs
-        unused_references = listed_refs - used_references
-        for ref in unused_references:
-            yield ConsistencyError(f"Unused reference: {ref}")
-        duplicates = collections.Counter(r.url for r in self.base_references.values())
+        duplicates = collections.defaultdict(set)
         if self.proposal:
-            duplicates.update(
-                r.url for r in self.proposal.references.values() if r is not None
-            )
-        for url, count in duplicates.most_common():
-            if count < 2:
+            for r in self.proposal.references.values():
+                if r is not None:
+                    duplicates[r.url].add(r.uid)
+        for refs in duplicates.values():
+            if len(refs) < 2:
                 break
-            yield ConsistencyError(f"Duplicated URL: {url}")
+            errors.append(ConsistencyError(f"Duplicated URL for {refs}"))
+        if not errors:
+            unused_references = listed_refs - used_references
+            for ref in unused_references:
+                if ref.startswith("RBK"):
+                    continue
+                self.delete_reference(ref)
+        return errors
 
     def parse_references(
         self, text: str

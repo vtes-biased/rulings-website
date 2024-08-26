@@ -61,7 +61,8 @@
 {% endif %}
 <div class="row my-3 gx-0" id="backrefList">
     {% for backref in current.backrefs %}
-    <a class="card m-1 bg-primary-subtle link-underline link-underline-opacity-0 backref" href="?uid={{ current.uid }}">
+    <a class="card m-1 bg-primary-subtle link-underline link-underline-opacity-0 backref"
+        href="?uid={{ current.uid }}{{ search_params_2 }}">
         <img class="card-img-top backref-img" src="{{ current.img }}" alt="{{ current.name }}">
         <p>{{ current.name }}</p>
     </a>

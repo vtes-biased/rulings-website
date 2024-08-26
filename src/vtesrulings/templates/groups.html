@@ -24,7 +24,7 @@
             {% for card in current.cards %}
             <div class="list-group-item d-flex flex-wrap align-items-center" data-uid="{{ card.uid }}">
                 <div class="px-2 me-auto">
-                    <a href="/index.html?uid={{ card.uid }}" class="krcg-card" data-noclick="true"
+                    <a href="/index.html?uid={{ card.uid }}{{ search_params_2 }}" class="krcg-card" data-noclick="true"
                         data-uid="{{ card.uid }}">{{ card.name }}</a>
                 </div>
                 <div class="px-2">
@@ -38,39 +38,39 @@
         <h3 class="my-2">Rulings</h3>
         <div id="rulingsList" data-source="{{ current.uid }}">
             {% for ruling in current.rulings %}
-            <div class="card my-1 krcg-ruling" data-source="{{current.uid}}" data-ruling='{{ ruling | tojson }}'>
-                <!-- Content added by JS -->
-            </div>
-            {% endfor %}
-        </div>
+            <div class="card my-1 krcg-ruling" data-source="{{current.uid}}" data-ruling=' {{ ruling | tojson }}'>
+        <!-- Content added by JS -->
     </div>
-    {% else %}
-    <div class="col-md"></div>
+    {% endfor %}
+</div>
+</div>
+{% else %}
+<div class="col-md"></div>
+{% endif %}
+<div class="col-md list-group p-0" id="groupsList">
+    {% if proposal %}
+    <form action="/api/group" method="post">
+        <input type="text" name="name" hidden="true" value="<unnamed>">
+        <button class="btn text-bg-primary my-2" type="submit"><i class="bi bi-plus-lg"></i> Add group</button>
+    </form>
     {% endif %}
-    <div class="col-md list-group p-0" id="groupsList">
-        {% if proposal %}
-        <form action="/api/group" method="post">
-            <input type="text" name="name" hidden="true" value="<unnamed>">
-            <button class="btn text-bg-primary my-2" type="submit"><i class="bi bi-plus-lg"></i> Add group</button>
-        </form>
-        {% endif %}
-        {% for group in groups %}
-        {% if current and group.uid == current.uid %}
-        <a href="?uid={{ group.uid }}"
-            class="list-group-item list-group-item-action d-flex justify-content-between align-items-center active"
-            data-uid="{{ group.uid }}">
-            {{ group.name }}
-            <span class="badge text-bg-primary rounded-pill">{{ group.cards | length}}</span>
-        </a>
-        {% else %}
-        <a href="?uid={{ group.uid }}"
-            class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
-            data-uid="{{ group.uid }}">
-            {{ group.name }}
-            <span class="badge text-bg-primary rounded-pill">{{ group.cards | length}}</span>
-        </a>
-        {% endif %}
-        {% endfor %}
-    </div>
+    {% for group in groups %}
+    {% if current and group.uid == current.uid %}
+    <a href="?uid={{ group.uid }}{{ search_params_2 }}"
+        class="list-group-item list-group-item-action d-flex justify-content-between align-items-center active"
+        data-uid="{{ group.uid }}">
+        {{ group.name }}
+        <span class="badge text-bg-primary rounded-pill">{{ group.cards | length}}</span>
+    </a>
+    {% else %}
+    <a href="?uid={{ group.uid }}{{ search_params_2 }}"
+        class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+        data-uid="{{ group.uid }}">
+        {{ group.name }}
+        <span class="badge text-bg-primary rounded-pill">{{ group.cards | length}}</span>
+    </a>
+    {% endif %}
+    {% endfor %}
+</div>
 </div>
 {% endblock %}

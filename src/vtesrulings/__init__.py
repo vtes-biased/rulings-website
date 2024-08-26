@@ -80,7 +80,18 @@ def newlines(s: str):
 @app.route("/")
 @app.route("/<path:page>")
 async def index(page=None):
-    api.use_proposal()
+    proposal = flask.request.args.get("prop", None)
+    if proposal and flask.session.get("user"):
+        try:
+            flask.g.proposal = rulings.INDEX.use_proposal(proposal)
+            flask.session["proposal"] = proposal
+        except KeyError:
+            flask.session.pop("proposal", None)
+            rulings.INDEX.off_proposals()
+            flask.g.pop("proposal", None)
+    else:
+        rulings.INDEX.off_proposals()
+        flask.g.pop("proposal", None)
     if not page:
         return flask.redirect("index.html", 301)
     context = {}
@@ -112,6 +123,11 @@ async def index(page=None):
         context["rbk_references"] = [
             ref for ref in INDEX.base_references.values() if ref.uid.startswith("RBK ")
         ]
+        context["search_params"] = f"?prop={proposal.uid}"
+        context["search_params_2"] = f"&prop={proposal.uid}"
+    else:
+        context["search_params"] = ""
+        context["search_params_2"] = ""
     if page == "groups.html":
         context["groups"] = list(asdict(g) for g in INDEX.all_groups())
         uid = flask.request.args.get("uid", None)
