@@ -134,7 +134,11 @@ async function insertCardInGroup(groupDisplay: HTMLDivElement, item: base.Select
     cardName.classList.add("krcg-card")
     cardName.dataset.noclick = "true"
     cardName.dataset.uid = uid
-    cardName.href = `/index.html?uid=${uid}`
+    const url = new URL(window.location.href)
+    url.searchParams.delete("uid")
+    url.searchParams.append("uid", uid)
+    url.pathname = "index.html"
+    cardName.href = url.href
     cardName.innerText = item.label
     cardName.addEventListener("mouseover", overCard.bind(cardName))
     cardName.addEventListener("mouseout", outCard)
@@ -181,12 +185,23 @@ async function removeCard(card: HTMLDivElement, groupDisplay: HTMLDivElement) {
 }
 
 function addRemoveCardButton(listItem: HTMLDivElement, groupDisplay: HTMLDivElement) {
-    const removeButton = document.createElement("button")
-    removeButton.classList.add("btn", "btn-sm", "text-bg-danger")
-    removeButton.type = "button"
-    removeButton.innerHTML = '<i class="bi-trash3"></i>'
-    removeButton.addEventListener("click", async () => { await removeCard(listItem, groupDisplay) })
-    listItem.prepend(removeButton)
+    if (listItem.dataset.state === base.State.DELETED) {
+        const restoreButton = document.createElement("button")
+        restoreButton.classList.add("btn", "btn-sm", "text-bg-success")
+        restoreButton.type = "button"
+        restoreButton.innerHTML = '<i class="bi bi-arrow-counterclockwise"></i>'
+        // TODO
+        // restoreButton.addEventListener("click", async () => { await restoreCard(listItem, groupDisplay) })
+        listItem.prepend(restoreButton)
+    }
+    else {
+        const removeButton = document.createElement("button")
+        removeButton.classList.add("btn", "btn-sm", "text-bg-danger")
+        removeButton.type = "button"
+        removeButton.innerHTML = '<i class="bi-trash3"></i>'
+        removeButton.addEventListener("click", async () => { await removeCard(listItem, groupDisplay) })
+        listItem.prepend(removeButton)
+    }
 }
 
 async function deleteGroup(ev: MouseEvent, groupDisplay: HTMLDivElement) {

@@ -175,14 +175,25 @@ export function displayRulingCard(elem: HTMLDivElement, edit_mode: boolean, posi
         card_row.classList.add("row", "g-0")
         elem.append(card_row)
         const row_1 = document.createElement("div")
-        row_1.classList.add("col-sm-1", "d-flex", "align-items-center", "justify-content-center", "bg-light", "border-end")
+        row_1.classList.add("col-sm-1", "d-flex", "flex-column", "align-items-center", "justify-content-center", "bg-light", "border-end")
         card_row.append(row_1)
-        const remove_button = document.createElement("button")
-        remove_button.classList.add("btn", "text-bg-danger")
-        remove_button.type = "button"
-        remove_button.innerHTML = '<i class="bi-trash3"></i>'
-        remove_button.addEventListener("click", async () => { await rulingDelete(elem) })
-        row_1.append(remove_button)
+        if (ruling.state === State.DELETED || ruling.state === State.MODIFIED) {
+            const restoreButton = document.createElement("button")
+            restoreButton.classList.add("btn", "text-bg-success", "m-1")
+            restoreButton.type = "button"
+            restoreButton.innerHTML = '<i class="bi bi-arrow-counterclockwise"></i>'
+            // TODO
+            // restoreButton.addEventListener("click", async () => { await rulingRestore(elem) })
+            row_1.append(restoreButton)
+        }
+        if (ruling.state != State.DELETED) {
+            const removeButton = document.createElement("button")
+            removeButton.classList.add("btn", "text-bg-danger", "m-1")
+            removeButton.type = "button"
+            removeButton.innerHTML = '<i class="bi-trash3"></i>'
+            removeButton.addEventListener("click", async () => { await rulingDelete(elem) })
+            row_1.append(removeButton)
+        }
         const row_11 = document.createElement("div")
         row_11.classList.add("col-sm-11")
         card_row.append(row_11)
@@ -223,7 +234,16 @@ export function displayRulingCard(elem: HTMLDivElement, edit_mode: boolean, posi
     let card_text = document.createElement("p")
     card_text.classList.add("card-text", "my-2")
     if (edit_mode) {
-        card_text.classList.add("p-2", "bg-primary", "bg-opacity-10")
+        card_text.classList.add("p-2", "bg-opacity-10")
+        if (ruling.state === State.ORIGINAL) {
+            card_text.classList.add("bg-primary")
+        } else if (ruling.state === State.NEW) {
+            card_text.classList.add("bg-success")
+        } else if (ruling.state === State.MODIFIED) {
+            card_text.classList.add("bg-warning")
+        } else if (ruling.state === State.DELETED) {
+            card_text.classList.add("bg-danger")
+        }
         card_text.contentEditable = "true"
         card_text.addEventListener("focusin", (ev) => displayEditTools(ev, position))
         card_text.addEventListener("input", debounce(async () => { await rulingSave(elem) }))
@@ -732,6 +752,13 @@ declare function overCard(): void
 declare function outCard(): void
 
 //Interfaces:
+export enum State {
+    ORIGINAL = "ORIGINAL",
+    NEW = "NEW",
+    MODIFIED = "MODIFIED",
+    DELETED = "DELETED",
+}
+
 interface UID {
     uid: string
 }
@@ -743,46 +770,50 @@ interface NID extends UID {
 interface Reference extends UID {
     url: string,
     source: string,
-    date: string
+    date: string,
+    state: State,
 }
 
 interface SearchResponse {
-    computed_uid: string | undefined
-    reference: Reference | undefined
+    computed_uid: string | undefined,
+    reference: Reference | undefined,
 }
 
 interface SymbolSubstitution {
     text: string,
-    symbol: string
+    symbol: string,
 }
 
 interface BaseCard extends NID {
     printed_name: string,
-    img: string
+    img: string,
 }
 
 interface CardSubstitution extends BaseCard {
-    text: string
+    text: string,
 }
 
 interface ReferencesSubstitution extends Reference {
-    text: string
+    text: string,
 }
 
 interface CardInGroup extends BaseCard {
     prefix: string,
-    symbols: SymbolSubstitution[]
+    state: State,
+    symbols: SymbolSubstitution[],
 }
 
 
 interface Group {
     uid: string,
     name: string,
+    state: State,
     cards: CardInGroup[],
-    rulings: Ruling[]
+    rulings: Ruling[],
 }
 
 interface GroupOfCard extends NID {
+    state: State,
     prefix: string,
     symbols: SymbolSubstitution[]
 }
@@ -795,6 +826,7 @@ interface CardVariant extends UID {
 interface Ruling extends UID {
     target: NID,
     text: string,
+    state: State,
     symbols: SymbolSubstitution[],
     references: ReferencesSubstitution[],
     cards: CardSubstitution[]

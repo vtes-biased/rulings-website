@@ -129,16 +129,26 @@ async def index(page=None):
         context["search_params"] = ""
         context["search_params_2"] = ""
     if page == "groups.html":
-        context["groups"] = list(asdict(g) for g in INDEX.all_groups())
+        context["groups"] = list(asdict(g) for g in INDEX.all_groups(deleted=True))
         uid = flask.request.args.get("uid", None)
         if uid:
-            current = asdict(INDEX.get_group(uid))
-            current["rulings"] = [asdict(r) for r in INDEX.get_rulings(uid)]
-            context["current"] = current
+            try:
+                current = asdict(INDEX.get_group(uid, deleted=True))
+                current["rulings"] = [
+                    asdict(r) for r in INDEX.get_rulings(uid, deleted=True)
+                ]
+                context["current"] = current
+            except KeyError:
+                flask.abort(404)
     elif page == "index.html":
         uid = flask.request.args.get("uid", None)
         if uid:
-            current = asdict(INDEX.get_card(int(uid)))
-            current["rulings"] = [asdict(r) for r in INDEX.get_rulings(uid)]
-            context["current"] = current
+            try:
+                current = asdict(INDEX.get_card(int(uid)))
+                current["rulings"] = [
+                    asdict(r) for r in INDEX.get_rulings(uid, deleted=True)
+                ]
+                context["current"] = current
+            except KeyError:
+                flask.abort(404)
     return flask.render_template(page, **context)

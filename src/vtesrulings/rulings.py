@@ -1,5 +1,6 @@
 import base64
 import collections
+import copy
 import dataclasses
 import datetime
 import enum
@@ -349,12 +350,6 @@ class Reference(UID):
                 )
 
 
-class Status(enum.StrEnum):
-    APPROVED = enum.auto()
-    DISCUSSED = enum.auto()
-    PROPOSAL = enum.auto()
-
-
 @dataclasses.dataclass
 class SymbolSubstitution:
     text: str
@@ -379,6 +374,7 @@ class ReferencesSubstitution(Reference):
 
 @dataclasses.dataclass
 class CardInGroup(BaseCard):
+    state: State
     prefix: str = ""
     symbols: list[SymbolSubstitution] = dataclasses.field(default_factory=list)
 
@@ -387,11 +383,13 @@ class CardInGroup(BaseCard):
 class Group:
     uid: str
     name: str
+    state: State
     cards: list[CardInGroup] = dataclasses.field(default_factory=list)
 
 
 @dataclasses.dataclass
 class GroupOfCard(NID):
+    state: State
     prefix: str = ""
     symbols: list[SymbolSubstitution] = dataclasses.field(default_factory=list)
 
@@ -406,6 +404,8 @@ class CardVariant(UID):
 class Ruling(UID):
     target: NID
     text: str
+    state: State
+    diff: str = ""
     symbols: list[SymbolSubstitution] = dataclasses.field(default_factory=list)
     references: list[ReferencesSubstitution] = dataclasses.field(default_factory=list)
     cards: list[CardSubstitution] = dataclasses.field(default_factory=list)
@@ -508,7 +508,7 @@ class Index:
                 for k, v in yaml.safe_load(f).items()
             }
         for nid, cards_list in yaml_groups.items():
-            group = Group(uid=nid.uid, name=nid.name)
+            group = Group(uid=nid.uid, name=nid.name, state=State.ORIGINAL)
             for card_ref, prefix in cards_list.items():
                 card = KRCG_CARDS[int(card_ref.uid)]
                 group.cards.append(
@@ -518,6 +518,7 @@ class Index:
                         printed_name=card.printed_name,
                         img=card.url,
                         prefix=prefix,
+                        state=State.ORIGINAL,
                         symbols=list(parse_symbols(prefix)),
                     )
                 )
@@ -533,18 +534,22 @@ class Index:
             self.base_rulings[nid.uid] = {}
             for line in rulings:
                 uid = stable_hash(line)
-                ruling = self.build_ruling(line, target=nid, uid=uid)
+                ruling = self.build_ruling(
+                    line, target=nid, uid=uid, state=State.ORIGINAL
+                )
                 self.base_rulings[nid.uid][uid] = ruling
                 for card in ruling.cards:
                     self.backrefs[card.uid].add(nid.uid)
 
-    def build_ruling(self, text: str, target: NID, uid: str = "") -> Ruling:
+    def build_ruling(
+        self, text: str, target: NID, uid: str = "", state: State = State.ORIGINAL
+    ) -> Ruling:
         """Build a Ruling object from text.
         If uid is not provided, it's computed from the text using stable_hash()
         If text is empty, a random 8-char uid is provided
         """
         uid = uid or (stable_hash(text) if text else random_uid8())
-        ruling = Ruling(target=target, uid=uid, text=text)
+        ruling = Ruling(target=target, uid=uid, text=text, state=state)
         ruling.symbols.extend(parse_symbols(text))
         ruling.cards.extend(parse_cards(text))
         ruling.references.extend(self.parse_references(text))
@@ -650,7 +655,7 @@ class Index:
     def all_references(self) -> typing.Generator[None, None, Reference]:
         if self.proposal:
             for reference in self.proposal.references.values():
-                if reference:
+                if reference.state != State.DELETED:
                     yield reference
         for reference in self.base_references.values():
             if self.proposal and reference.uid in self.proposal.references:
@@ -662,18 +667,22 @@ class Index:
         if uid:
             if self.proposal and uid in self.proposal.references:
                 ret = self.proposal.references[uid]
-                if ret is None:
-                    raise KeyError()
+                if ret.state == State.DELETED:
+                    raise KeyError(f"Deleted reference {uid}")
                 return ret
             return self.base_references[uid]
         elif url:
             remove = set()
             if self.proposal:
                 remove = set(
-                    uid for uid, ref in self.proposal.references.items() if ref is None
+                    uid
+                    for uid, ref in self.proposal.references.items()
+                    if ref.state == State.DELETED
                 )
                 rev_proposal = {
-                    ref.url: ref for ref in self.proposal.references.values() if ref
+                    ref.url: ref
+                    for ref in self.proposal.references.values()
+                    if ref.state != State.DELETED
                 }
                 if url in rev_proposal:
                     return rev_proposal[url]
@@ -685,12 +694,12 @@ class Index:
             return rev_base[url]
         raise KeyError()
 
-    def all_groups(self) -> typing.Generator[None, None, Group]:
+    def all_groups(self, deleted: bool = False) -> typing.Generator[None, None, Group]:
         if self.proposal:
             for group in sorted(
                 self.proposal.groups.values(), key=lambda g: g.name if g else ""
             ):
-                if group is None:
+                if group.state == State.DELETED and not deleted:
                     continue
                 yield group
         for group in sorted(self.base_groups.values(), key=lambda g: g.name):
@@ -698,12 +707,12 @@ class Index:
                 continue
             yield group
 
-    def get_group(self, uid: str) -> Group:
+    def get_group(self, uid: str, deleted: bool = False) -> Group:
         """Return the Group object if it exists. Raise KeyError otherwise."""
         if self.proposal and uid in self.proposal.groups:
             ret = self.proposal.groups[uid]
-            if ret is None:
-                raise KeyError()
+            if ret.state == State.DELETED and not deleted:
+                raise KeyError(f"Deleted group {uid}")
             return ret
         return self.base_groups[uid]
 
@@ -717,7 +726,7 @@ class Index:
                     yield from self.get_rulings(uid, False)
 
     def get_rulings(
-        self, uid: str, group: bool = True
+        self, uid: str, group: bool = True, deleted: bool = False
     ) -> typing.Generator[None, None, Ruling]:
         """Yields all Ruling currently listed for the card or group.
         If it's a card, this includes rulings from groups the card is part of,
@@ -731,19 +740,19 @@ class Index:
         for ruling_uid, ruling in base.items():
             if ruling_uid in proposal:
                 ruling = proposal[ruling_uid]
-                if ruling is None:
+                if ruling.state == State.DELETED and not deleted:
                     continue
                 yield ruling
             else:
                 yield ruling
         for ruling_uid, ruling in proposal.items():
             if ruling_uid not in base:
-                assert ruling is not None
+                assert ruling.state != State.DELETED
                 yield ruling
         if uid.startswith(("G", "P")) or not group:
             return
         for group, card_in_group in self.get_groups_of(uid):
-            for ruling in self.get_rulings(group.uid):
+            for ruling in self.get_rulings(group.uid, deleted):
                 yield Ruling(
                     uid=ruling.uid,
                     target=ruling.target,
@@ -752,6 +761,7 @@ class Index:
                         + (" " if card_in_group.prefix else "")
                         + ruling.text
                     ),
+                    state=ruling.state,
                     symbols=ruling.symbols + card_in_group.symbols,
                     references=ruling.references,
                     cards=ruling.cards,
@@ -767,8 +777,8 @@ class Index:
             proposal = self.proposal.rulings[target_uid]
             if ruling_uid in proposal:
                 ret = proposal[ruling_uid]
-                if ret is None:
-                    raise KeyError(f"Unknown ruling {target_uid}:{ruling_uid}")
+                if ret.state == State.DELETED:
+                    raise KeyError(f"Deleted ruling {target_uid}:{ruling_uid}")
                 return ret
         return self.base_rulings[target_uid][ruling_uid]
 
@@ -811,6 +821,7 @@ class Index:
             yield GroupOfCard(
                 uid=group.uid,
                 name=group.name,
+                state=group.state,
                 prefix=card.prefix,
                 symbols=card.symbols,
             )
@@ -944,7 +955,6 @@ class Index:
 
     def delete_ruling(self, target_uid: str, uid: str):
         """Deletes the given ruling. Yield KeyError if not found."""
-        # TODO use State.DELETED instead of None
         if (
             uid in self.proposal.rulings[target_uid]
             and uid not in self.base_rulings[target_uid]
@@ -952,8 +962,17 @@ class Index:
             del self.proposal.rulings[target_uid][uid]
         else:
             if uid not in self.base_rulings[target_uid]:
-                raise ConsistencyError(f"Unknown ruling {target_uid}:{uid}")
-            self.proposal.rulings[target_uid][uid] = None
+                raise KeyError(f"Unknown ruling {target_uid}:{uid}")
+            base_ruling = self.base_rulings[target_uid][uid]
+            self.proposal.rulings[target_uid][uid] = Ruling(
+                uid=base_ruling.uid,
+                target=base_ruling.target,
+                text=base_ruling.text,
+                state=State.DELETED,
+                symbols=base_ruling.symbols,
+                references=base_ruling.references,
+                cards=base_ruling.cards,
+            )
 
     def upsert_group(
         self, uid: str = "", name: str = "", cards: dict[str, str] = None
@@ -968,9 +987,10 @@ class Index:
         """
         cards = cards or {}
         if uid:
-            group = self.get_group(uid)
+            group = copy.copy(self.get_group(uid))
             if name:
                 group.name = name
+            group.state = State.MODIFIED
         else:
             if name and name in itertools.chain(
                 [g.name for g in self.base_groups.values()],
@@ -980,13 +1000,22 @@ class Index:
             if not name:
                 raise FormatError("New group must be given a name")
             uid = f"P{stable_hash(name)}"
-            group = Group(
-                uid=uid,
-                name=name,
-            )
-        group.cards.clear()
+            group = Group(uid=uid, name=name, state=State.NEW)
+        group_cards_dict = {card.uid: copy.copy(card) for card in group.cards}
+        group.cards = []
+        for card in group_cards_dict.values():
+            if card.uid not in cards:
+                card.state = State.DELETED
+                group.cards.append(card)
         for cid, prefix in sorted(cards.items()):
             card = self.get_base_card(int(cid))
+            if cid in group_cards_dict:
+                if prefix != group_cards_dict[cid].prefix:
+                    state = State.MODIFIED
+                else:
+                    state = State.ORIGINAL
+            else:
+                state = State.NEW
             try:
                 symbols = list(parse_symbols(prefix))
             except KeyError:
@@ -998,6 +1027,7 @@ class Index:
                     printed_name=card.printed_name,
                     img=card.img,
                     prefix=prefix,
+                    state=state,
                     symbols=symbols,
                 )
             ),
@@ -1011,7 +1041,8 @@ class Index:
         else:
             if uid not in self.base_groups:
                 raise ConsistencyError(f"Unknown group {uid}")
-            self.proposal.groups[uid] = None
+            self.proposal.groups[uid] = copy.copy(self.base_groups[uid])
+            self.proposal.groups[uid].state = State.DELETED
 
     def insert_reference(self, uid: str = "", url: str = "") -> Reference:
         """Insert a new reference. uid suffixes are handled automatically.
@@ -1083,7 +1114,8 @@ class Index:
         else:
             if uid not in self.base_references:
                 raise ConsistencyError(f"Unknown reference {uid}")
-            self.proposal.references[uid] = None
+            self.proposal.references[uid] = copy.copy(self.base_references[uid])
+            self.proposal.references[uid].state = State.DELETED
 
     def check_references(self) -> list[ConsistencyError]:
         """Check if reference URLs are all used and listed only once,
