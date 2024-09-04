@@ -16,28 +16,21 @@
         <h2 id="groupName">{{ current.name }}</h2>
         {% if proposal %}
         <div class="d-flex justify-content-center">
-            <button id="groupDeleteButton" class="btn text-bg-danger my-3" type="submit"><i class="bi bi-trash3"></i>
-                Delete group</button>
+            <button id="groupDeleteButton" class="btn text-bg-danger my-3" type="submit">
+                <i class="bi bi-trash3"></i>
+                Delete group
+            </button>
+            <button id="groupRestoreButton" class="btn text-bg-success my-3" type="submit" hidden="true">
+                <i class="bi bi-arrow-counterclockwise"></i>
+                Restore group
+            </button>
         </div>
         {% endif %}
         <div class="list-group">
             {% for card in current.cards %}
             <div class="list-group-item d-flex flex-wrap align-items-center" data-uid="{{ card.uid }}"
-                data-state="{{ card.state }}">
-                {% set state_text_colors = {
-                "ORIGINAL": "text-primary",
-                "NEW": "text-success",
-                "MODIFIED": "text-warning",
-                "DELETED": "text-danger"
-                }%}
-                {% set state_tooltip = {
-                "ORIGINAL": "No change",
-                "NEW": "New",
-                "MODIFIED": "Modified",
-                "DELETED": "Deleted"
-                }%}
-                <div class="px-2 {{ state_text_colors[card.state] }}" data-bs-toggle="tooltip"
-                    title="{{ state_tooltip[card.state] }}">
+                data-name='{{ card.name }}' data-state="{{ card.state }}">
+                <div class="krcg-dot px-2" data-bs-toggle="tooltip">
                     <i class="bi bi-circle-fill"></i>
                 </div>
                 <div class="px-2 me-auto">

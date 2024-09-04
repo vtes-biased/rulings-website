@@ -8,6 +8,7 @@ async function load() {
 }
 
 function cardSelected(item: base.SelectItem) {
+    console.log("cardSelected", item)
     const url = new URL(window.location.href)
     url.searchParams.delete("uid")
     url.searchParams.append("uid", item.value)

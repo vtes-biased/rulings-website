@@ -3,6 +3,93 @@ import * as base from "./layout.js"
 import Autocomplete from "bootstrap5-autocomplete/autocomplete.js"
 
 
+function updateGroupDisplay(groupDisplay: HTMLDivElement, data: base.Group | undefined) {
+    if (data) {
+        groupDisplay.dataset.data = JSON.stringify(data)
+    }
+    else {
+        data = JSON.parse(groupDisplay.dataset.data)
+    }
+    const groupDeleteButton = groupDisplay.querySelector("#groupDeleteButton") as HTMLButtonElement
+    const groupRestoreButton = groupDisplay.querySelector("#groupRestoreButton") as HTMLButtonElement
+    if (base.DELETABLE_STATES.includes(data.state)) {
+        groupDeleteButton.hidden = false
+    } else {
+        groupDeleteButton.hidden = true
+    }
+    if (base.RESTORABLE_STATES.includes(data.state)) {
+        groupRestoreButton.hidden = false
+    } else {
+        groupRestoreButton.hidden = true
+    }
+    const groupName = groupDisplay.querySelector("#groupName") as HTMLHeadingElement
+    if (data.state == base.State.DELETED) {
+        groupName.contentEditable = "false"
+        groupName.classList.remove("bg-opacity-10")
+    } else {
+        groupName.contentEditable = "true"
+        groupName.classList.add("bg-opacity-10")
+        groupName.classList.remove(...Object.values(base.STATE_BG_COLORS))
+        groupName.classList.add(base.STATE_BG_COLORS[data.state])
+    }
+    let cards_dict = {} as Record<string, base.CardInGroup>
+    for (const card_data of data.cards) {
+        cards_dict[card_data.uid] = card_data
+    }
+    const cardList = groupDisplay.querySelector(".list-group") as HTMLDivElement
+    const cards = cardList.querySelectorAll(".list-group-item") as NodeListOf<HTMLDivElement>
+    for (const card of cards) {
+        const card_data = cards_dict[card.dataset.uid]
+        const dot = card.querySelector(".krcg-dot") as HTMLDivElement
+        dot.classList.remove(...Object.values(base.STATE_TEXT_COLORS))
+        dot.classList.add(base.STATE_TEXT_COLORS[card_data.state])
+        dot.title = base.STATE_TOOLTIP[card_data.state]
+        let restoreButton = card.querySelector(".krcg-restore") as HTMLButtonElement
+        if (data.state != base.State.DELETED && base.RESTORABLE_STATES.includes(card_data.state)) {
+            if (!restoreButton) {
+                restoreButton = document.createElement("button")
+                restoreButton.classList.add("btn", "btn-sm", "text-bg-success", "krcg-restore")
+                restoreButton.type = "button"
+                restoreButton.innerHTML = '<i class="bi bi-arrow-counterclockwise"></i>'
+                restoreButton.addEventListener("click", async () => {
+                    await restoreGroupCard(groupDisplay, card_data.uid)
+                })
+                card.prepend(restoreButton)
+            }
+        } else if (restoreButton) {
+            restoreButton.remove()
+        }
+        let removeButton = card.querySelector(".krcg-remove") as HTMLButtonElement
+        if (data.state != base.State.DELETED && base.DELETABLE_STATES.includes(card_data.state)) {
+            if (!removeButton) {
+                removeButton = document.createElement("button")
+                removeButton.classList.add("btn", "btn-sm", "text-bg-danger", "krcg-remove")
+                removeButton.type = "button"
+                removeButton.innerHTML = '<i class="bi-trash3"></i>'
+                removeButton.addEventListener("click", async () => { await removeCard(card, groupDisplay) })
+                card.prepend(removeButton)
+            }
+        }
+        else if (removeButton) {
+            removeButton.remove()
+        }
+        let prefix = card.querySelector(".krcg-prefix") as HTMLDivElement
+        let text = card_data.prefix
+        for (const symbol of card_data.symbols) {
+            text.replace(symbol.text, `<span class="krcg-icon">${symbol.symbol}</span>`)
+        }
+        prefix.innerHTML = text
+        if (data.state == base.State.DELETED || card_data.state == base.State.DELETED) {
+            prefix.classList.remove("bg-primary", "bg-opacity-10")
+            prefix.contentEditable = "false"
+        } else {
+            prefix.classList.add("bg-primary", "bg-opacity-10")
+            prefix.contentEditable = "true"
+        }
+    }
+}
+
+
 async function groupSave(groupDisplay: HTMLDivElement) {
     const name = groupDisplay.querySelector("h2").innerText
     const cards = groupDisplay.querySelectorAll(".list-group-item") as NodeListOf<HTMLDivElement>
@@ -11,6 +98,7 @@ async function groupSave(groupDisplay: HTMLDivElement) {
         cards: {}
     }
     for (const card of cards) {
+        if (card.dataset.state === base.State.DELETED) { continue }
         const prefixElem = card.querySelector(".krcg-prefix") as HTMLDivElement
         let prefix = ""
         for (const node of prefixElem.childNodes) {
@@ -38,14 +126,13 @@ async function groupSave(groupDisplay: HTMLDivElement) {
         if (!response.ok) {
             throw new Error((await response.json())[0])
         }
+        const data = await response.json()
         const groupsList = document.getElementById("groupsList") as HTMLDivElement
         const current = groupsList.querySelector("a.active") as HTMLAnchorElement
-        // we're async, make sure it's the right one
-        if (current.dataset.uid === groupDisplay.dataset.uid) {
-            current.firstChild.textContent = name
-            const counter = current.querySelector("span.badge") as HTMLSpanElement
-            counter.innerText = cards.length.toString()
-        }
+        current.firstChild.textContent = name
+        const counter = current.querySelector("span.badge") as HTMLSpanElement
+        counter.innerText = cards.length.toString()
+        updateGroupDisplay(groupDisplay, data)
         base.updateProposal()
     }
     catch (error) {
@@ -62,6 +149,12 @@ async function insertDiscInCard(ev: MouseEvent, groupDisplay: HTMLDivElement) {
     window.getSelection().getRangeAt(0).insertNode(newElement)
     await groupSave(groupDisplay)
     window.getSelection().setPosition(newElement.nextSibling, 0)
+}
+
+async function restoreGroupCard(groupDisplay: HTMLDivElement, card_uid: string) {
+    const response = await base.do_fetch(`/api/group/${groupDisplay.dataset.uid}/restore/${card_uid}`, { method: "post" })
+    const data = await response.json() as base.Group
+    updateGroupDisplay(groupDisplay, data)
 }
 
 function setupCardEditTools(groupDisplay: HTMLDivElement) {
@@ -106,8 +199,6 @@ function hideCardEditTools(ev: FocusEvent) {
 }
 
 function makePrefixEditable(prefix: HTMLDivElement, groupDisplay: HTMLDivElement) {
-    prefix.classList.add("bg-primary", "bg-opacity-10")
-    prefix.contentEditable = "true"
     prefix.addEventListener("focusin", (ev) => displayCardEditTools(ev))
     prefix.addEventListener("focusout", (ev) => hideCardEditTools(ev))
     prefix.addEventListener("input", base.debounce(async () => { await groupSave(groupDisplay) }))
@@ -118,15 +209,25 @@ async function insertCardInGroup(groupDisplay: HTMLDivElement, item: base.Select
     const cards = cardList.querySelectorAll(".list-group-item") as NodeListOf<HTMLDivElement>
     const uid = item.value.toString()
     for (const card of cards) {
-        console.log(item.value, card.dataset.uid)
         if (card.dataset.uid === uid) {
+            if (card.dataset.state === base.State.DELETED) {
+                card.dataset.state = base.State.ORIGINAL
+            }
+            await groupSave(groupDisplay)
             return
         }
     }
     const listItem = document.createElement("div")
     listItem.classList.add("list-group-item", "d-flex", "flex-wrap", "align-items-center")
     listItem.dataset.uid = uid
+    listItem.dataset.name = item.value
+    listItem.dataset.state = base.State.NEW
     cardList.append(listItem)
+    const dotDiv = document.createElement("div")
+    dotDiv.classList.add("krcg-dot", "px-2")
+    dotDiv.dataset.bsToggle = "tooltip"
+    dotDiv.innerHTML = '<i class="bi bi-circle-fill"></i>'
+    listItem.append(dotDiv)
     const nameDiv = document.createElement("div")
     nameDiv.classList.add("px-2", "me-auto")
     listItem.append(nameDiv)
@@ -150,7 +251,6 @@ async function insertCardInGroup(groupDisplay: HTMLDivElement, item: base.Select
     prefix.classList.add("krcg-prefix", "w-25", "px-2")
     makePrefixEditable(prefix, groupDisplay)
     listItem.append(prefix)
-    addRemoveCardButton(listItem, groupDisplay)
     await groupSave(groupDisplay)
 }
 
@@ -180,47 +280,52 @@ function setupCardAdd(groupDisplay: HTMLDivElement) {
 }
 
 async function removeCard(card: HTMLDivElement, groupDisplay: HTMLDivElement) {
-    card.remove()
+    card.dataset.state = base.State.DELETED
     await groupSave(groupDisplay)
 }
 
-function addRemoveCardButton(listItem: HTMLDivElement, groupDisplay: HTMLDivElement) {
-    if (listItem.dataset.state === base.State.DELETED) {
-        const restoreButton = document.createElement("button")
-        restoreButton.classList.add("btn", "btn-sm", "text-bg-success")
-        restoreButton.type = "button"
-        restoreButton.innerHTML = '<i class="bi bi-arrow-counterclockwise"></i>'
-        // TODO
-        // restoreButton.addEventListener("click", async () => { await restoreCard(listItem, groupDisplay) })
-        listItem.prepend(restoreButton)
-    }
-    else {
-        const removeButton = document.createElement("button")
-        removeButton.classList.add("btn", "btn-sm", "text-bg-danger")
-        removeButton.type = "button"
-        removeButton.innerHTML = '<i class="bi-trash3"></i>'
-        removeButton.addEventListener("click", async () => { await removeCard(listItem, groupDisplay) })
-        listItem.prepend(removeButton)
-    }
-}
+// function addRemoveCardButton(listItem: HTMLDivElement, groupDisplay: HTMLDivElement) {
+//     if (listItem.dataset.state === base.State.DELETED) {
+//         const restoreButton = document.createElement("button")
+//         restoreButton.classList.add("btn", "btn-sm", "text-bg-success")
+//         restoreButton.type = "button"
+//         restoreButton.innerHTML = '<i class="bi bi-arrow-counterclockwise"></i>'
+//         restoreButton.addEventListener("click", async () => {
+//             await insertCardInGroup(groupDisplay, {
+//                 value: listItem.dataset.uid,
+//                 label: listItem.dataset.name
+//             })
+//         })
+//         listItem.prepend(restoreButton)
+//     }
+//     else {
+//         const removeButton = document.createElement("button")
+//         removeButton.classList.add("btn", "btn-sm", "text-bg-danger")
+//         removeButton.type = "button"
+//         removeButton.innerHTML = '<i class="bi-trash3"></i>'
+//         removeButton.addEventListener("click", async () => { await removeCard(listItem, groupDisplay) })
+//         listItem.prepend(removeButton)
+//     }
+// }
 
 async function deleteGroup(ev: MouseEvent, groupDisplay: HTMLDivElement) {
-    try {
-        const response = await fetch(
-            `/api/group/${groupDisplay.dataset.uid}`,
-            { method: "delete" }
-        )
-        if (!response.ok) {
-            throw new Error((await response.json())[0])
-        }
-        const url = new URL(window.location.href)
-        url.searchParams.delete("uid")
-        window.location.replace(url.href)
-    }
-    catch (error) {
-        console.log("Error deleting group", error.message)
-        base.displayError(error.message)
-    }
+    await base.do_fetch(
+        `/api/group/${groupDisplay.dataset.uid}`,
+        { method: "delete" }
+    )
+    const url = new URL(window.location.href)
+    url.searchParams.delete("uid")
+    window.location.replace(url.href)
+}
+
+async function restoreGroup(ev: MouseEvent, groupDisplay: HTMLDivElement) {
+    const response = await base.do_fetch(
+        `/api/group/${groupDisplay.dataset.uid}/restore`,
+        { method: "post" }
+    )
+    const data = await response.json()
+    updateGroupDisplay(groupDisplay, data)
+    base.updateProposal()
 }
 
 async function load() {
@@ -230,17 +335,17 @@ async function load() {
     if (proposalAcc) {
         // editable group name
         const groupName = document.getElementById("groupName")
-        groupName.contentEditable = "true"
-        groupName.classList.add("bg-primary", "bg-opacity-10")
         groupName.addEventListener("input", base.debounce(async () => { await groupSave(groupDisplay) }))
-        // delete group button
+        // group buttons
         const groupDeleteButton = document.getElementById("groupDeleteButton") as HTMLButtonElement
         groupDeleteButton.addEventListener("click", async (ev) => await deleteGroup(ev, groupDisplay))
+        const groupRestoreButton = document.getElementById("groupRestoreButton") as HTMLButtonElement
+        groupRestoreButton.addEventListener("click", async (ev) => await restoreGroup(ev, groupDisplay))
         // removable cards
-        const cards = groupDisplay.querySelectorAll(".list-group-item") as NodeListOf<HTMLDivElement>
-        for (const card of cards) {
-            addRemoveCardButton(card, groupDisplay)
-        }
+        // const cards = groupDisplay.querySelectorAll(".list-group-item") as NodeListOf<HTMLDivElement>
+        // for (const card of cards) {
+        //     addRemoveCardButton(card, groupDisplay)
+        // }
         // editable cards prefixes
         const prefixes = groupDisplay.querySelectorAll(".krcg-prefix") as NodeListOf<HTMLDivElement>
         setupCardEditTools(groupDisplay)
@@ -249,6 +354,7 @@ async function load() {
         }
         // add new card
         setupCardAdd(groupDisplay)
+        updateGroupDisplay(groupDisplay, undefined)
     }
 }
 

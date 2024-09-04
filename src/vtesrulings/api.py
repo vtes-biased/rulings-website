@@ -186,7 +186,7 @@ async def search_reference():
 async def post_reference():
     use_proposal()
     data = flask.request.form or flask.request.get_json(force=True)
-    ret = await INDEX.insert_reference(**data)
+    ret = INDEX.insert_reference(**data)
     return asdict(ret)
 
 
@@ -234,6 +234,14 @@ async def put_ruling(target_id: str, ruling_id: str):
     return asdict(ret)
 
 
+@api.route("/ruling/<target_id>/<ruling_id>/restore", methods=["POST"])
+@proposal_required
+async def restore_ruling(target_id: str, ruling_id: str):
+    use_proposal()
+    ret = INDEX.restore_ruling(target_id, ruling_id)
+    return asdict(ret)
+
+
 @api.route("/ruling/<target_id>/<ruling_id>", methods=["DELETE"])
 @proposal_required
 async def delete_ruling(target_id: str, ruling_id: str):
@@ -257,6 +265,22 @@ async def put_group(group_id: str):
     use_proposal()
     data = flask.request.form or flask.request.get_json(force=True)
     ret = INDEX.upsert_group(uid=group_id, **data)
+    return asdict(ret)
+
+
+@api.route("/group/<group_id>/restore", methods=["POST"])
+@proposal_required
+async def restore_group(group_id: str):
+    use_proposal()
+    del INDEX.proposal.groups[group_id]
+    return asdict(INDEX.get_group(group_id))
+
+
+@api.route("/group/<group_id>/restore/<card_id>", methods=["POST"])
+@proposal_required
+async def restore_group_card(group_id: str, card_id: str):
+    use_proposal()
+    ret = INDEX.restore_group_card(group_id, card_id)
     return asdict(ret)
 
 

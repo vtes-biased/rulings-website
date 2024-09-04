@@ -24,7 +24,7 @@ function addCardEvents(elem: HTMLElement) {
     }
 }
 
-async function do_fetch(url: string, options: Object) {
+export async function do_fetch(url: string, options: Object) {
     try {
         const response = await fetch(url, options)
         if (!response.ok) {
@@ -45,22 +45,24 @@ function getRange(position: Position) {
     return range
 }
 
-function insertDisc(ev: Event, position: Position) {
+async function insertDisc(ev: Event, position: Position) {
     const newElement = document.createElement('span')
     newElement.classList.add("krcg-icon")
     newElement.contentEditable = "false"
     newElement.innerText = (ev.target as HTMLSpanElement).innerText
     getRange(position).insertNode(newElement)
+    await rulingSave(position.card)
     window.getSelection().setPosition(newElement.nextSibling, 0)
 }
 
-function insertCard(item: SelectItem, position: Position) {
+async function insertCard(item: SelectItem, position: Position) {
     const newElement = document.createElement('span')
     newElement.classList.add("krcg-card")
     newElement.contentEditable = "false"
     newElement.innerText = item.label
     addCardEvents(newElement)
     getRange(position).insertNode(newElement)
+    await rulingSave(position.card)
     window.getSelection().setPosition(newElement.nextSibling, 0)
 }
 
@@ -74,12 +76,12 @@ function setupEditTools(position: Position) {
         item.classList.add("dropdown-item")
         item.innerHTML = `<span class="krcg-icon">${icon}</span>`
         li.append(item)
-        item.addEventListener("click", (ev) => insertDisc(ev, position))
+        item.addEventListener("click", async (ev) => await insertDisc(ev, position))
     }
     new bootstrap.Dropdown(dropdown_button)
     const card_search = position.controls.querySelector("input.autocomplete")
     new Autocomplete(card_search,
-        { "onSelectItem": (item: SelectItem) => insertCard(item, position) }
+        { "onSelectItem": async (item: SelectItem) => await insertCard(item, position) }
     )
 }
 
@@ -95,6 +97,8 @@ function memorizePosition(ev: Event, position: Position) {
     const selection = window.getSelection()
     if (!selection.anchorNode) { return }
     if (selection.anchorNode.parentElement != position.paragraph) { return }
+    const card = selection.anchorNode.parentElement.closest(".krcg-ruling") as HTMLDivElement
+    position.card = card
     position.node = selection.anchorNode
     position.offset = selection.anchorOffset
 }
@@ -177,23 +181,7 @@ export function displayRulingCard(elem: HTMLDivElement, edit_mode: boolean, posi
         const row_1 = document.createElement("div")
         row_1.classList.add("col-sm-1", "d-flex", "flex-column", "align-items-center", "justify-content-center", "bg-light", "border-end")
         card_row.append(row_1)
-        if (ruling.state === State.DELETED || ruling.state === State.MODIFIED) {
-            const restoreButton = document.createElement("button")
-            restoreButton.classList.add("btn", "text-bg-success", "m-1")
-            restoreButton.type = "button"
-            restoreButton.innerHTML = '<i class="bi bi-arrow-counterclockwise"></i>'
-            // TODO
-            // restoreButton.addEventListener("click", async () => { await rulingRestore(elem) })
-            row_1.append(restoreButton)
-        }
-        if (ruling.state != State.DELETED) {
-            const removeButton = document.createElement("button")
-            removeButton.classList.add("btn", "text-bg-danger", "m-1")
-            removeButton.type = "button"
-            removeButton.innerHTML = '<i class="bi-trash3"></i>'
-            removeButton.addEventListener("click", async () => { await rulingDelete(elem) })
-            row_1.append(removeButton)
-        }
+        // buttons added by updateRulingDisplay
         const row_11 = document.createElement("div")
         row_11.classList.add("col-sm-11")
         card_row.append(row_11)
@@ -216,35 +204,11 @@ export function displayRulingCard(elem: HTMLDivElement, edit_mode: boolean, posi
         group.innerText = ruling.target.name
         body.append(group)
     }
-    // rework ruling text
-    let text = ruling.text
-    for (const symbol of ruling.symbols) {
-        text = text.replaceAll(
-            symbol.text,
-            `<span class="krcg-icon" contenteditable="false">${symbol.symbol}</span>`
-        )
-    }
-    for (const card of ruling.cards) {
-        let elem = document.createElement("span")
-        elem.classList.add("krcg-card")
-        elem.contentEditable = "false"
-        elem.innerText = card.name
-        text = text.replaceAll(card.text, elem.outerHTML.toString())
-    }
     let card_text = document.createElement("p")
     card_text.classList.add("card-text", "my-2")
     if (edit_mode) {
         card_text.classList.add("p-2", "bg-opacity-10")
-        if (ruling.state === State.ORIGINAL) {
-            card_text.classList.add("bg-primary")
-        } else if (ruling.state === State.NEW) {
-            card_text.classList.add("bg-success")
-        } else if (ruling.state === State.MODIFIED) {
-            card_text.classList.add("bg-warning")
-        } else if (ruling.state === State.DELETED) {
-            card_text.classList.add("bg-danger")
-        }
-        card_text.contentEditable = "true"
+        // color and contentEditable set by updateRulingDisplay
         card_text.addEventListener("focusin", (ev) => displayEditTools(ev, position))
         card_text.addEventListener("input", debounce(async () => { await rulingSave(elem) }))
     }
@@ -253,18 +217,18 @@ export function displayRulingCard(elem: HTMLDivElement, edit_mode: boolean, posi
     footer.classList.add("card-footer", "text-body-secondary")
     root.append(footer)
     for (const reference of ruling.references) {
-        text = text.replace(reference.text, "")
+        // references removed from text in updateRulingDisplay
         addRulingReference(elem, footer, reference, edit_mode, false)
     }
     if (edit_mode) {
         let plus_button = document.createElement("button")
-        plus_button.classList.add("badge", "btn", "mx-2", "text-bg-primary")
+        plus_button.classList.add("badge", "btn", "mx-2", "text-bg-primary", "krcg-reference-add")
         plus_button.type = "button"
         plus_button.innerHTML = '<i class="bi-plus-lg"></i>'
         plus_button.addEventListener("click", (ev) => clickAddLink(ev, position))
         footer.append(plus_button)
     }
-    card_text.innerHTML = text
+    updateRulingDisplay(elem, undefined, edit_mode)
     for (const elem of card_text.querySelectorAll("span.krcg-card") as NodeListOf<HTMLSpanElement>) {
         addCardEvents(elem)
     }
@@ -277,6 +241,84 @@ export function debounce(func: Function, timeout = 300) {
         timer = setTimeout(async () => { await func.apply(this, args) }, timeout)
     }
 }
+
+
+function updateRulingDisplay(elem: HTMLDivElement, data: Ruling | undefined, edit_mode: boolean) {
+    if (data) {
+        elem.dataset.ruling = JSON.stringify(data)
+    }
+    else {
+        data = JSON.parse(elem.dataset.ruling) as Ruling
+    }
+    if (edit_mode) {
+        const buttonsDiv = elem.querySelector(".col-sm-1") as HTMLDivElement
+        if (RESTORABLE_STATES.includes(data.state)) {
+            let restoreButton = elem.querySelector(".krcg-restore") as HTMLButtonElement
+            if (!restoreButton) {
+                restoreButton = document.createElement("button")
+                restoreButton.classList.add("btn", "text-bg-success", "m-1", "krcg-restore")
+                restoreButton.type = "button"
+                restoreButton.innerHTML = '<i class="bi bi-arrow-counterclockwise"></i>'
+                restoreButton.addEventListener("click", async () => { await rulingRestore(elem) })
+                buttonsDiv.prepend(restoreButton)
+            }
+        }
+        else {
+            const restoreButton = elem.querySelector(".krcg-restore") as HTMLButtonElement
+            if (restoreButton) { restoreButton.remove() }
+        }
+        if (DELETABLE_STATES.includes(data.state)) {
+            let deleteButton = elem.querySelector(".krcg-delete") as HTMLButtonElement
+            if (!deleteButton) {
+                deleteButton = document.createElement("button")
+                deleteButton.classList.add("btn", "text-bg-danger", "m-1", "krcg-delete")
+                deleteButton.type = "button"
+                deleteButton.innerHTML = '<i class="bi-trash3"></i>'
+                deleteButton.addEventListener("click", async () => { await rulingDelete(elem) })
+                buttonsDiv.append(deleteButton)
+            }
+        }
+        else {
+            const deleteButton = elem.querySelector(".krcg-delete") as HTMLButtonElement
+            if (deleteButton) { deleteButton.remove() }
+        }
+    }
+    const card_text = elem.querySelector("p")
+    card_text.classList.remove(...Object.values(STATE_BG_COLORS))
+    if (edit_mode) {
+        card_text.classList.add(STATE_BG_COLORS[data.state])
+    }
+    // rework ruling text
+    let text = data.text
+    for (const symbol of data.symbols) {
+        text = text.replaceAll(
+            symbol.text,
+            `<span class="krcg-icon" contenteditable="false">${symbol.symbol}</span>`
+        )
+    }
+    for (const card of data.cards) {
+        let elem = document.createElement("span")
+        elem.classList.add("krcg-card")
+        elem.contentEditable = "false"
+        elem.innerText = card.name
+        text = text.replaceAll(card.text, elem.outerHTML.toString())
+    }
+    for (const reference of data.references) {
+        text = text.replace(reference.text, "")
+    }
+    card_text.innerHTML = text
+    const plus_button = elem.querySelector(".krcg-reference-add") as HTMLButtonElement
+    if (edit_mode) {
+        if (data.state == State.DELETED) {
+            card_text.contentEditable = "false"
+            plus_button.disabled = true
+        } else {
+            card_text.contentEditable = "true"
+            plus_button.disabled = false
+        }
+    }
+}
+
 
 async function rulingSave(elem: HTMLDivElement) {
     console.log("in rulingSave", elem)
@@ -305,22 +347,17 @@ async function rulingSave(elem: HTMLDivElement) {
     for (const reference of elem.querySelectorAll("a.krcg-reference")) {
         new_text += ` [${(reference as HTMLAnchorElement).innerText}]`
     }
-    if (new_text != ruling.text) {
-        console.log("Updating ruling", ruling.uid, ruling.text, new_text)
-        const response = await do_fetch(
-            `/api/ruling/${elem.dataset.source}/${ruling.uid}`,
-            {
-                method: "put",
-                body: JSON.stringify({ text: new_text })
-            }
-        )
-        const new_ruling = await response.json() as Ruling
-        elem.dataset.ruling = JSON.stringify(new_ruling)
-        updateProposal()
-    }
-    else {
-        console.log("Ruling unchanged", ruling.uid)
-    }
+    console.log("Updating ruling", ruling.uid, ruling.text, new_text)
+    const response = await do_fetch(
+        `/api/ruling/${elem.dataset.source}/${ruling.uid}`,
+        {
+            method: "put",
+            body: JSON.stringify({ text: new_text })
+        }
+    )
+    const new_ruling = await response.json() as Ruling
+    updateRulingDisplay(elem, new_ruling, true)
+    updateProposal()
 }
 
 async function rulingDelete(elem: HTMLDivElement) {
@@ -330,11 +367,33 @@ async function rulingDelete(elem: HTMLDivElement) {
         return
     }
     const ruling = JSON.parse(elem.dataset.ruling) as Ruling
-    await do_fetch(
+    const response = await do_fetch(
         `/api/ruling/${elem.dataset.source}/${ruling.uid}`,
         { method: "delete" }
     )
+    if (!response) { return }
     elem.remove()
+    updateProposal()
+}
+
+async function rulingRestore(elem: HTMLDivElement) {
+    console.log("in rulingRestore")
+    if (!elem.classList.contains("krcg-ruling")) {
+        console.log("Div is not a krcg-ruling", elem)
+        return
+    }
+    const ruling = JSON.parse(elem.dataset.ruling) as Ruling
+    const response = await do_fetch(
+        `/api/ruling/${elem.dataset.source}/${ruling.uid}/restore`,
+        { method: "post" }
+    )
+    if (!response) { return }
+    const new_ruling = await response.json()
+    if (new_ruling) {
+        updateRulingDisplay(elem, new_ruling, true)
+    } else {
+        elem.remove()
+    }
     updateProposal()
 }
 
@@ -402,6 +461,7 @@ export function updateProposal() {
     const nid = { uid: current_data.uid, name: current_data.name }
     const proposalAcc = document.getElementById("proposalAcc") as HTMLDivElement
     const prop_data = JSON.parse(proposalAcc.dataset.data) as Proposal
+    // TODO remove if state is ORIGINAL
     if (nid.uid.startsWith("G") || nid.uid.startsWith("P")) {
         if (!prop_data.groups.some((v) => { return v.uid === nid.uid })) {
             prop_data.groups.push(nid)
@@ -440,17 +500,20 @@ async function startProposal(event: MouseEvent) {
     window.location.href = url.href
 }
 
-async function submitProposal(event: MouseEvent, proposalModal: bootstrap.Modal) {
-    const form = (event.currentTarget as HTMLButtonElement).form
+async function checkReferences(): Promise<boolean> {
     const response = await do_fetch("/api/check-references", { method: "get" })
-    console.log(response)
-    if (!response) { console.log("nooooo"); return }
     const errors = await response.json()
     console.log(errors)
     for (const error of errors) {
         displayError(error)
     }
-    if (errors.length > 0) { return }
+    if (errors.length > 0) { return true }
+    return false
+}
+
+async function submitProposal(event: MouseEvent, proposalModal: bootstrap.Modal) {
+    const form = (event.currentTarget as HTMLButtonElement).form
+    if (await checkReferences()) { return }
     await do_fetch("/api/proposal/submit", { method: "post", body: new FormData(form) })
     window.location.reload()
 }
@@ -458,14 +521,7 @@ async function submitProposal(event: MouseEvent, proposalModal: bootstrap.Modal)
 async function approveProposal(event: MouseEvent, proposalModal: bootstrap.Modal) {
     // TODO: add spinner
     const form = (event.currentTarget as HTMLButtonElement).form
-    const response = await do_fetch("/api/check-references", { method: "post", body: new FormData(form) })
-    if (!response) { return }
-    const errors = await response.json()
-    console.log(errors)
-    for (const error in errors) {
-        displayError(error)
-    }
-    if (errors) { return }
+    if (await checkReferences()) { return }
     await do_fetch("/api/proposal/approve", { method: "post", body: new FormData(form) })
     const url = new URL(window.location.href)
     url.searchParams.delete("prop")
@@ -494,8 +550,6 @@ function mapProposalModal() {
     const proposalModal = new bootstrap.Modal('#proposalModal')
     const proposalButton = document.getElementById('proposalButton') as HTMLButtonElement
     if (!proposalButton) { return }
-    const proposalForm = document.getElementById('proposalForm') as HTMLFormElement
-
     proposalButton.addEventListener("click", () => proposalModal.show())
     if (proposalStart) {
         proposalStart.addEventListener("click", startProposal)
@@ -758,6 +812,26 @@ export enum State {
     MODIFIED = "MODIFIED",
     DELETED = "DELETED",
 }
+export const RESTORABLE_STATES = [State.DELETED, State.MODIFIED]
+export const DELETABLE_STATES = [State.ORIGINAL, State.NEW, State.MODIFIED]
+export const STATE_BG_COLORS = {
+    "ORIGINAL": "bg-primary",
+    "NEW": "bg-success",
+    "MODIFIED": "bg-warning",
+    "DELETED": "bg-danger",
+}
+export const STATE_TEXT_COLORS = {
+    "ORIGINAL": "text-primary",
+    "NEW": "text-success",
+    "MODIFIED": "text-warning",
+    "DELETED": "text-danger",
+}
+export const STATE_TOOLTIP = {
+    "ORIGINAL": "No change",
+    "NEW": "New",
+    "MODIFIED": "Modified",
+    "DELETED": "Deleted",
+}
 
 interface UID {
     uid: string
@@ -797,14 +871,13 @@ interface ReferencesSubstitution extends Reference {
     text: string,
 }
 
-interface CardInGroup extends BaseCard {
+export interface CardInGroup extends BaseCard {
     prefix: string,
     state: State,
     symbols: SymbolSubstitution[],
 }
 
-
-interface Group {
+export interface Group {
     uid: string,
     name: string,
     state: State,

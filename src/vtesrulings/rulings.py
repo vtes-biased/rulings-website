@@ -612,6 +612,8 @@ class Index:
                 group_nid = f"{group_uid}|{group.name}"
                 data[group_nid] = {}
                 for card in group.cards:
+                    if card.state == State.DELETED:
+                        continue
                     krcg_card = KRCG_CARDS[int(card.uid)]
                     card_nid = f"{krcg_card.id}|{krcg_card._name}"
                     data[group_nid][card_nid] = card.prefix
@@ -935,13 +937,27 @@ class Index:
         if not uid:
             raise FormatError("Cannot update a ruling without its UID")
         ruling = self.build_ruling(text, target=target)
+        old_ruling = self.get_ruling(target_uid, uid)
+        if old_ruling.state == State.NEW:
+            ruling.state = State.NEW
+            self.proposal.rulings[target_uid].pop(uid, None)
+            self.proposal.rulings[target_uid][ruling.uid] = ruling
+            return ruling
         if ruling.uid == uid:
-            self.proposal.rulings[target_uid].pop(ruling.uid, None)
+            self.proposal.rulings[target_uid].pop(uid, None)
             return self.base_rulings[target_uid][uid]
         ruling.uid = uid
         ruling.state = State.MODIFIED
         self.proposal.rulings[target_uid][ruling.uid] = ruling
         return ruling
+
+    def restore_ruling(self, target_uid: str, uid: str) -> Ruling:
+        """Restore the given ruling"""
+        self.get_nid(target_uid)
+        self.proposal.rulings[target_uid].pop(uid, None)
+        if not self.proposal.rulings[target_uid]:
+            del self.proposal.rulings[target_uid]
+        return self.base_rulings[target_uid][uid]
 
     def insert_ruling(self, target_uid: str, text: str) -> Ruling:
         """Can be empty."""
@@ -955,13 +971,14 @@ class Index:
 
     def delete_ruling(self, target_uid: str, uid: str):
         """Deletes the given ruling. Yield KeyError if not found."""
-        if (
-            uid in self.proposal.rulings[target_uid]
-            and uid not in self.base_rulings[target_uid]
-        ):
+        if uid in self.proposal.rulings.get(
+            target_uid, {}
+        ) and uid not in self.base_rulings.get(target_uid, {}):
             del self.proposal.rulings[target_uid][uid]
+            if not self.proposal.rulings[target_uid]:
+                del self.proposal.rulings[target_uid]
         else:
-            if uid not in self.base_rulings[target_uid]:
+            if uid not in self.base_rulings.get(target_uid, {}):
                 raise KeyError(f"Unknown ruling {target_uid}:{uid}")
             base_ruling = self.base_rulings[target_uid][uid]
             self.proposal.rulings[target_uid][uid] = Ruling(
@@ -1033,6 +1050,23 @@ class Index:
             ),
         self.proposal.groups[uid] = group
         return group
+
+    def restore_group_card(self, uid: str, card_uid: str) -> Proposal:
+        if uid not in self.proposal.groups:
+            raise KeyError(f"Unknown group {uid}")
+        proposal = self.proposal.groups[uid]
+        prop_cards = {c.uid: c for c in proposal.cards}
+        if uid in self.base_groups:
+            base_cards = {c.uid: c for c in self.base_groups[uid].cards}
+        else:
+            base_cards = {}
+        card = base_cards.get(card_uid, None)
+        if card:
+            prop_cards[card_uid] = card
+        else:
+            prop_cards.pop(card_uid, None)
+        proposal.cards = list(prop_cards.values())
+        return proposal
 
     def delete_group(self, uid: str):
         """Delete given group. Yield KeyError if not found."""
