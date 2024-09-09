@@ -577,11 +577,11 @@ function loginManagement() {
     if (loginButton) {
         const loginSubmit = document.getElementById('loginSubmit') as HTMLFormElement
         loginButton.addEventListener("click", () => loginModal.show())
-        loginForm.action = `/api/login?next=${next}`
+        loginForm.action = `/login?next=${next}`
         loginSubmit.addEventListener("click", () => loginForm.submit())
     }
     if (logoutButton) {
-        loginForm.action = `/api/logout?next=${next}`
+        loginForm.action = `/logout?next=${next}`
         logoutButton.addEventListener("click", () => loginForm.submit())
     }
 }

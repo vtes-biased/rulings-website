@@ -17,8 +17,7 @@ $ make update
 You want a couple of env variables for tha app to run correctly:
 
 ```shell
-export FLASK_APP="vtesrulings"
-export FLASK_ENV="development"
+export QUART_APP="vtesrulings:app"
 export DISCORD_WEBHOOK=<your Discord community server webhook URL>
 ```
 

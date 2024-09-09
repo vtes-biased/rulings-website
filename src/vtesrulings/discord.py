@@ -1,16 +1,17 @@
 import aiohttp
 import logging
 import os
+import pprint
 import urllib.parse
 
-from . import rulings
+from . import proposal
 
 logger = logging.getLogger()
 DISCORD_WEBHOOK = os.getenv("DISCORD_WEBHOOK")
 SITE_URL_BASE = os.getenv("SITE_URL_BASE", "http://127.0.0.1:5000")
 
 
-async def proposal_approved(proposal: rulings.Proposal):
+async def proposal_approved(proposal: proposal.Proposal):
     async with aiohttp.ClientSession() as session:
         async with session.post(
             DISCORD_WEBHOOK + f"?wait=true&thread_id={proposal.channel_id}",
@@ -28,7 +29,7 @@ async def proposal_approved(proposal: rulings.Proposal):
             logger.info("Posted on Discord <%s>: %s", proposal.channel_id, data)
 
 
-async def submit_proposal(proposal: rulings.Proposal):
+async def submit_proposal(proposal: proposal.Proposal):
     async with aiohttp.ClientSession() as session:
         async with session.post(
             DISCORD_WEBHOOK + "?wait=true",
@@ -76,4 +77,6 @@ async def submit_proposal(proposal: rulings.Proposal):
         ) as resp:
             resp.raise_for_status()
             data = await resp.json()
+            logger.info("discord said: %s", data)
+            pprint.pprint(data)
             proposal.channel_id = data["channel_id"]

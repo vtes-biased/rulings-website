@@ -30,4 +30,4 @@ update:
 	npm install --include=dev
 
 serve:
-	npm run watch & source .env && flask run
+	npm run watch & source .env && quart run --reload
