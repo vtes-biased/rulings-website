@@ -96,6 +96,34 @@ async def get_user(uid: uuid.UUID) -> User | None:
             return await ret.fetchone()
 
 
+async def get_50_users() -> list[User]:
+    async with POOL.connection() as conn:
+        async with conn.cursor(row_factory=psycopg.rows.class_row(User)) as cursor:
+            ret = await cursor.execute("SELECT * FROM users LIMIT 50")
+            return await ret.fetchall()
+
+
+async def complete_user_vekn(vekn: str) -> list[User]:
+    vekn = vekn.strip().replace("%", "")
+    async with POOL.connection() as conn:
+        async with conn.cursor(row_factory=psycopg.rows.class_row(User)) as cursor:
+            ret = await cursor.execute(
+                "SELECT * FROM users WHERE vekn ILIKE %s LIMIT 10", [f"%{vekn}%"]
+            )
+            return await ret.fetchall()
+
+
+async def make_user(uid: uuid.UUID, category: UserCategory) -> None:
+    async with POOL.connection() as conn:
+        async with conn.cursor(row_factory=psycopg.rows.class_row(User)) as cursor:
+            ret = await cursor.execute(
+                "UPDATE users SET category=%s WHERE uid=%s AND category <> 'ADMIN'",
+                [category, uid],
+            )
+            if ret.rowcount < 1:
+                raise ValueError(f"User '{uid}' not found")
+
+
 def make_admin(username: str):
     with psycopg.connect(CONNINFO) as conn:
         with conn.cursor() as cursor:

@@ -5,6 +5,7 @@
             "source": [
                 "src/front/js/index.ts",
                 "src/front/js/groups.ts",
+                "src/front/js/admin.ts",
                 "src/front/css/layout.scss"
             ]
         }

@@ -197,7 +197,52 @@ async def index(page=None):
                 context["current"] = current
             except KeyError:
                 quart.abort(404)
+    elif page == "admin.html":
+        if not quart.g.user or quart.g.user.category != db.UserCategory.ADMIN:
+            quart.abort(401)
+        uid = quart.request.args.get("uid", None)
+        if uid:
+            users = [await db.get_user(uuid.UUID(uid))]
+        else:
+            users = await db.get_50_users()
+        context["users"] = users
     return await quart.render_template(page, **context)
+
+
+@app.route("/user/search")
+async def user_search():
+    if not quart.g.user or quart.g.user.category != db.UserCategory.ADMIN:
+        quart.abort(401)
+    vekn = quart.request.args.get("query", None)
+    if not vekn:
+        return []
+    users = await db.complete_user_vekn(vekn)
+    ret = [{"label": user.vekn, "value": user.uid} for user in users]
+    return ret
+
+
+@app.route("/user/promote", methods=["POST"])
+async def user_promote():
+    if not quart.g.user or quart.g.user.category != db.UserCategory.ADMIN:
+        quart.abort(401)
+    params = await quart.request.form
+    uid = params.get("uid", None)
+    if not uid:
+        quart.abort(404)
+    await db.make_user(uid, db.UserCategory.RULEMONGER)
+    return quart.redirect("/admin.html", 302)
+
+
+@app.route("/user/demote", methods=["POST"])
+async def user_demote():
+    if not quart.g.user or quart.g.user.category != db.UserCategory.ADMIN:
+        quart.abort(401)
+    params = await quart.request.form
+    uid = params.get("uid", None)
+    if not uid:
+        quart.abort(404)
+    await db.make_user(uid, db.UserCategory.BASIC)
+    return quart.redirect("/admin.html", 302)
 
 
 @app.route("/login", methods=["POST"])
