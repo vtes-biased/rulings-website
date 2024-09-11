@@ -11,6 +11,7 @@ import jinja2.exceptions
 import logging
 import os
 import urllib
+import uuid
 import markupsafe
 
 
@@ -36,9 +37,9 @@ async def lifespan():
     for card in app.cards_map:
         app.cards_search.add(card)
     async with aiofiles.tempfile.TemporaryDirectory() as repo_dir, db.POOL:
-        logger.warn("Initializing database")
+        logger.warning("Initializing database")
         await db.init()
-        logger.warn("Using temporary repo: %s", repo_dir)
+        logger.warning("Using temporary repo: %s", repo_dir)
         app.rulings_repo = await repository.clone(repo_dir)
         app.rulings_index = await repository.load_base(app.rulings_repo, app.cards_map)
         yield
@@ -47,14 +48,14 @@ async def lifespan():
 # Defining Errors
 @app.errorhandler(jinja2.exceptions.TemplateNotFound)
 @app.errorhandler(404)
-def page_not_found(error):
-    return quart.render_template("404.html"), 404
+async def page_not_found(error):
+    return quart.Response(await quart.render_template("404.html"), 404)
 
 
 @app.errorhandler(ValueError)
 @app.errorhandler(KeyError)
 def data_error(error: Exception):
-    logger.exception(str(error))
+    logger.exception("%s: %s", error.__class__, error.args[:1], exc_info=error)
     return quart.jsonify(error.args[:1]), 400
 
 
@@ -111,12 +112,20 @@ def make_session_permanent():
     quart.session.permanent = True
 
 
+@app.before_request
+async def load_user():
+    quart.g.user = None
+    user_id = quart.session.get("user_id", None)
+    if user_id:
+        quart.g.user = await db.get_user(uuid.UUID(user_id))
+
+
 # Default route
 @app.route("/")
 @app.route("/<path:page>")
 async def index(page=None):
     prop_uid = quart.request.args.get("prop", None)
-    if prop_uid and quart.session.get("user"):
+    if prop_uid and quart.g.user:
         try:
             prop = await db.get_proposal(prop_uid)
             quart.g.proposal = proposal.Proposal(**prop)
@@ -129,8 +138,8 @@ async def index(page=None):
     if not page:
         return quart.redirect("index.html", 301)
     context = {}
-    if "user" in quart.session:
-        context["user"] = quart.session["user"]
+    if quart.g.user:
+        context["user"] = asdict(quart.g.user)
     manager = api.get_manager()
     if hasattr(quart.g, "proposal"):
         prop = quart.g.proposal
@@ -191,30 +200,32 @@ async def index(page=None):
     return await quart.render_template(page, **context)
 
 
-@app.route("/login/", methods=["POST"])
+@app.route("/login", methods=["POST"])
 async def login():
-    next = quart.request.args.get("next", "index.html")
+    next = quart.request.args.get("next", "/index.html")
     params = await api.get_params()
-    async with aiohttp.ClientSession() as session:
-        async with session.post(
-            "https://www.vekn.net/api/vekn/login",
-            data=params,
-        ) as response:
-            result = await response.json()
-            try:
-                token = result["data"]["auth"]
-            except:  # noqa: E722
-                token = None
-        if not token:
-            quart.abort(401)
+    if not quart.current_app.config["TESTING"]:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                "https://www.vekn.net/api/vekn/login",
+                data=params,
+            ) as response:
+                result = await response.json()
+                try:
+                    token = result["data"]["auth"]
+                except:  # noqa: E722
+                    token = None
+            if not token:
+                quart.abort(401)
     user = await db.get_or_create_user(params["username"])
-    quart.session["user"] = asdict(user)
+    quart.session["user_id"] = str(user.uid)
     return quart.redirect(next, 302)
 
 
-@app.route("/logout/", methods=["POST"])
+@app.route("/logout", methods=["POST"])
 async def logout():
     next = quart.request.args.get("next", "index.html")
+    quart.session.pop("user_id", None)
     quart.session.pop("user", None)
     quart.session.pop("proposal", None)
     return quart.redirect(next, 302)

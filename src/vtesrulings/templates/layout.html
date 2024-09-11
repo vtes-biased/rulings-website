@@ -102,6 +102,7 @@
                     <button type="button" class="btn btn-success" id="proposalApprove" form="proposalForm">
                         Approve
                     </button>
+                    {% endif %}
                     {% else %}
                     <button type="button" class="btn btn-success" id="proposalSubmit" form="proposalForm">
                         Submit
@@ -201,7 +202,7 @@
             </div>
             <form>
                 <input class="form-control autocomplete mx-2" type="search" placeholder="Card name"
-                    data-server="/api/complete/" data-live-server="true" data-suggestions-threshold="3"
+                    data-server="/api/complete" data-live-server="true" data-suggestions-threshold="3"
                     autocomplete="off" autocapitalize="off" spellcheck=false>
             </form>
         </div>

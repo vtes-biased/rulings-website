@@ -2,7 +2,6 @@ import Autocomplete from "bootstrap5-autocomplete/autocomplete.js";
 import * as base from "./layout.js"
 
 async function load() {
-    // Autocomplete.init already done in base
     const cardSearchInput = document.getElementById("cardSearchInput") as HTMLInputElement
     new Autocomplete(cardSearchInput, { "onSelectItem": cardSelected })
 }

@@ -25,16 +25,16 @@ def proposal_update(f):
         prop_uid = quart.session.get("proposal", None)
         if not prop_uid:
             quart.abort(405)
-        if not quart.session.get("user", None):
+        if not quart.g.user:
             quart.abort(401)
         async with db.POOL.connection() as connection:
             prop = await db.get_proposal_for_update(connection, prop_uid)
             quart.g.proposal = proposal.Proposal(**prop)
-            if quart.g.proposal.usr != str(quart.session["user"]["uid"]):
-                if quart.session["user"]["category"] == db.UserCategory.BASIC:
+            if quart.g.proposal.usr != str(quart.g.user.uid):
+                if quart.g.user.category == db.UserCategory.BASIC:
                     raise ValueError("You cannot modify someone else's proposal")
             ret = await f(*args, **kwargs)
-            await db.update_proposal(connection, prop)
+            await db.update_proposal(connection, asdict(quart.g.proposal))
             quart.g.pop("proposal", None)
         return ret
 
@@ -72,10 +72,13 @@ def get_manager() -> proposal.Manager:
     )
 
 
-@api.route("/complete/")
+@api.route("/complete")
 async def complete_card():
     """Card name completion, with IDs."""
-    text = urllib.parse.unquote(quart.request.args.get("query"))
+    text = quart.request.args.get("query")
+    if not text:
+        quart.abort(404)
+    text = urllib.parse.unquote(text)
     ret = quart.current_app.cards_search.name.search(text)["en"]
     ret = [
         {"label": card.usual_name, "value": card.id}
@@ -102,16 +105,13 @@ async def complete_card():
 @api.route("/card/<int:card_id>")
 @proposal_readonly
 async def get_card(card_id: int):
-    try:
-        manager = get_manager()
-        ret = asdict(manager.get_card(card_id))
-        card_id = str(card_id)
-        ret["rulings"] = [asdict(r) for r in manager.get_rulings(card_id)]
-        ret["groups"] = [asdict(r) for r in manager.get_groups_of_card(card_id)]
-        ret["backrefs"] = [asdict(r) for r in manager.get_backrefs(card_id)]
-        return ret
-    except KeyError:
-        quart.abort(404)
+    manager = get_manager()
+    ret = asdict(manager.get_card(card_id))
+    card_id = str(card_id)
+    ret["rulings"] = [asdict(r) for r in manager.get_rulings(card_id)]
+    ret["groups"] = [asdict(r) for r in manager.get_groups_of_card(card_id)]
+    ret["backrefs"] = [asdict(r) for r in manager.get_backrefs(card_id)]
+    return ret
 
 
 @api.route("/group")
@@ -143,8 +143,10 @@ async def update_proposal_from_params():
 
 @api.route("/proposal", methods=["POST"])
 async def start_proposal():
+    if not quart.g.user:
+        quart.abort(401)
     quart.g.proposal = proposal.Proposal(
-        uid=utils.random_uid8(), usr=quart.session["user"]["uid"]
+        uid=utils.random_uid8(), usr=str(quart.g.user.uid)
     )
     await update_proposal_from_params()
     existing_ids = await db.all_proposal_ids()
@@ -167,7 +169,7 @@ async def submit_proposal():
     await update_proposal_from_params()
     if not quart.g.proposal.name:
         raise ValueError("Proposal needs a name for submission")
-    await discord.submit_proposal(proposal)
+    await discord.submit_proposal(quart.g.proposal)
     # maybe return Discord URL https://discord.com/channels/1269039622059462768/1280893094568398899
     return {}
 
@@ -175,7 +177,7 @@ async def submit_proposal():
 @api.route("/proposal/approve", methods=["POST"])
 @proposal_update
 async def approve_proposal():
-    if quart.session["user"]["category"] not in [
+    if quart.g.user.category not in [
         db.UserCategory.RULEMONGER,
         db.UserCategory.ADMIN,
     ]:
@@ -188,9 +190,12 @@ async def approve_proposal():
         quart.current_app.rulings_repo,
         quart.current_app.cards_map,
         index,
-        "\n\n".join(quart.g.proposal.name, quart.g.proposal.description),
+        f"{quart.g.proposal.name}\n\n{quart.g.proposal.description}",
     )
     await discord.proposal_approved(quart.g.proposal)
+    quart.current_app.rulings_index = await repository.load_base(
+        quart.current_app.rulings_repo, quart.current_app.cards_map
+    )
     return {}
 
 
@@ -242,19 +247,19 @@ async def put_reference(reference_id: str):
     return asdict(ret)
 
 
-@api.route("/reference/<reference_id>", methods=["DELETE"])
-@proposal_update
-async def delete_reference(reference_id: str):
-    if reference_id.startswith("RBK"):
-        quart.abort(403)
-    get_manager().delete_reference(reference_id)
-    return {}
+# @api.route("/reference/<reference_id>", methods=["DELETE"])
+# @proposal_update
+# async def delete_reference(reference_id: str):
+#     if reference_id.startswith("RBK"):
+#         quart.abort(403)
+#     get_manager().delete_reference(reference_id)
+#     return {}
 
 
 @api.route("/check-references", methods=["GET"])
 @proposal_update
 async def check_references():
-    ret = [e.args[0] for e in get_manager().check_references()]
+    ret = [asdict(e) for e in get_manager().check_references()]
     return ret
 
 
@@ -284,8 +289,10 @@ async def restore_ruling(target_id: str, ruling_id: str):
 @api.route("/ruling/<target_id>/<ruling_id>", methods=["DELETE"])
 @proposal_update
 async def delete_ruling(target_id: str, ruling_id: str):
-    get_manager().delete_ruling(target_id, ruling_id)
-    return {}
+    ret = get_manager().delete_ruling(target_id, ruling_id)
+    if ret is None:
+        return quart.Response(status=200)
+    return asdict(ret)
 
 
 @api.route("/group", methods=["POST"])
@@ -307,7 +314,7 @@ async def put_group(group_id: str):
 @api.route("/group/<group_id>/restore", methods=["POST"])
 @proposal_update
 async def restore_group(group_id: str):
-    ret = asdict(get_manager().restore_group(group_id))
+    ret = get_manager().restore_group(group_id)
     return asdict(ret)
 
 

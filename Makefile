@@ -23,7 +23,7 @@ test:
 	black --check src
 	ruff check src
 	yamllint rulings
-	pytest -vvs
+	QUART_TESTING=1 pytest -vvs
 
 update:
 	pip install --upgrade --upgrade-strategy eager -e ".[dev]"

@@ -79,9 +79,14 @@ function setupEditTools(position: Position) {
         item.addEventListener("click", async (ev) => await insertDisc(ev, position))
     }
     new bootstrap.Dropdown(dropdown_button)
-    const card_search = position.controls.querySelector("input.autocomplete")
+    const card_search = position.controls.querySelector("input.autocomplete") as HTMLInputElement
     new Autocomplete(card_search,
-        { "onSelectItem": async (item: SelectItem) => await insertCard(item, position) }
+        {
+            "onSelectItem": async (item: SelectItem) => {
+                await insertCard(item, position)
+                card_search.value = ""
+            }
+        }
     )
 }
 
@@ -129,6 +134,7 @@ function addRulingReference(
     link.innerText = data.uid
     link.target = "blank"
     link_div.append(link)
+    link.addEventListener("dragstart", (ev) => { ev.dataTransfer.setData("application/json", JSON.stringify(data)) })
     if (edit_mode) {
         let remove_button = document.createElement("button")
         remove_button.classList.add("badge", "btn", "ms-2", "text-bg-danger")
@@ -227,11 +233,27 @@ export function displayRulingCard(elem: HTMLDivElement, edit_mode: boolean, posi
         plus_button.innerHTML = '<i class="bi-plus-lg"></i>'
         plus_button.addEventListener("click", (ev) => clickAddLink(ev, position))
         footer.append(plus_button)
+        root.addEventListener("dragover", (ev) => { ev.preventDefault(); ev.dataTransfer.dropEffect = "copy" });
+        root.addEventListener("drop", async (ev) => await dropExistingReference(ev, elem));
+        root.addEventListener("dragenter", (ev) => { ev.preventDefault(); console.log("dragenter", ev) });
+        root.addEventListener("dragleave", (ev) => { console.log("dragleave", ev); ev.dataTransfer.dropEffect = "none" });
     }
-    updateRulingDisplay(elem, undefined, edit_mode)
+    updateRulingDisplay(elem, undefined, edit_mode, false)
     for (const elem of card_text.querySelectorAll("span.krcg-card") as NodeListOf<HTMLSpanElement>) {
         addCardEvents(elem)
     }
+}
+
+async function dropExistingReference(ev: DragEvent, card: HTMLDivElement) {
+    ev.preventDefault()
+    console.log("drop", ev)
+    const url = ev.dataTransfer.getData("URL")
+    console.log(url)
+    console.log("card", card)
+    const data = JSON.parse(ev.dataTransfer.getData("application/json"))
+    console.log("data", data)
+    addRulingReference(card, card.querySelector("div.card-footer"), data, true, true)
+    await rulingSave(card)
 }
 
 export function debounce(func: Function, timeout = 300) {
@@ -243,7 +265,7 @@ export function debounce(func: Function, timeout = 300) {
 }
 
 
-function updateRulingDisplay(elem: HTMLDivElement, data: Ruling | undefined, edit_mode: boolean) {
+function updateRulingDisplay(elem: HTMLDivElement, data: Ruling | undefined, edit_mode: boolean, keep_text: boolean) {
     if (data) {
         elem.dataset.ruling = JSON.stringify(data)
     }
@@ -288,6 +310,7 @@ function updateRulingDisplay(elem: HTMLDivElement, data: Ruling | undefined, edi
     if (edit_mode) {
         card_text.classList.add(STATE_BG_COLORS[data.state])
     }
+    if (keep_text) { return }
     // rework ruling text
     let text = data.text
     for (const symbol of data.symbols) {
@@ -356,7 +379,7 @@ async function rulingSave(elem: HTMLDivElement) {
         }
     )
     const new_ruling = await response.json() as Ruling
-    updateRulingDisplay(elem, new_ruling, true)
+    updateRulingDisplay(elem, new_ruling, true, true)
     updateProposal()
 }
 
@@ -372,7 +395,14 @@ async function rulingDelete(elem: HTMLDivElement) {
         { method: "delete" }
     )
     if (!response) { return }
-    elem.remove()
+    const new_ruling = await response.json() as Ruling
+    console.log("delete new_ruling", new_ruling)
+    if (!new_ruling) {
+        elem.remove()
+    }
+    else {
+        updateRulingDisplay(elem, new_ruling, true, true)
+    }
     updateProposal()
 }
 
@@ -390,7 +420,7 @@ async function rulingRestore(elem: HTMLDivElement) {
     if (!response) { return }
     const new_ruling = await response.json()
     if (new_ruling) {
-        updateRulingDisplay(elem, new_ruling, true)
+        updateRulingDisplay(elem, new_ruling, true, false)
     } else {
         elem.remove()
     }
@@ -514,15 +544,19 @@ async function checkReferences(): Promise<boolean> {
 async function submitProposal(event: MouseEvent, proposalModal: bootstrap.Modal) {
     const form = (event.currentTarget as HTMLButtonElement).form
     if (await checkReferences()) { return }
-    await do_fetch("/api/proposal/submit", { method: "post", body: new FormData(form) })
+    const response = await do_fetch("/api/proposal/submit", { method: "post", body: new FormData(form) })
+    if (!response) { return }
     window.location.reload()
 }
 
 async function approveProposal(event: MouseEvent, proposalModal: bootstrap.Modal) {
-    // TODO: add spinner
-    const form = (event.currentTarget as HTMLButtonElement).form
+    const button = event.currentTarget as HTMLButtonElement
+    const form = button.form
     if (await checkReferences()) { return }
-    await do_fetch("/api/proposal/approve", { method: "post", body: new FormData(form) })
+    button.innerHTML = '<div class="spinner-border" role="status"></div>'
+    const response = await do_fetch("/api/proposal/approve", { method: "post", body: new FormData(form) })
+    button.innerHTML = "Approve"
+    if (!response) { return }
     const url = new URL(window.location.href)
     url.searchParams.delete("prop")
     window.location.href = url.href
@@ -761,7 +795,6 @@ export async function load() {
         return new bootstrap.Tooltip(tooltipTriggerEl)
     })
     // other stuff
-    Autocomplete.init()
     navActivateCurrent()
     loginManagement()
     mapProposalModal()

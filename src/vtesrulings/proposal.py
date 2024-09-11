@@ -4,20 +4,29 @@ import dataclasses
 import functools
 import itertools
 import krcg.cards
+import pydantic.dataclasses
 import typing
 import uuid
-
 from . import models
 from . import utils
 
 
-@dataclasses.dataclass(kw_only=True)
+@pydantic.dataclasses.dataclass(kw_only=True)
 class Proposal(models.BaseIndex):
     uid: str = ""
     usr: str = ""
     name: str = ""
     description: str = ""
     channel_id: str = ""
+
+
+# def from_json(data: dict) -> Proposal:
+#     references = {k: models.Reference(**v) for k, v in data.pop("references", {})}
+#     references: dict[str, Reference] = dataclasses.field(default_factory=dict)
+#     groups: dict[str, Group] = dataclasses.field(default_factory=dict)
+#     rulings: dict[str, dict[str, Ruling]] = dataclasses.field(default_factory=dict)
+
+#     return Proposal()
 
 
 class Manager:
@@ -122,6 +131,7 @@ class Manager:
             missing = ruling_uid not in self.base.rulings.get(uid, {})
             if ruling.state == models.State.MODIFIED and missing:
                 ruling.state = models.State.NEW
+            if ruling.state == models.State.NEW and missing:
                 missing = False
             if not missing and (deleted or ruling.state != models.State.DELETED):
                 yield ruling
@@ -157,9 +167,9 @@ class Manager:
         by the current proposal.
         """
         if target_uid in self.prop.rulings:
-            proposal = self.prop.rulings[target_uid]
-            if ruling_uid in proposal:
-                ret = proposal[ruling_uid]
+            rulings = self.prop.rulings[target_uid]
+            if ruling_uid in rulings:
+                ret = rulings[ruling_uid]
                 if ret.state == models.State.DELETED and not deleted:
                     raise KeyError(f"Deleted ruling {target_uid}:{ruling_uid}")
                 # A modified ruling might have also been modified by another proposal
@@ -306,9 +316,9 @@ class Manager:
             cls = models.LibraryCard
             kwargs.update(
                 {
-                    "pool_cost": card.pool_cost,
-                    "blood_cost": card.blood_cost,
-                    "conviction_cost": card.conviction_cost,
+                    "pool_cost": card.pool_cost or "",
+                    "blood_cost": card.blood_cost or "",
+                    "conviction_cost": card.conviction_cost or "",
                 }
             )
 
@@ -349,6 +359,7 @@ class Manager:
         ruling.state = models.State.NEW
         if ruling.uid in self.prop.rulings.get(target_uid, {}):
             raise ValueError("An identical ruling exists already")
+        self.prop.rulings.setdefault(target_uid, {})
         self.prop.rulings[target_uid][ruling.uid] = ruling
         return ruling
 
@@ -361,6 +372,7 @@ class Manager:
             raise ValueError("Cannot update a ruling without its UID")
         ruling = self.build_ruling(text, target=target)
         old_ruling = self.get_ruling(target_uid, uid)
+        self.prop.rulings.setdefault(target_uid, {})
         if old_ruling.state == models.State.NEW:
             ruling.state = models.State.NEW
             self.prop.rulings[target_uid].pop(uid, None)
@@ -368,6 +380,8 @@ class Manager:
             return ruling
         if ruling.uid == uid:
             self.prop.rulings[target_uid].pop(uid, None)
+            if not self.prop.rulings[target_uid]:
+                del self.prop.rulings[target_uid]
             return self.base.rulings[target_uid][uid]
         ruling.uid = uid
         ruling.state = models.State.MODIFIED
@@ -381,7 +395,7 @@ class Manager:
             del self.prop.rulings[target_uid]
         return self.base.rulings[target_uid][uid]
 
-    def delete_ruling(self, target_uid: str, uid: str):
+    def delete_ruling(self, target_uid: str, uid: str) -> models.Ruling | None:
         """Delete the given ruling. Yield KeyError if not found."""
         if uid in self.prop.rulings.get(
             target_uid, {}
@@ -389,19 +403,22 @@ class Manager:
             del self.prop.rulings[target_uid][uid]
             if not self.prop.rulings[target_uid]:
                 del self.prop.rulings[target_uid]
-        else:
-            if uid not in self.base.rulings.get(target_uid, {}):
-                raise KeyError(f"Unknown ruling {target_uid}:{uid}")
-            base_ruling = self.base.rulings[target_uid][uid]
-            self.prop.rulings[target_uid][uid] = models.Ruling(
-                uid=base_ruling.uid,
-                target=base_ruling.target,
-                text=base_ruling.text,
-                state=models.State.DELETED,
-                symbols=base_ruling.symbols,
-                references=base_ruling.references,
-                cards=base_ruling.cards,
-            )
+            return None
+        if uid not in self.base.rulings.get(target_uid, {}):
+            raise KeyError(f"Unknown ruling {target_uid}:{uid}")
+        base_ruling = self.base.rulings[target_uid][uid]
+        ret = models.Ruling(
+            uid=base_ruling.uid,
+            target=base_ruling.target,
+            text=base_ruling.text,
+            state=models.State.DELETED,
+            symbols=base_ruling.symbols,
+            references=base_ruling.references,
+            cards=base_ruling.cards,
+        )
+        self.prop.rulings.setdefault(target_uid, {})
+        self.prop.rulings[target_uid][uid] = ret
+        return ret
 
     def upsert_group(
         self, uid: str = "", name: str = "", cards: dict[str, str] = None
@@ -420,8 +437,6 @@ class Manager:
             group = copy.copy(self.get_group(uid))
             if name:
                 group.name = name
-            if group.state == models.State.ORIGINAL:
-                group.state = models.State.MODIFIED
         else:
             if name and name in itertools.chain(
                 [g.name for g in self.base.groups.values()],
@@ -432,21 +447,34 @@ class Manager:
                 raise ValueError("New group must be given a name")
             uid = f"P{utils.stable_hash(name)}"
             group = models.Group(uid=uid, name=name, state=models.State.NEW)
-        group_cards_dict = {card.uid: copy.copy(card) for card in group.cards}
         group.cards = []
-        for card in group_cards_dict.values():
+        base_cards_dict = {}
+        # carefully compare with original group if it exists
+        # we want the global status to be properly computed
+        if uid in self.base.groups:
+            base_cards_dict = {c.uid: c for c in self.base.groups[uid].cards}
+            if name == self.base.groups[uid].name:
+                group.state = models.State.ORIGINAL
+            else:
+                group.state = models.State.MODIFIED
+        for card in base_cards_dict.values():
             if card.uid not in cards:
+                card = copy.copy(card)
                 card.state = models.State.DELETED
                 group.cards.append(card)
+                group.state = models.State.MODIFIED
         for cid, prefix in sorted(cards.items()):
             card = self.get_base_card(int(cid))
-            if cid in group_cards_dict:
-                if prefix == group_cards_dict[cid].prefix:
+            if cid in base_cards_dict:
+                if prefix == base_cards_dict[cid].prefix:
                     state = models.State.ORIGINAL
                 else:
                     state = models.State.MODIFIED
+                    group.state = models.State.MODIFIED
             else:
                 state = models.State.NEW
+                if uid in self.base.groups:
+                    group.state = models.State.MODIFIED
             try:
                 symbols = list(utils.parse_symbols(prefix))
             except KeyError:
@@ -462,6 +490,11 @@ class Manager:
                     symbols=symbols,
                 )
             ),
+        if group.state == models.State.ORIGINAL:
+            self.prop.groups.pop(uid, None)
+        # removing all cards is akin to deleting the group
+        elif not group.cards:
+            group.state = models.State.DELETED
         self.prop.groups[uid] = group
         return group
 
@@ -614,7 +647,7 @@ class Manager:
             if not ret.groups[key].cards:
                 del ret.groups[key]
         for target, rulings in self.prop.rulings.items():
-            ret.rulings[target].setdefault(dict())
+            ret.rulings.setdefault(target, dict())
             for key, value in rulings.items():
                 if value.state == models.State.DELETED or not value.text.strip():
                     ret.rulings[target].pop(key, None)

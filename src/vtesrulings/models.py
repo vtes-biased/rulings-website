@@ -1,4 +1,5 @@
 import dataclasses
+import pydantic.dataclasses
 import enum
 
 
@@ -9,7 +10,7 @@ class State(enum.StrEnum):
     DELETED = "DELETED"
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass
 class UID:
     uid: str
 
@@ -22,7 +23,7 @@ class UID:
         return self.uid == rhs
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass
 class NID(UID):
     """Named Identifier"""
 
@@ -38,44 +39,44 @@ class NID(UID):
         return super().__eq__()
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass
 class Reference(UID):
     url: str
     source: str
-    date: str
-    state: State
+    date: str | None = None
+    state: State = State.ORIGINAL
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass
 class SymbolSubstitution:
     text: str
     symbol: str
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass
 class BaseCard(NID):
     printed_name: str
     img: str
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass
 class CardSubstitution(BaseCard):
     text: str
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass(kw_only=True)
 class ReferencesSubstitution(Reference):
     text: str
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass
 class CardInGroup(BaseCard):
     state: State
     prefix: str = ""
     symbols: list[SymbolSubstitution] = dataclasses.field(default_factory=list)
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass
 class Group:
     uid: str
     name: str
@@ -83,25 +84,24 @@ class Group:
     cards: list[CardInGroup] = dataclasses.field(default_factory=list)
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass
 class GroupOfCard(NID):
     state: State
     prefix: str = ""
     symbols: list[SymbolSubstitution] = dataclasses.field(default_factory=list)
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass
 class CardVariant(UID):
     group: int | None = None
     advanced: bool = False
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass
 class Ruling(UID):
     target: NID
     text: str
     state: State
-    diff: str = ""
     symbols: list[SymbolSubstitution] = dataclasses.field(default_factory=list)
     references: list[ReferencesSubstitution] = dataclasses.field(default_factory=list)
     cards: list[CardSubstitution] = dataclasses.field(default_factory=list)
@@ -113,7 +113,7 @@ class Ruling(UID):
         self.target.uid, self.uid == rhs.target.uid, rhs.uid
 
 
-@dataclasses.dataclass(kw_only=True)
+@pydantic.dataclasses.dataclass(kw_only=True)
 class Card(BaseCard):
     types: list[str]
     disciplines: list[str]
@@ -122,7 +122,7 @@ class Card(BaseCard):
     text_symbols: list[SymbolSubstitution] = dataclasses.field(default_factory=list)
 
 
-@dataclasses.dataclass(kw_only=True)
+@pydantic.dataclasses.dataclass(kw_only=True)
 class CryptCard(Card):
     capacity: int | None = None
     group: str | None = ""
@@ -131,34 +131,34 @@ class CryptCard(Card):
     variants: list[CardVariant] = dataclasses.field(default_factory=list)
 
 
-@dataclasses.dataclass(kw_only=True)
+@pydantic.dataclasses.dataclass(kw_only=True)
 class LibraryCard(Card):
-    pool_cost: int = 0
-    blood_cost: int = 0
-    conviction_cost: int = 0
+    pool_cost: str = ""
+    blood_cost: str = ""
+    conviction_cost: str = ""
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass
 class BaseIndex:
     references: dict[str, Reference] = dataclasses.field(default_factory=dict)
     groups: dict[str, Group] = dataclasses.field(default_factory=dict)
     rulings: dict[str, dict[str, Ruling]] = dataclasses.field(default_factory=dict)
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass
 class Backref:
     target_uid: str
     ruling_uid: str
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass
 class Index(BaseIndex):
     # convenience indexes generated from the previous ones on load
     groups_of_card: dict[str, set[str]] = dataclasses.field(default_factory=dict)
     backrefs: dict[str, list[Backref]] = dataclasses.field(default_factory=dict)
 
 
-@dataclasses.dataclass
+@pydantic.dataclasses.dataclass
 class ReferenceError:
     target_uid: str
     ruling_uid: str

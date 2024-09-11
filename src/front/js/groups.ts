@@ -40,6 +40,10 @@ function updateGroupDisplay(groupDisplay: HTMLDivElement, data: base.Group | und
     const cards = cardList.querySelectorAll(".list-group-item") as NodeListOf<HTMLDivElement>
     for (const card of cards) {
         const card_data = cards_dict[card.dataset.uid]
+        if (!card_data) {
+            card.remove()
+            continue
+        }
         const dot = card.querySelector(".krcg-dot") as HTMLDivElement
         dot.classList.remove(...Object.values(base.STATE_TEXT_COLORS))
         dot.classList.add(base.STATE_TEXT_COLORS[card_data.state])
@@ -76,7 +80,7 @@ function updateGroupDisplay(groupDisplay: HTMLDivElement, data: base.Group | und
         let prefix = card.querySelector(".krcg-prefix") as HTMLDivElement
         let text = card_data.prefix
         for (const symbol of card_data.symbols) {
-            text.replace(symbol.text, `<span class="krcg-icon">${symbol.symbol}</span>`)
+            text = text.replaceAll(symbol.text, `<span class="krcg-icon" contenteditable="false">${symbol.symbol}</span>`)
         }
         prefix.innerHTML = text
         if (data.state == base.State.DELETED || card_data.state == base.State.DELETED) {
@@ -127,6 +131,7 @@ async function groupSave(groupDisplay: HTMLDivElement) {
             throw new Error((await response.json())[0])
         }
         const data = await response.json()
+        console.log("Result", data)
         const groupsList = document.getElementById("groupsList") as HTMLDivElement
         const current = groupsList.querySelector("a.active") as HTMLAnchorElement
         current.firstChild.textContent = name
@@ -148,7 +153,6 @@ async function insertDiscInCard(ev: MouseEvent, groupDisplay: HTMLDivElement) {
     newElement.innerText = (ev.currentTarget as HTMLSpanElement).innerText
     window.getSelection().getRangeAt(0).insertNode(newElement)
     await groupSave(groupDisplay)
-    window.getSelection().setPosition(newElement.nextSibling, 0)
 }
 
 async function restoreGroupCard(groupDisplay: HTMLDivElement, card_uid: string) {
@@ -180,9 +184,9 @@ function displayCardEditTools(ev: FocusEvent) {
     elem.previousElementSibling.appendChild(buttons)
 }
 
-function hideCardEditTools(ev: FocusEvent) {
+function hideCardEditTools(ev: FocusEvent | undefined) {
     const selection = window.getSelection()
-    if (selection) {
+    if (ev && selection) {
         const anchor = selection.anchorNode
         if (anchor) {
             if (anchor === ev.currentTarget) {
@@ -204,7 +208,7 @@ function makePrefixEditable(prefix: HTMLDivElement, groupDisplay: HTMLDivElement
     prefix.addEventListener("input", base.debounce(async () => { await groupSave(groupDisplay) }))
 }
 
-async function insertCardInGroup(groupDisplay: HTMLDivElement, item: base.SelectItem) {
+async function insertCardInGroup(groupDisplay: HTMLDivElement, item: base.SelectItem, searchInput: HTMLInputElement) {
     const cardList = groupDisplay.querySelector(".list-group") as HTMLDivElement
     const cards = cardList.querySelectorAll(".list-group-item") as NodeListOf<HTMLDivElement>
     const uid = item.value.toString()
@@ -251,6 +255,7 @@ async function insertCardInGroup(groupDisplay: HTMLDivElement, item: base.Select
     prefix.classList.add("krcg-prefix", "w-25", "px-2")
     makePrefixEditable(prefix, groupDisplay)
     listItem.append(prefix)
+    searchInput.value = ""
     await groupSave(groupDisplay)
 }
 
@@ -275,7 +280,7 @@ function setupCardAdd(groupDisplay: HTMLDivElement) {
     searchInput.spellcheck = false
     searchForm.append(searchInput)
     new Autocomplete(searchInput,
-        { "onSelectItem": async (item: base.SelectItem) => await insertCardInGroup(groupDisplay, item) }
+        { "onSelectItem": async (item: base.SelectItem) => await insertCardInGroup(groupDisplay, item, searchInput) }
     )
 }
 

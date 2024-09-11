@@ -212,7 +212,7 @@ async def commit_index(
         await f.write(RULINGS_COMMENT)
         data = {}
         for card in sorted(card_map, key=lambda x: x.id):
-            for ruling in index.rulings.get(str(card.id), []):
+            for ruling in index.rulings.get(str(card.id), {}).values():
                 # skip group rulings
                 if ruling.target.uid != str(card.id):
                     continue
@@ -220,16 +220,16 @@ async def commit_index(
                 data.setdefault(key, [])
                 data[key].append(ruling.text)
         for group in all_groups:
-            for ruling in index.rulings.get(group.uid, []):
+            for ruling in index.rulings.get(group.uid, {}).values():
                 key = f"{group.uid}|{group.name}"
                 data.setdefault(key, [])
                 data[key].append(ruling.text)
         await async_yaml_dump(f, data)
     await asgiref.sync.SyncToAsync(yamlfix.fix_files)(
         [
-            rulings_dir / "references.yaml",
-            rulings_dir / "groups.yaml",
-            rulings_dir / "rulings.yaml",
+            str(rulings_dir / "references.yaml"),
+            str(rulings_dir / "groups.yaml"),
+            str(rulings_dir / "rulings.yaml"),
         ],
         config=yamlfix.model.YamlfixConfig(
             line_length=120,
