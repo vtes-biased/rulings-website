@@ -15,6 +15,7 @@ logger = logging.getLogger()
 
 DB_USER = os.getenv("DB_USER", "vtes-rulings")
 DB_PWD = os.getenv("DB_PWD", "")
+CONNINFO = f"postgresql://{DB_USER}:{DB_PWD}@localhost/vtes-rulings"
 psycopg.types.json.set_json_dumps(orjson.dumps)
 psycopg.types.json.set_json_loads(orjson.loads)
 
@@ -25,7 +26,7 @@ def reconnect_failed(_pool: psycopg_pool.AsyncConnectionPool):
 
 #: await POOL.open() before using this module, and POOL.close() when finished
 POOL = psycopg_pool.AsyncConnectionPool(
-    f"postgresql://{DB_USER}:{DB_PWD}@localhost/vtes-rulings",
+    CONNINFO,
     open=False,
     max_size=10,
     reconnect_failed=reconnect_failed,
@@ -63,12 +64,12 @@ async def init():
             )
 
 
-async def reset():
-    async with POOL.connection() as conn:
-        async with conn.cursor() as cursor:
+def reset():
+    with psycopg.connect(CONNINFO) as conn:
+        with conn.cursor() as cursor:
             logger.warning("Reset DB")
-            await cursor.execute("DROP TABLE proposals")
-            await cursor.execute("DROP TABLE users")
+            cursor.execute("DROP TABLE proposals")
+            cursor.execute("DROP TABLE users")
 
 
 async def get_or_create_user(vekn: str) -> User:
@@ -93,6 +94,18 @@ async def get_user(uid: uuid.UUID) -> User | None:
         async with conn.cursor(row_factory=psycopg.rows.class_row(User)) as cursor:
             ret = await cursor.execute("SELECT * FROM users WHERE uid=%s", [uid])
             return await ret.fetchone()
+
+
+def make_admin(username: str):
+    with psycopg.connect(CONNINFO) as conn:
+        with conn.cursor() as cursor:
+            ret = cursor.execute(
+                "UPDATE users SET category=%s WHERE vekn=%s",
+                [UserCategory.ADMIN, username],
+            )
+            if ret.rowcount < 1:
+                raise ValueError(f"User '{username}' not found")
+            logger.warning("%s is now admin", username)
 
 
 # async def get_proposals() -> list[dict]:

@@ -26,6 +26,7 @@ dependencies = [
     "aiohttp>=3",
     "arrow>=1",
     "asgiref>=3",
+    "click>=8",
     "quart>=0",
     "gitpython>=3",
     "unidecode>=1",

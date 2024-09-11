@@ -3,6 +3,7 @@ import aiofiles
 import aiohttp
 import asgiref
 import asgiref.sync
+import click
 import krcg.cards
 import quart
 import importlib
@@ -217,3 +218,14 @@ async def logout():
     quart.session.pop("user", None)
     quart.session.pop("proposal", None)
     return quart.redirect(next, 302)
+
+
+@app.cli.command()
+def resetdb():
+    db.reset()
+
+
+@app.cli.command()
+@click.argument("username")
+def makeadmin(username: str):
+    db.make_admin(username)

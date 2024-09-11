@@ -14,7 +14,7 @@ from . import utils
 @dataclasses.dataclass(kw_only=True)
 class Proposal(models.BaseIndex):
     uid: str = ""
-    usr: uuid.UUID | None = None
+    usr: str = ""
     name: str = ""
     description: str = ""
     channel_id: str = ""

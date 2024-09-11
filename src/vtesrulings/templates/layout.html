@@ -98,6 +98,7 @@
                         Save
                     </button>
                     {% if proposal.channel_id %}
+                    {% if user.category != 'BASIC' %}
                     <button type="button" class="btn btn-success" id="proposalApprove" form="proposalForm">
                         Approve
                     </button>

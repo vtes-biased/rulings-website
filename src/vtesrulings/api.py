@@ -30,6 +30,9 @@ def proposal_update(f):
         async with db.POOL.connection() as connection:
             prop = await db.get_proposal_for_update(connection, prop_uid)
             quart.g.proposal = proposal.Proposal(**prop)
+            if quart.g.proposal.usr != str(quart.session["user"]["uid"]):
+                if quart.session["user"]["category"] == db.UserCategory.BASIC:
+                    raise ValueError("You cannot modify someone else's proposal")
             ret = await f(*args, **kwargs)
             await db.update_proposal(connection, prop)
             quart.g.pop("proposal", None)
@@ -172,6 +175,11 @@ async def submit_proposal():
 @api.route("/proposal/approve", methods=["POST"])
 @proposal_update
 async def approve_proposal():
+    if quart.session["user"]["category"] not in [
+        db.UserCategory.RULEMONGER,
+        db.UserCategory.ADMIN,
+    ]:
+        quart.abort(401)
     await update_proposal_from_params()
     if not quart.g.proposal.channel_id:
         raise ValueError("Proposal must be submitted first")
