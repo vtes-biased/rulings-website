@@ -43,13 +43,13 @@ dependencies = [
 dev = [
     "black>=24",
     "build>=1",
-    "check-manifest>=0",
     "ipdb>=0",
     "ipython>=8",
     "pytest>=8",
     "pytest-asyncio>=0",
     "python-dotenv",
     "ruff>=0",
+    "setuptools-scm>=8",
     "twine>=5",
 ]
 

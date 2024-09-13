@@ -10,7 +10,7 @@ clean:
 	rm -rf dist
 
 release-local: check-porcelain clean
-	check-manifestmak
+	npm run build
 	git tag "${NEXT_VERSION}"
 	python -m build
 

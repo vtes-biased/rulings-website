@@ -1,0 +1,12 @@
+include LICENSE README.md
+
+graft src/vtesrulings
+prune tests
+prune src/front
+exclude Makefile
+exclude package.json
+exclude tsconfig.json
+
+global-exclude */__pycache__/*
+global-exclude *.egg-info/*
+global-exclude *.DS_Store
