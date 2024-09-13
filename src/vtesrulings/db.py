@@ -1,4 +1,3 @@
-import contextlib
 import dataclasses
 import enum
 import logging
@@ -8,7 +7,6 @@ import psycopg
 import psycopg.rows
 import psycopg.types.json
 import psycopg_pool
-import typing
 import uuid
 
 logger = logging.getLogger()
@@ -134,14 +132,6 @@ def make_admin(username: str):
             if ret.rowcount < 1:
                 raise ValueError(f"User '{username}' not found")
             logger.warning("%s is now admin", username)
-
-
-# async def get_proposals() -> list[dict]:
-#     """Call once at startup"""
-#     async with POOL.connection() as conn:
-#         async with conn.cursor() as cursor:
-#             ret = await cursor.execute("SELECT data FROM proposals")
-#             return [r[0] for r in ret]
 
 
 async def all_proposal_ids() -> None:

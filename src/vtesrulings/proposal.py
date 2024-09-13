@@ -1,12 +1,9 @@
 import collections.abc
 import copy
-import dataclasses
 import functools
-import itertools
 import krcg.cards
 import pydantic.dataclasses
 import typing
-import uuid
 from . import models
 from . import utils
 
@@ -18,15 +15,6 @@ class Proposal(models.BaseIndex):
     name: str = ""
     description: str = ""
     channel_id: str = ""
-
-
-# def from_json(data: dict) -> Proposal:
-#     references = {k: models.Reference(**v) for k, v in data.pop("references", {})}
-#     references: dict[str, Reference] = dataclasses.field(default_factory=dict)
-#     groups: dict[str, Group] = dataclasses.field(default_factory=dict)
-#     rulings: dict[str, dict[str, Ruling]] = dataclasses.field(default_factory=dict)
-
-#     return Proposal()
 
 
 class Manager:
@@ -529,7 +517,7 @@ class Manager:
         See RULING_SOURCES
         """
         if not uid:
-            raise ValueError(f"A reference ID is required")
+            raise ValueError("A reference ID is required")
         if uid[3] != " ":
             raise ValueError(f"Reference must have a space after prefix: {uid}")
         if uid in self.base.references or uid in self.prop.references:

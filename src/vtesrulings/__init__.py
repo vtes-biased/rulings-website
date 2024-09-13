@@ -60,11 +60,6 @@ def data_error(error: Exception):
     return quart.jsonify(error.args[:1]), 400
 
 
-@app.before_request
-def make_session_permanent():
-    quart.session.permanent = True
-
-
 # Helper for hyperlinks
 @app.context_processor
 def linker():

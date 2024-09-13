@@ -1,14 +1,8 @@
-import aiohttp
-import contextlib
 import quart
 import functools
-import krcg.cards
-import typing
 import urllib
-import uuid
 from dataclasses import asdict
 
-from . import models
 from . import db
 from . import discord
 from . import proposal
@@ -85,21 +79,6 @@ async def complete_card():
         for card, _ in sorted(ret.items(), key=lambda x: (-x[1], x[0]))
     ]
     return ret
-
-
-# def use_proposal():
-#     """Non-async function to make sure we use the right context"""
-#     proposal = quart.session.get("proposal")
-#     if proposal and quart.session.get("user"):
-#         try:
-#             quart.g.proposal = rulings.INDEX.use_proposal(proposal)
-#         except KeyError:
-#             quart.session.pop("proposal", None)
-#             rulings.INDEX.off_proposals()
-#             quart.g.pop("proposal", None)
-#     else:
-#         rulings.INDEX.off_proposals()
-#         quart.g.pop("proposal", None)
 
 
 @api.route("/card/<int:card_id>")
@@ -199,12 +178,6 @@ async def approve_proposal():
     return {}
 
 
-# @api.route("/proposal", methods=["GET"])
-# async def list_proposals():
-#     ret = list(INDEX.proposals.keys())
-#     return quart.jsonify(ret)
-
-
 @api.route("/reference", methods=["GET"])
 @proposal_readonly
 async def get_reference():
@@ -249,15 +222,6 @@ async def put_reference(reference_id: str):
     params = await get_params()
     ret = get_manager().update_reference(reference_id, **params)
     return asdict(ret)
-
-
-# @api.route("/reference/<reference_id>", methods=["DELETE"])
-# @proposal_update
-# async def delete_reference(reference_id: str):
-#     if reference_id.startswith("RBK"):
-#         quart.abort(403)
-#     get_manager().delete_reference(reference_id)
-#     return {}
 
 
 @api.route("/check-consistency", methods=["GET"])

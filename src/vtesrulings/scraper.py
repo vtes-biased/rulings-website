@@ -84,9 +84,9 @@ async def get_vekn_reference(url: str):
                 url = response.url
             parser.feed(await response.text())
     if not parser.author:
-        raise ValueError(f"Message not found in VEKN forum")
+        raise ValueError("Message not found in VEKN forum")
     if parser.author not in VEKN_AUTHORS.values():
         raise ValueError(f"Author {parser.author} is no Rules Director")
     if not parser.date:
-        raise ValueError(f"Failed to find the message date")
+        raise ValueError("Failed to find the message date")
     return f"{parser.author} {parser.date:%Y%m%d}"

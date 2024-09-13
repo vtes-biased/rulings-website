@@ -51,7 +51,6 @@ dev = [
     "python-dotenv",
     "ruff>=0",
     "twine>=5",
-    "yamllint",
 ]
 
 [project.scripts]

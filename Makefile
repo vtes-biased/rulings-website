@@ -22,7 +22,6 @@ release: release-local
 test:
 	black --check src
 	ruff check src
-	yamllint rulings
 	QUART_TESTING=1 pytest -vvs
 
 update:

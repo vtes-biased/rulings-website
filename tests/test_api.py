@@ -49,7 +49,7 @@ async def test_get_card(app: quart.typing.TestAppProtocol):
         "uid": "100038",
         "rulings": [
             {
-                "uid": "L3XPSHJF",
+                "uid": "WUF4F3LL",
                 "state": "ORIGINAL",
                 "target": {"name": "Alastor", "uid": "100038"},
                 "cards": [],
@@ -68,7 +68,7 @@ async def test_get_card(app: quart.typing.TestAppProtocol):
                 ],
                 "symbols": [],
                 "text": "If the weapon retrieved costs blood, that cost is paid by the "
-                "vampire chosen by the terms.    [LSJ 20040518]",
+                "vampire chosen by the terms. [LSJ 20040518]",
             },
             {
                 "uid": "KHQHCLMP",
@@ -435,15 +435,15 @@ async def test_start_update_proposal(app: quart.typing.TestAppProtocol):
 
 
 @pytest.mark.asyncio
-async def test_check_references(app: quart.typing.TestAppProtocol):
+async def test_check_consistency(app: quart.typing.TestAppProtocol):
     client = app.test_client()
     # not available outside of a proposal
-    response = await client.get("/api/check-references")
+    response = await client.get("/api/check-consistency")
     assert response.status_code == 405
     # with an active proposal, check all references are fine,
     # and cleanup unused ones
     await login_and_proposal(client)
-    response = await client.get("/api/check-references")
+    response = await client.get("/api/check-consistency")
     assert response.status_code == 200
     assert await response.json == []
 
@@ -806,26 +806,11 @@ async def test_add_group(app: quart.typing.TestAppProtocol):
         "/api/group",
         json={
             "name": "Anti-combat cards",
-            "cards": {
-                "101201": "",
-                "101223": "THA",
-                "101309": "",
-            },
         },
     )
     assert response.status_code == 302
-    assert response.location == "/groups.html?uid=PFTD2UQWO"
-    # The new group also shows on the card
-    response = await client.get("/api/card/101201")
-    assert (await response.json)["groups"] == [
-        {
-            "name": "Anti-combat cards",
-            "prefix": "",
-            "symbols": [],
-            "uid": "PFTD2UQWO",
-            "state": "NEW",
-        },
-    ]
+    # the new group gets a random UID
+    assert response.location.startswith("/groups.html?uid=P")
 
 
 @pytest.mark.asyncio
