@@ -31,7 +31,7 @@
                     <li class="nav-item">
                         <a class="nav-link" href="groups.html{{ search_params }}">Group</a>
                     </li>
-                    {% if user.category == 'ADMIN' %}
+                    {% if user and user.category == 'ADMIN' %}
                     <li class="nav-item">
                         <a class="nav-link" href="admin.html{{ search_params }}">Admin</a>
                     </li>
@@ -187,10 +187,15 @@
                 <div id="collapseOne" class="accordion-collapse collapse" data-bs-parent="#proposalAcc">
                     <div id="proposalAccBody" class="accordion-body">
                         <div id="proposalDescription">{{ proposal.description }}</div>
-                        <div id="proposalGroups" class="d-flex flex-wrap align-items-center invisible">
+                        {% if proposal.url %}
+                        <a href="{{ proposal.url }}" target="_blank" class="my-2">
+                            <i class="bi bi-discord"></i> Discord discussion
+                        </a>
+                        {% endif %}
+                        <div id="proposalGroups" class="d-flex flex-wrap align-items-center d-none">
                             <!-- Content managed by JS -->
                         </div>
-                        <div id="proposalCards" class="d-flex flex-wrap align-items-center invisible">
+                        <div id="proposalCards" class="d-flex flex-wrap align-items-center d-none">
                             <!-- Content managed by JS -->
                         </div>
                     </div>

@@ -217,11 +217,15 @@ async def get_reference():
 async def search_reference():
     params = await get_params()
     try:
-        ret = {"reference": asdict(get_manager().get_reference(**params))}
+        if params.get("uid", ""):
+            ret = get_manager().get_reference(params.get("uid", ""))
+        else:
+            ret = get_manager().get_reference_by_url(params.get("url", ""))
+        ret = {"reference": asdict(ret)}
     except KeyError:
-        if models.get("url", "").startswith("https://www.vekn.net/forum/"):
+        if params.get("url", "").startswith("https://www.vekn.net/forum/"):
             try:
-                uid = await scraper.get_vekn_reference(models["url"])
+                uid = await scraper.get_vekn_reference(params["url"])
                 return {"computed_uid": uid}
             except Exception as e:
                 ret = quart.jsonify(e.args[:1])
@@ -256,10 +260,10 @@ async def put_reference(reference_id: str):
 #     return {}
 
 
-@api.route("/check-references", methods=["GET"])
+@api.route("/check-consistency", methods=["GET"])
 @proposal_update
-async def check_references():
-    ret = [asdict(e) for e in get_manager().check_references()]
+async def check_consistency():
+    ret = [asdict(e) for e in get_manager().check_consistency()]
     return ret
 
 
@@ -299,15 +303,17 @@ async def delete_ruling(target_id: str, ruling_id: str):
 @proposal_update
 async def post_group():
     params = await get_params()
-    ret = get_manager().upsert_group(**params)
-    return quart.redirect(f"/groups.html?uid={ret.uid}", 302)
+    ret = get_manager().insert_group(**params)
+    return quart.redirect(
+        f"/groups.html?uid={ret.uid}&prop={quart.g.proposal.uid}", 302
+    )
 
 
 @api.route("/group/<group_id>", methods=["PUT"])
 @proposal_update
 async def put_group(group_id: str):
     params = await get_params()
-    ret = get_manager().upsert_group(uid=group_id, **params)
+    ret = get_manager().update_group(uid=group_id, **params)
     return asdict(ret)
 
 

@@ -69,11 +69,10 @@ class VEKNParser(SmartParser):
     def handle_data(self, data: str) -> None:
         if "DATE" not in self.state:
             return
-        if not self.date:
-            try:
-                self.date = arrow.get(data, "D MMM YYYY").date()
-            except arrow.ParserError:
-                pass
+        try:
+            self.date = arrow.get(data, "D MMM YYYY").date()
+        except arrow.ParserError:
+            pass
 
 
 async def get_vekn_reference(url: str):

@@ -159,7 +159,7 @@ class Index(BaseIndex):
 
 
 @pydantic.dataclasses.dataclass
-class ReferenceError:
-    target_uid: str
+class ConsistencyError:
+    target: NID
     ruling_uid: str
     error: str

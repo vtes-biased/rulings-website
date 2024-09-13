@@ -13,7 +13,7 @@
         <ul class="dropdown-menu"><!-- Icons added by JS --></ul>
     </div>
     <div class="col-md krcg-current" id="groupDisplay" data-uid="{{ current.uid }}" data-data='{{ current | tojson }}'>
-        <h2 id="groupName">{{ current.name }}</h2>
+        <h2 id="groupName">{{ current.name or '_Choose a name_' }}</h2>
         {% if proposal %}
         <div class="d-flex justify-content-center">
             <button id="groupDeleteButton" class="btn text-bg-danger my-3" type="submit">
@@ -58,7 +58,7 @@
     <div class="col-md list-group p-0" id="groupsList">
         {% if proposal %}
         <form action="/api/group" method="post">
-            <input type="text" name="name" hidden="true" value="<unnamed>">
+            <input type="text" name="name" hidden="true" value="">
             <button class="btn text-bg-primary my-2" type="submit"><i class="bi bi-plus-lg"></i> Add group</button>
         </form>
         {% endif %}
@@ -67,14 +67,14 @@
         <a href="?uid={{ group.uid }}{{ search_params_2 }}"
             class="list-group-item list-group-item-action d-flex justify-content-between align-items-center active"
             data-uid="{{ group.uid }}">
-            {{ group.name }}
+            {{ group.name or '_Choose a name_' }}
             <span class="badge text-bg-primary rounded-pill">{{ group.cards | length}}</span>
         </a>
         {% else %}
         <a href="?uid={{ group.uid }}{{ search_params_2 }}"
             class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
             data-uid="{{ group.uid }}">
-            {{ group.name }}
+            {{ group.name or '_Choose a name_' }}
             {% set state_colors = {
             "ORIGINAL": "text-bg-primary",
             "NEW": "text-bg-success",

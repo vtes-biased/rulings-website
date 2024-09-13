@@ -8,6 +8,7 @@ from . import proposal
 
 logger = logging.getLogger()
 DISCORD_WEBHOOK = os.getenv("DISCORD_WEBHOOK")
+DISCORD_SERVER_ID = os.getenv("DISCORD_SERVER_ID")
 SITE_URL_BASE = os.getenv("SITE_URL_BASE", "http://127.0.0.1:5000")
 
 
@@ -80,3 +81,9 @@ async def submit_proposal(prop: proposal.Proposal):
             logger.info("discord said: %s", data)
             pprint.pprint(data)
             prop.channel_id = data["channel_id"]
+
+
+def proposal_discussion_url(prop: proposal.Proposal):
+    if not prop.channel_id:
+        raise ValueError(f"Proposal {prop.uid} not submitted")
+    return f"discord://discordapp.com/channels/{DISCORD_SERVER_ID}/{prop.channel_id}"

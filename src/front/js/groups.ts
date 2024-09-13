@@ -113,10 +113,10 @@ async function groupSave(groupDisplay: HTMLDivElement) {
                 }
             }
             else if (node.nodeType == node.TEXT_NODE) {
-                prefix += node.textContent.trim()
+                prefix += node.textContent
             }
         }
-        body.cards[card.dataset.uid] = prefix
+        body.cards[card.dataset.uid] = prefix.trim()
     }
     console.log("Updating group", body)
     try {
@@ -165,9 +165,12 @@ function setupCardEditTools(groupDisplay: HTMLDivElement) {
     const controls = document.getElementById("cardEditControls") as HTMLDivElement
     const dropdown_button = controls.querySelector(".dropdown-toggle")
     const dropdown_menu = controls.querySelector(".dropdown-menu")
+    const listDiv = document.createElement("div")
+    listDiv.classList.add("d-flex", "flex-wrap")
+    dropdown_menu.append(listDiv)
     for (const icon of Object.values(base.ANKHA_SYMBOLS)) {
         const li = document.createElement("li")
-        dropdown_menu.append(li)
+        listDiv.append(li)
         const item = document.createElement("button")
         item.classList.add("dropdown-item")
         item.innerHTML = `<span class="krcg-icon">${icon}</span>`

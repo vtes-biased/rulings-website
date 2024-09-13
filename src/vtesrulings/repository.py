@@ -1,13 +1,13 @@
 import aiofiles
 import aiofiles.threadpool.text
 import asgiref.sync
+import asyncio
 import git
 import io
 import krcg.cards
 import logging
 import os
 import pathlib
-import tempfile
 import typing
 import yaml
 import yamlfix
@@ -16,6 +16,7 @@ from . import models
 from . import utils
 
 logger = logging.getLogger()
+COMMIT_LOCK = asyncio.Lock()
 RULINGS_GIT = "git@github.com:vtes-biased/vtes-rulings.git"
 GIT_SSH_COMMAND = os.getenv("GIT_SSH_COMMAND", "ssh -i ~/.ssh/id_rsa")
 RULINGS_FILES_PATH = "rulings/"
@@ -180,9 +181,22 @@ async def async_yaml_dump(
 async def commit_index(
     repo: git.Repo, card_map: krcg.cards.CardMap, index: models.Index, description: str
 ) -> None:
+    """YAML generation and github commit
+
+    This uses a global lock to avoid concurrent approvals,
+    as they could break group IDs unicity
+    """
+    async with COMMIT_LOCK:
+        await _commit_index(repo, card_map, index, description)
+
+
+async def _commit_index(
+    repo: git.Repo, card_map: krcg.cards.CardMap, index: models.Index, description: str
+) -> None:
     """YAML generation and github commit"""
     rulings_dir = pathlib.Path(repo.working_tree_dir) / RULINGS_FILES_PATH
     all_groups = sorted(index.groups.values(), key=lambda x: x.uid)
+    goup_ids_map = {}  # map with new stable group IDs assignments
     async with aiofiles.open(
         rulings_dir / "references.yaml", "w", encoding="utf-8"
     ) as f:
@@ -198,10 +212,10 @@ async def commit_index(
             max(int(g.uid[1:]) for g in all_groups if g.uid.startswith("G")) + 1
         )
         for group in all_groups:
-            group_uid = group.uid
-            if group_uid.startswith("P"):
-                group_uid = f"G{group_counter:0>5}"
-            group_nid = f"{group_uid}|{group.name}"
+            if group.uid.startswith("P"):
+                goup_ids_map[group.uid] = f"G{group_counter:0>5}"
+                group_counter += 1
+            group_nid = f"{goup_ids_map.get(group.uid, group.uid)}|{group.name}"
             data[group_nid] = {}
             for card in group.cards:
                 krcg_card = card_map[int(card.uid)]
@@ -221,7 +235,7 @@ async def commit_index(
                 data[key].append(ruling.text)
         for group in all_groups:
             for ruling in index.rulings.get(group.uid, {}).values():
-                key = f"{group.uid}|{group.name}"
+                key = f"{goup_ids_map.get(group.uid, group.uid)}|{group.name}"
                 data.setdefault(key, [])
                 data[key].append(ruling.text)
         await async_yaml_dump(f, data)

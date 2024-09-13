@@ -110,7 +110,7 @@ class Manager:
 
     def all_rulings(
         self, deleted: bool = False
-    ) -> typing.Generator[None, None, models.Ruling]:
+    ) -> typing.Generator[models.Ruling, None, None]:
         """Allows iteration on all Ruling objects"""
         for uid in self.base.rulings:
             yield from self.get_rulings(uid, False, deleted)
@@ -120,7 +120,7 @@ class Manager:
 
     def get_rulings(
         self, uid: str, group: bool = True, deleted: bool = False
-    ) -> typing.Generator[None, None, models.Ruling]:
+    ) -> typing.Generator[models.Ruling, None, None]:
         """Yields all Ruling currently listed for the card or group.
         If it's a card, this includes rulings from groups the card is part of,
         except if group is False.
@@ -143,7 +143,7 @@ class Manager:
         if uid.startswith(("G", "P")) or not group:
             return
         for group, card_in_group in self.get_groups_of(uid):
-            for ruling in self.get_rulings(group.uid, True, deleted):
+            for ruling in self.get_rulings(group.uid, True, False):
                 yield models.Ruling(
                     uid=ruling.uid,
                     target=ruling.target,
@@ -183,7 +183,7 @@ class Manager:
 
     def get_groups_of(
         self, card_uid: str
-    ) -> typing.Generator[None, None, tuple[models.Group, models.CardInGroup]]:
+    ) -> typing.Generator[tuple[models.Group, models.CardInGroup], None, None]:
         """Yield the groups the card is a member of, alongside the CardInGroup object.
         The CardInGroup object includes the prefix the card should use in the group.
         """
@@ -210,7 +210,7 @@ class Manager:
 
     def get_groups_of_card(
         self, card_uid: str
-    ) -> typing.Generator[None, None, models.GroupOfCard]:
+    ) -> typing.Generator[models.GroupOfCard, None, None]:
         """Yield the groups the card is a part of, as GroupOfCard objects.
         The GroupOfCard object includes the prefix the card uses in the group.
         """
@@ -225,7 +225,7 @@ class Manager:
 
     def get_backrefs(
         self, card_uid: str
-    ) -> typing.Generator[None, None, models.BaseCard]:
+    ) -> typing.Generator[models.BaseCard, None, None]:
         """Yield the cards that have a ruling mentioning the given card."""
         backrefs = []
         for target_uid, rulings in self.prop.rulings.items():
@@ -276,7 +276,7 @@ class Manager:
         card = self.card_map[card_id_or_name]
         return models.BaseCard(
             uid=str(card.id),
-            name=card.name,
+            name=card.usual_name,
             printed_name=card.printed_name,
             img=card.url,
         )
@@ -335,7 +335,7 @@ class Manager:
         for key, uid in card.variants.items():
             ret.variants.append(
                 models.CardVariant(
-                    uid=uid,
+                    uid=str(uid),
                     group=int(key[1]) if key[0] == "G" else None,
                     advanced=True if key[-3:] == "ADV" else False,
                 )
@@ -420,33 +420,25 @@ class Manager:
         self.prop.rulings[target_uid][uid] = ret
         return ret
 
-    def upsert_group(
-        self, uid: str = "", name: str = "", cards: dict[str, str] = None
+    def insert_group(self, name: str = "") -> models.Group:
+        uid = f"P{utils.random_uid8()}"
+        while uid in self.prop.groups:
+            uid = f"P{utils.random_uid8()}"
+        group = models.Group(uid=uid, name=name, state=models.State.NEW)
+        self.prop.groups[uid] = group
+        return group
+
+    def update_group(
+        self, uid: str, name: str = "", cards: dict[str, str] = None
     ) -> models.Group:
         """Insert or Update a group. It's an update if the `uid` is given.
         It can be used to update a group's name.
-        A name cannot be reused, even if it was previously removed as part of the
-        proposal, to avoid inconsistencies.
-
-        In case of an insert (no `uid`),
-        the group will get a stable text UID starting with "P"
         """
         cards = cards or {}
-        if uid:
-            # no need for deepcopy: cards get re-created later on
-            group = copy.copy(self.get_group(uid))
-            if name:
-                group.name = name
-        else:
-            if name and name in itertools.chain(
-                [g.name for g in self.base.groups.values()],
-                [g.name for g in self.prop.groups.values()],
-            ):
-                raise ValueError("Group name already taken")
-            if not name:
-                raise ValueError("New group must be given a name")
-            uid = f"P{utils.stable_hash(name)}"
-            group = models.Group(uid=uid, name=name, state=models.State.NEW)
+        # no need for deepcopy: cards get re-created later on
+        group = copy.copy(self.get_group(uid))
+        if name:
+            group.name = name
         group.cards = []
         base_cards_dict = {}
         # carefully compare with original group if it exists
@@ -492,9 +484,6 @@ class Manager:
             ),
         if group.state == models.State.ORIGINAL:
             self.prop.groups.pop(uid, None)
-        # removing all cards is akin to deleting the group
-        elif not group.cards:
-            group.state = models.State.DELETED
         self.prop.groups[uid] = group
         return group
 
@@ -598,7 +587,7 @@ class Manager:
         self.prop.references[uid] = copy.copy(self.base.references[uid])
         self.prop.references[uid].state = models.State.DELETED
 
-    def check_references(self) -> list[models.ReferenceError]:
+    def check_consistency(self) -> list[models.ConsistencyError]:
         """Check if reference URLs are all used and listed only once,
         and if rulings don't use a reference that has been removed.
         Returns the inconsistencies found.
@@ -612,11 +601,44 @@ class Manager:
             ruling_refs &= listed_refs
             if not ruling_refs:
                 errors.append(
-                    ReferenceError(
+                    models.ConsistencyError(
                         ruling.target, ruling.uid, "At least one reference is required"
                     )
                 )
             used_references |= ruling_refs
+        group_names = set()
+        for group in self.all_groups():
+            if not group.name:
+                errors.append(
+                    models.ConsistencyError(
+                        models.NID(group.uid, "<unnamed>"), "", "Group has no name"
+                    )
+                )
+            elif group.name in group_names:
+                errors.append(
+                    models.ConsistencyError(
+                        models.NID(group.uid, group.name),
+                        "",
+                        "Group name is already taken",
+                    )
+                )
+            group_names.add(group.name)
+            if not group.cards:
+                errors.append(
+                    models.ConsistencyError(
+                        models.NID(group.uid, group.name or "<unnamed>"),
+                        "",
+                        "Group is empty",
+                    )
+                )
+            if not list(self.get_rulings(group.uid)):
+                errors.append(
+                    models.ConsistencyError(
+                        models.NID(group.uid, group.name or "<unnamed>"),
+                        "",
+                        "Group has no ruling",
+                    )
+                )
         if not errors:
             unused_references = listed_refs - used_references
             for ref in unused_references:

@@ -17,6 +17,7 @@ import markupsafe
 
 from . import api
 from . import db
+from . import discord
 from . import proposal
 from . import repository
 
@@ -164,6 +165,8 @@ async def index(page=None):
                 continue
             proposal_dict["groups"].append({"uid": group_id, "name": group.name})
         context["proposal"] = proposal_dict
+        if prop.channel_id:
+            context["proposal"]["url"] = discord.proposal_discussion_url(prop)
         context["rbk_references"] = [
             ref
             for ref in manager.base.references.values()

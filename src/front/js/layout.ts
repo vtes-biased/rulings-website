@@ -69,9 +69,12 @@ async function insertCard(item: SelectItem, position: Position) {
 function setupEditTools(position: Position) {
     const dropdown_button = position.controls.querySelector(".dropdown-toggle")
     const dropdown_menu = position.controls.querySelector(".dropdown-menu")
+    const listDiv = document.createElement("div")
+    listDiv.classList.add("d-flex", "flex-wrap")
+    dropdown_menu.append(listDiv)
     for (const icon of Object.values(ANKHA_SYMBOLS)) {
         let li = document.createElement("li")
-        dropdown_menu.append(li)
+        listDiv.append(li)
         let item = document.createElement("button")
         item.classList.add("dropdown-item")
         item.innerHTML = `<span class="krcg-icon">${icon}</span>`
@@ -126,6 +129,10 @@ function addRulingReference(
     data: Reference,
     edit_mode: boolean,
     prepend: boolean) {
+    const emptyWarning = footer.querySelector(".krcg-empty") as HTMLDivElement | undefined
+    if (emptyWarning) {
+        emptyWarning.remove()
+    }
     let link_div = document.createElement("div")
     link_div.classList.add("card-link", "badge", "text-bg-secondary")
     let link = document.createElement("a")
@@ -143,6 +150,12 @@ function addRulingReference(
         link_div.append(remove_button)
         remove_button.addEventListener("click", async () => {
             link_div.remove()
+            if (footer.querySelectorAll(".krcg-reference").length < 1) {
+                const emptyWarning = document.createElement("div")
+                emptyWarning.classList.add("text-danger", "krcg-empty")
+                emptyWarning.textContent = "A reference is required"
+                footer.prepend(emptyWarning)
+            }
             await rulingSave(card)
         })
     }
@@ -156,15 +169,29 @@ function addRulingReference(
 
 async function createAndAddLink(ev: MouseEvent, position: Position) {
     const form = (ev.target as HTMLButtonElement).form
-    const response = await do_fetch("/api/reference", {
-        method: "post",
-        body: new FormData(form)
-    })
+    // do not use "do_fetch", any error must be displayed in the modal directly
+    // using toast while in a modal does not work
+    let response = undefined
+    try {
+        response = await fetch("/api/reference", {
+            method: "post",
+            body: new FormData(form)
+        })
+        if (!response.ok) {
+            throw new Error((await response.json())[0])
+        }
+    }
+    catch (error) {
+        console.log(`Error fetching /api/reference`, error.message)
+        const errorDiv = document.getElementById("referenceUrlError") as HTMLDivElement
+        errorDiv.innerText = error.message
+        errorDiv.classList.remove("invisible")
+        return
+    }
     const data = await response.json() as Reference
     addRulingReference(position.card, position.card.querySelector("div.card-footer"), data, true, true)
     await rulingSave(position.card)
     position.modal.hide()
-
 }
 
 async function addExistingLink(ev: MouseEvent, position: Position) {
@@ -220,11 +247,17 @@ export function displayRulingCard(elem: HTMLDivElement, edit_mode: boolean, posi
     }
     body.append(card_text)
     let footer = document.createElement("div")
-    footer.classList.add("card-footer", "text-body-secondary")
+    footer.classList.add("card-footer", "d-flex", "text-body-secondary")
     root.append(footer)
     for (const reference of ruling.references) {
         // references removed from text in updateRulingDisplay
         addRulingReference(elem, footer, reference, edit_mode, false)
+    }
+    if (ruling.references.length < 1) {
+        const emptyWarning = document.createElement("div")
+        emptyWarning.classList.add("text-danger", "krcg-empty")
+        emptyWarning.textContent = "A reference is required"
+        footer.prepend(emptyWarning)
     }
     if (edit_mode) {
         let plus_button = document.createElement("button")
@@ -235,8 +268,8 @@ export function displayRulingCard(elem: HTMLDivElement, edit_mode: boolean, posi
         footer.append(plus_button)
         root.addEventListener("dragover", (ev) => { ev.preventDefault(); ev.dataTransfer.dropEffect = "copy" });
         root.addEventListener("drop", async (ev) => await dropExistingReference(ev, elem));
-        root.addEventListener("dragenter", (ev) => { ev.preventDefault(); console.log("dragenter", ev) });
-        root.addEventListener("dragleave", (ev) => { console.log("dragleave", ev); ev.dataTransfer.dropEffect = "none" });
+        root.addEventListener("dragenter", (ev) => { ev.preventDefault() });
+        root.addEventListener("dragleave", (ev) => { ev.dataTransfer.dropEffect = "none" });
     }
     updateRulingDisplay(elem, undefined, edit_mode, false)
     for (const elem of card_text.querySelectorAll("span.krcg-card") as NodeListOf<HTMLSpanElement>) {
@@ -246,12 +279,7 @@ export function displayRulingCard(elem: HTMLDivElement, edit_mode: boolean, posi
 
 async function dropExistingReference(ev: DragEvent, card: HTMLDivElement) {
     ev.preventDefault()
-    console.log("drop", ev)
-    const url = ev.dataTransfer.getData("URL")
-    console.log(url)
-    console.log("card", card)
     const data = JSON.parse(ev.dataTransfer.getData("application/json"))
-    console.log("data", data)
     addRulingReference(card, card.querySelector("div.card-footer"), data, true, true)
     await rulingSave(card)
 }
@@ -323,7 +351,7 @@ function updateRulingDisplay(elem: HTMLDivElement, data: Ruling | undefined, edi
         let elem = document.createElement("span")
         elem.classList.add("krcg-card")
         elem.contentEditable = "false"
-        elem.innerText = card.name
+        elem.innerText = card.printed_name
         text = text.replaceAll(card.text, elem.outerHTML.toString())
     }
     for (const reference of data.references) {
@@ -336,9 +364,19 @@ function updateRulingDisplay(elem: HTMLDivElement, data: Ruling | undefined, edi
             card_text.contentEditable = "false"
             plus_button.disabled = true
         } else {
-            card_text.contentEditable = "true"
+            card_text.contentEditable = "plaintext-only"
             plus_button.disabled = false
         }
+    }
+    // adjust references
+    const data_references = new Map([...data.references].map(r => [r.uid, r]))
+    for (const reference of elem.querySelectorAll(".krcg-reference")) {
+        if (!data_references.delete(reference.textContent)) {
+            reference.parentElement.remove()
+        }
+    }
+    for (const reference of data_references.values()) {
+        addRulingReference(elem, elem.querySelector(".card-footer"), reference, edit_mode, true)
     }
 }
 
@@ -395,13 +433,12 @@ async function rulingDelete(elem: HTMLDivElement) {
         { method: "delete" }
     )
     if (!response) { return }
-    const new_ruling = await response.json() as Ruling
-    console.log("delete new_ruling", new_ruling)
-    if (!new_ruling) {
-        elem.remove()
-    }
-    else {
+    try {
+        const new_ruling = await response.json() as Ruling
         updateRulingDisplay(elem, new_ruling, true, true)
+    }
+    catch (error: any) {
+        elem.remove()
     }
     updateProposal()
 }
@@ -434,6 +471,32 @@ export function displayError(msg: string) {
     bootstrap.Toast.getOrCreateInstance(toast_div).show()
 }
 
+export function displayConsistencyErrors(errors: ConsistencyError[]) {
+    const toast_div = document.getElementById('errorToast') as HTMLDivElement
+    const body = toast_div.querySelector("div.toast-body") as HTMLDivElement
+    body.innerHTML = ""
+    for (const error of errors.slice(0, 10)) {
+        const item = document.createElement("div") as HTMLDivElement
+        item.innerText = error.error
+        body.append(item)
+        const groupLink = document.createElement("a") as HTMLAnchorElement
+        groupLink.classList.add("m-2", "badge", "bg-secondary", "text-decoration-none")
+        const url = new URL(window.location.href)
+        url.searchParams.delete("uid")
+        url.searchParams.append("uid", error.target.uid)
+        if (error.target.uid.startsWith("P") || error.target.uid.startsWith("G")) {
+            url.pathname = "groups.html"
+        }
+        else {
+            url.pathname = "index.html"
+        }
+        groupLink.href = url.href
+        groupLink.innerText = error.target.name
+        item.append(groupLink)
+    }
+    bootstrap.Toast.getOrCreateInstance(toast_div).show()
+}
+
 export function displayProposal(data: Proposal | undefined) {
     const proposalAcc = document.getElementById("proposalAcc") as HTMLDivElement
     if (data === undefined) {
@@ -447,9 +510,9 @@ export function displayProposal(data: Proposal | undefined) {
     groupsHead.innerText = "Groups:"
     groupsDiv.append(groupsHead)
     if (data.groups && data.groups.length > 0) {
-        groupsDiv.classList.remove("invisible")
+        groupsDiv.classList.remove("d-none")
     } else {
-        groupsDiv.classList.add("invisible")
+        groupsDiv.classList.add("d-none")
     }
     for (const group of data.groups) {
         const link = document.createElement("a")
@@ -468,9 +531,9 @@ export function displayProposal(data: Proposal | undefined) {
     cardsHead.innerText = "Cards:"
     cardsDiv.append(cardsHead)
     if (data.cards && data.cards.length > 0) {
-        cardsDiv.classList.remove("invisible")
+        cardsDiv.classList.remove("d-none")
     } else {
-        cardsDiv.classList.add("invisible")
+        cardsDiv.classList.add("d-none")
     }
     for (const card of data.cards) {
         const link = document.createElement("a")
@@ -530,20 +593,20 @@ async function startProposal(event: MouseEvent) {
     window.location.href = url.href
 }
 
-async function checkReferences(): Promise<boolean> {
-    const response = await do_fetch("/api/check-references", { method: "get" })
-    const errors = await response.json()
-    console.log(errors)
-    for (const error of errors) {
-        displayError(error)
+async function checkConsistency(): Promise<boolean> {
+    const response = await do_fetch("/api/check-consistency", { method: "get" })
+    const errors = await response.json() as ConsistencyError[]
+    if (errors.length > 0) {
+        console.log(errors)
+        displayConsistencyErrors(errors)
+        return true
     }
-    if (errors.length > 0) { return true }
     return false
 }
 
 async function submitProposal(event: MouseEvent, proposalModal: bootstrap.Modal) {
     const form = (event.currentTarget as HTMLButtonElement).form
-    if (await checkReferences()) { return }
+    if (await checkConsistency()) { return }
     const response = await do_fetch("/api/proposal/submit", { method: "post", body: new FormData(form) })
     if (!response) { return }
     window.location.reload()
@@ -552,13 +615,14 @@ async function submitProposal(event: MouseEvent, proposalModal: bootstrap.Modal)
 async function approveProposal(event: MouseEvent, proposalModal: bootstrap.Modal) {
     const button = event.currentTarget as HTMLButtonElement
     const form = button.form
-    if (await checkReferences()) { return }
+    if (await checkConsistency()) { return }
     button.innerHTML = '<div class="spinner-border" role="status"></div>'
     const response = await do_fetch("/api/proposal/approve", { method: "post", body: new FormData(form) })
     button.innerHTML = "Approve"
     if (!response) { return }
     const url = new URL(window.location.href)
     url.searchParams.delete("prop")
+    url.searchParams.delete("uid")  // avoid 404
     window.location.href = url.href
 }
 
@@ -641,12 +705,15 @@ async function addRulingCard(ev: MouseEvent, position: Position) {
 
 async function changeReferenceName(ev: InputEvent) {
     const referenceURL = document.getElementById("referenceURL") as HTMLInputElement
-    if (!referenceURL.disabled && referenceURL.value) { return }
+    if (!referenceURL.readOnly && referenceURL.value) { return }
     const referenceName = document.getElementById("referenceName") as HTMLInputElement
     const form = referenceName.form
     const referenceAddNewButton = document.getElementById('referenceAddNewButton') as HTMLButtonElement
     const referenceAddExistingButton = document.getElementById('referenceAddExistingButton') as HTMLButtonElement
     const selectRulebookRef = document.getElementById('selectRulebookRef') as HTMLSelectElement
+    const errorDiv = document.getElementById("referenceUrlError") as HTMLDivElement
+    errorDiv.innerText = ""
+    errorDiv.classList.add("invisible")
     selectRulebookRef.selectedIndex = 0
     const body = new FormData()
     body.append("uid", referenceName.value)
@@ -658,13 +725,13 @@ async function changeReferenceName(ev: InputEvent) {
         if (response.ok) {
             const data = await response.json() as SearchResponse
             referenceURL.value = data.reference.url
-            referenceURL.disabled = true
+            referenceURL.readOnly = true
             form.dataset.existing = JSON.stringify(data.reference)
             referenceAddNewButton.hidden = true
             referenceAddExistingButton.hidden = false
         } else {
-            if (referenceURL.disabled) {
-                referenceURL.disabled = false
+            if (referenceURL.readOnly) {
+                referenceURL.readOnly = false
                 referenceURL.value = ""
             }
             form.dataset.existing = undefined
@@ -685,6 +752,7 @@ async function changeReferenceURL(ev: InputEvent) {
     const referenceAddNewButton = document.getElementById('referenceAddNewButton') as HTMLButtonElement
     const referenceAddExistingButton = document.getElementById('referenceAddExistingButton') as HTMLButtonElement
     const referenceUrlError = form.querySelector("#referenceUrlError") as HTMLDivElement
+    referenceUrlError.innerText = ""
     referenceUrlError.classList.add("invisible")
     const body = new FormData()
     body.append("url", referenceURL.value)
@@ -697,13 +765,13 @@ async function changeReferenceURL(ev: InputEvent) {
             const data = await response.json() as SearchResponse
             if (data.computed_uid) {
                 referenceName.value = data.computed_uid
-                referenceName.disabled = true
+                referenceName.readOnly = true
                 referenceAddNewButton.hidden = false
                 referenceAddExistingButton.hidden = true
             }
             else {
                 referenceName.value = data.reference.uid
-                referenceName.disabled = true
+                referenceName.readOnly = true
                 form.dataset.existing = JSON.stringify(data.reference)
                 referenceAddNewButton.hidden = true
                 referenceAddExistingButton.hidden = false
@@ -714,12 +782,12 @@ async function changeReferenceURL(ev: InputEvent) {
                 if (error.length) {
                     referenceUrlError.innerText = error[0]
                     referenceUrlError.classList.remove("invisible")
-                    referenceName.disabled = true
+                    referenceName.readOnly = true
                     referenceName.value = ""
                 }
             } else {
-                if (referenceName.disabled) {
-                    referenceName.disabled = false
+                if (referenceName.readOnly) {
+                    referenceName.readOnly = false
                     referenceName.value = ""
                 }
                 form.dataset.existing = undefined
@@ -744,9 +812,9 @@ function changeRulebookRef(ev: InputEvent) {
     const selectedOption = selectRulebookRef.options[selectRulebookRef.selectedIndex]
     if (selectedOption.value) {
         referenceName.value = selectedOption.value
-        referenceName.disabled = false
+        referenceName.readOnly = false
         referenceURL.value = JSON.parse(selectedOption.dataset.reference).url
-        referenceURL.disabled = true
+        referenceURL.readOnly = true
         referenceAddNewButton.hidden = true
         referenceAddExistingButton.hidden = false
         form.dataset.existing = selectedOption.dataset.reference
@@ -754,9 +822,9 @@ function changeRulebookRef(ev: InputEvent) {
         if (referenceName.value.startsWith("RBK")) {
             referenceName.value = ""
         }
-        if (referenceURL.disabled) {
+        if (referenceURL.readOnly) {
             referenceURL.value = ""
-            referenceURL.disabled = false
+            referenceURL.readOnly = false
             referenceAddNewButton.hidden = false
             referenceAddExistingButton.hidden = true
         }
@@ -772,7 +840,7 @@ function setupReferenceModal(position: Position) {
         form.reset()
         form.querySelector("#referenceUrlError").classList.add("invisible")
         for (const input of form.querySelectorAll("input")) {
-            input.disabled = false
+            input.readOnly = false
         }
     })
     const referenceAddNewButton = referenceModal.querySelector('#referenceAddNewButton') as HTMLButtonElement
@@ -788,6 +856,11 @@ function setupReferenceModal(position: Position) {
     selectRulebookRef.addEventListener("input", changeRulebookRef)
 }
 
+function initToasts() {
+    const toastElList = document.querySelectorAll('.toast')
+    const toastList = [...toastElList].map(toastEl => new bootstrap.Toast(toastEl, { autohide: false }))
+}
+
 export async function load() {
     // activate tooltips
     var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
@@ -795,6 +868,7 @@ export async function load() {
         return new bootstrap.Tooltip(tooltipTriggerEl)
     })
     // other stuff
+    initToasts()
     navActivateCurrent()
     loginManagement()
     mapProposalModal()
@@ -966,6 +1040,12 @@ interface Proposal extends UID {
     channel_id: string
     cards: NID[]
     groups: NID[]
+}
+
+interface ConsistencyError {
+    target: NID
+    ruling_uid: string
+    error: string
 }
 
 export const ANKHA_SYMBOLS = {

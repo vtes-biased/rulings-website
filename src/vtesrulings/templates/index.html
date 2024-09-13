@@ -42,8 +42,8 @@
 </div>
 <div class="container-fluid my-3" id="rulingsDiv">
     <h4>Rulings</h4>
-    {% if current.rulings %}
     <div id="rulingsList" data-source="{{ current.uid }}">
+        {% if current.rulings %}
         {% for ruling in current.rulings %}
         <div class="card my-1 krcg-ruling" data-source="{{ current.uid }}" data-ruling='{{ ruling | tojson }}'>
             <!-- Content added by JS -->
@@ -51,8 +51,9 @@
         {% endfor %}
     </div>
     {% else %}
-    <div id="rulingsList">No Ruling.</div>
+    <div class="my-2">No Ruling</div>
     {% endif %}
+</div>
 </div>
 {% if current.backrefs %}
 <div class="container-fluid my-3" id="backrefTitle">
