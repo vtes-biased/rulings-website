@@ -503,6 +503,8 @@ class Manager:
         """Delete given group. Yield KeyError if not found."""
         if uid in self.prop.groups and uid not in self.base.groups:
             del self.prop.groups[uid]
+            if uid in self.prop.rulings:
+                del self.prop.rulings[uid]
         else:
             self.prop.groups[uid] = copy.deepcopy(self.base.groups[uid])
             self.prop.groups[uid].state = models.State.DELETED
