@@ -162,6 +162,18 @@ async def update_proposal(connection: psycopg.AsyncConnection, proposal: dict) -
         )
 
 
+async def delete_proposal(connection: psycopg.AsyncConnection, proposal: dict) -> None:
+    """
+    Use `async with proposal_connection(uid):`
+    to properly lock the proposal for update before doIng anything
+    """
+    async with connection.cursor() as cursor:
+        await cursor.execute(
+            "DELETE proposals WHERE uid=%s",
+            [proposal["uid"]],
+        )
+
+
 async def get_proposal(proposal_uid: str):
     async with POOL.connection() as connection:
         async with connection.cursor() as cursor:

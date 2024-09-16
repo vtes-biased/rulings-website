@@ -22,6 +22,7 @@ def proposal_update(f):
         if not quart.g.user:
             quart.abort(401)
         async with db.POOL.connection() as connection:
+            quart.g.db_connection = connection
             prop = await db.get_proposal_for_update(connection, prop_uid)
             quart.g.proposal = proposal.Proposal(**prop)
             if quart.g.proposal.usr != str(quart.g.user.uid):
@@ -149,7 +150,6 @@ async def submit_proposal():
     if not quart.g.proposal.name:
         raise ValueError("Proposal needs a name for submission")
     await discord.submit_proposal(quart.g.proposal)
-    # maybe return Discord URL https://discord.com/channels/1269039622059462768/1280893094568398899
     return {}
 
 
@@ -175,6 +175,7 @@ async def approve_proposal():
     quart.current_app.rulings_index = await repository.load_base(
         quart.current_app.rulings_repo, quart.current_app.cards_map
     )
+    await db.delete_proposal(quart.g.db_connection, asdict(quart.g.proposal))
     return {}
 
 
