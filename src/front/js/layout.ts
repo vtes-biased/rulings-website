@@ -104,7 +104,9 @@ function memorizePosition(ev: Event, position: Position) {
     // save offset inside current <p> element
     const selection = window.getSelection()
     if (!selection.anchorNode) { return }
-    if (selection.anchorNode.parentElement != position.paragraph) { return }
+    if (selection.anchorNode != position.paragraph && selection.anchorNode.parentElement != position.paragraph) {
+        return
+    }
     const card = selection.anchorNode.parentElement.closest(".krcg-ruling") as HTMLDivElement
     position.card = card
     position.node = selection.anchorNode
