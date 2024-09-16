@@ -24,6 +24,8 @@ def proposal_update(f):
         async with db.POOL.connection() as connection:
             quart.g.db_connection = connection
             prop = await db.get_proposal_for_update(connection, prop_uid)
+            if not prop:
+                quart.abort(405)
             quart.g.proposal = proposal.Proposal(**prop)
             if quart.g.proposal.usr != str(quart.g.user.uid):
                 if quart.g.user.category == db.UserCategory.BASIC:
@@ -42,7 +44,11 @@ def proposal_readonly(f):
         prop_uid = quart.session.get("proposal", None)
         if prop_uid:
             prop = await db.get_proposal(prop_uid)
-            quart.g.proposal = proposal.Proposal(**prop)
+            if prop:
+                quart.g.proposal = proposal.Proposal(**prop)
+            else:
+                quart.session.pop("proposal", None)
+                quart.g.proposal = None
         else:
             quart.g.proposal = None
         return await f(*args, **kwargs)

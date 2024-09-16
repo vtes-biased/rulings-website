@@ -182,7 +182,9 @@ async def get_proposal(proposal_uid: str):
                     "SELECT data FROM proposals WHERE uid=%s", [proposal_uid]
                 )
             ).fetchone()
-        return ret[0]
+        if ret:
+            return ret[0]
+        return None
 
 
 async def get_proposal_for_update(

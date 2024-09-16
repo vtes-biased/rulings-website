@@ -120,20 +120,21 @@ async def load_user():
 @app.route("/")
 @app.route("/<path:page>")
 async def index(page=None):
+    context = {}
     prop_uid = quart.request.args.get("prop", None)
     if prop_uid and quart.g.user:
-        try:
-            prop = await db.get_proposal(prop_uid)
+        prop = await db.get_proposal(prop_uid)
+        if prop:
             quart.g.proposal = proposal.Proposal(**prop)
             quart.session["proposal"] = prop_uid
-        except KeyError:
+        else:
+            context["alert"] = "This proposal has been approved and merged"
             quart.session.pop("proposal", None)
             quart.g.pop("proposal", None)
     else:
         quart.g.pop("proposal", None)
     if not page:
         return quart.redirect("index.html", 301)
-    context = {}
     if quart.g.user:
         context["user"] = asdict(quart.g.user)
     manager = api.get_manager()

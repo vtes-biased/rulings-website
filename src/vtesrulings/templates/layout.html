@@ -175,6 +175,15 @@
     </div>
     {% endif %}
     <div class="container" id="contentContainer">
+        {% if alert %}
+        <div class="alert alert-warning d-flex align-items-center alert-dismissible fade show" role="alert">
+            <i class="bi bi-exclamation-triangle"></i>
+            <div>
+                {{ alert }}
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endif %}
         {% if proposal %}
         <div class="accordion" id="proposalAcc" data-data='{{ proposal | tojson }}'>
             <div class="accordion-item">
