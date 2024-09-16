@@ -169,7 +169,7 @@ async def delete_proposal(connection: psycopg.AsyncConnection, proposal: dict) -
     """
     async with connection.cursor() as cursor:
         await cursor.execute(
-            "DELETE proposals WHERE uid=%s",
+            "DELETE FROM proposals WHERE uid=%s",
             [proposal["uid"]],
         )
 
