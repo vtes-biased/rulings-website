@@ -1,7 +1,6 @@
 import aiohttp
 import logging
 import os
-import pprint
 import urllib.parse
 
 from . import proposal
@@ -40,7 +39,7 @@ async def submit_proposal(prop: proposal.Proposal):
                         "title": prop.name,
                         "description": prop.description,
                         "url": urllib.parse.urljoin(
-                            SITE_URL_BASE, f"/index.html?prop={prop.uid}"
+                            SITE_URL_BASE, proposal.get_proposal_url(prop)
                         ),
                         "fields": [
                             {
@@ -79,7 +78,6 @@ async def submit_proposal(prop: proposal.Proposal):
             resp.raise_for_status()
             data = await resp.json()
             logger.info("discord said: %s", data)
-            pprint.pprint(data)
             prop.channel_id = data["channel_id"]
 
 

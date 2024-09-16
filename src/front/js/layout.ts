@@ -628,11 +628,12 @@ async function approveProposal(event: MouseEvent, proposalModal: bootstrap.Modal
     window.location.href = url.href
 }
 
-async function saveProposal(event: MouseEvent) {
-    const form = (event.currentTarget as HTMLButtonElement).form
-    const response = await do_fetch("/api/proposal", { method: "put", body: new FormData(form) })
+async function deleteProposal(event: MouseEvent) {
+    const response = await do_fetch("/api/proposal", { method: "delete" })
     if (!response) { return }
-    window.location.reload()
+    const url = new URL(window.location.href)
+    url.searchParams.delete("prop")
+    window.location.replace(url.href)
 }
 
 async function leaveProposal() {
@@ -646,7 +647,7 @@ function mapProposalModal() {
     const proposalLeave = document.getElementById('proposalLeave') as HTMLButtonElement
     const proposalSubmit = document.getElementById('proposalSubmit') as HTMLButtonElement
     const proposalApprove = document.getElementById('proposalApprove') as HTMLButtonElement
-    const proposalSave = document.getElementById('proposalSave') as HTMLButtonElement
+    const proposalDelete = document.getElementById('proposalDelete') as HTMLButtonElement
     const proposalModal = new bootstrap.Modal('#proposalModal')
     const proposalButton = document.getElementById('proposalButton') as HTMLButtonElement
     if (!proposalButton) { return }
@@ -663,8 +664,8 @@ function mapProposalModal() {
     if (proposalApprove) {
         proposalApprove.addEventListener("click", (ev) => approveProposal(ev, proposalModal))
     }
-    if (proposalSave) {
-        proposalSave.addEventListener("click", saveProposal)
+    if (proposalDelete) {
+        proposalDelete.addEventListener("click", deleteProposal)
     }
 }
 

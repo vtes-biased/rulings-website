@@ -99,8 +99,8 @@
                     <button type="button" class="btn btn-secondary" id="proposalLeave" form="proposalForm">
                         Leave
                     </button>
-                    <button type="button" class="btn btn-primary" id="proposalSave" form="proposalForm">
-                        Save
+                    <button type="button" class="btn btn-danger" id="proposalDelete" form="proposalForm">
+                        Delete
                     </button>
                     {% if proposal.channel_id %}
                     {% if user.category != 'BASIC' %}
@@ -176,12 +176,22 @@
     {% endif %}
     <div class="container" id="contentContainer">
         {% if alert %}
-        <div class="alert alert-warning d-flex align-items-center alert-dismissible fade show" role="alert">
-            <i class="bi bi-exclamation-triangle"></i>
-            <div>
-                {{ alert }}
+        <div class="alert alert-warning alert-dismissible fade show" role="alert">
+            <div class="d-flex align-items-center">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                <div>
+                    {{ alert.text }}
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
             </div>
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            {% if alert.links %}
+            <hr>
+            <div class="d-flex align-items-center flex-wrap">
+                {% for link in alert.links %}
+                <a class="m-2 badge bg-secondary text-decoration-none" href="{{ link.url }}">{{ link.label }}</a>
+                {% endfor %}
+            </div>
+            {% endif %}
         </div>
         {% endif %}
         {% if proposal %}

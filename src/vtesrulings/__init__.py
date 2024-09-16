@@ -128,11 +128,28 @@ async def index(page=None):
             quart.g.proposal = proposal.Proposal(**prop)
             quart.session["proposal"] = prop_uid
         else:
-            context["alert"] = "This proposal has been approved and merged"
+            context["alert"] = {"text": "This proposal has been approved and merged"}
             quart.session.pop("proposal", None)
             quart.g.pop("proposal", None)
     else:
         quart.g.pop("proposal", None)
+    if quart.g.user:
+        proposals = [
+            proposal.Proposal(**p)
+            for p in await db.get_user_proposals(quart.g.user.uid)
+            if p["uid"] != prop_uid and not p.get("channel_id")
+        ]
+        if proposals and "alert" not in context:
+            context["alert"] = {
+                "text": "You have active proposals waiting for submission",
+                "links": [
+                    {
+                        "url": proposal.get_proposal_url(p),
+                        "label": p.name,
+                    }
+                    for p in proposals
+                ],
+            }
     if not page:
         return quart.redirect("index.html", 301)
     if quart.g.user:
@@ -151,7 +168,10 @@ async def index(page=None):
             if target.startswith(("G", "P")):
                 if target in prop.groups:
                     continue
-                group = manager.get_group(target)
+                try:
+                    group = manager.get_group(target)
+                except KeyError:  # might happen on corrupted prop data
+                    continue
                 proposal_dict["groups"].append({"uid": target, "name": group.name})
             else:
                 card = manager.get_card(int(target))

@@ -149,6 +149,13 @@ async def update_proposal():
     return {}
 
 
+@api.route("/proposal", methods=["DELETE"])
+@proposal_update
+async def delete_proposal():
+    await db.delete_proposal(quart.g.db_connection, asdict(quart.g.proposal))
+    return {}
+
+
 @api.route("/proposal/submit", methods=["POST"])
 @proposal_update
 async def submit_proposal():

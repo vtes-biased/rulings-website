@@ -17,6 +17,15 @@ class Proposal(models.BaseIndex):
     channel_id: str = ""
 
 
+def get_proposal_url(prop: Proposal):
+    if not prop.rulings:
+        return f"/index.html?prop={prop.uid}"
+    for target in prop.rulings.keys():
+        if target.startswith(("G", "P")):
+            return f"/groups.html?uid={target}&prop={prop.uid}"
+        return f"/index.html?uid={target}&prop={prop.uid}"
+
+
 class Manager:
     def __init__(
         self,
