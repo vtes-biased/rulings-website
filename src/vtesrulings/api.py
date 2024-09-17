@@ -138,6 +138,8 @@ async def start_proposal():
     existing_ids = await db.all_proposal_ids()
     while quart.g.proposal.uid in existing_ids:
         quart.g.proposal.uid = utils.random_uid8()
+    if not quart.g.proposal.name:
+        quart.g.proposal.name = "_Choose a name_"
     await db.insert_proposal(asdict(quart.g.proposal))
     return {"uid": quart.g.proposal.uid}
 

@@ -42,6 +42,9 @@
 </div>
 <div class="container-fluid my-3" id="rulingsDiv">
     <h4>Rulings</h4>
+    {% if not proposal %}
+    <button class="btn btn-primary my-2" id="quickProposalButton">Add/Edit rulings</button>
+    {% endif %}
     <div id="rulingsList" data-source="{{ current.uid }}">
         {% if current.rulings %}
         {% for ruling in current.rulings %}

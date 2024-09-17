@@ -38,16 +38,23 @@
                     {% endif %}
                 </ul>
                 {% if user %}
-                <button type="button" class="btn btn-primary mx-2" id="logoutButton">Logout</button>
-                <button type="button" class="btn btn-primary mx-2" id="proposalButton">
-                    {% if proposal %}
-                    Proposal
-                    {% else %}
-                    Start proposal
-                    {% endif %}
-                </button>
+                <button type="button" class="btn btn-secondary ms-2" id="logoutButton">Logout</button>
+                {% if proposal %}
+                {% if proposal.channel_id %}
+                {% if user.category != 'BASIC' %}
+                <button type="button" class="btn btn-success ms-2" id="proposalApprove">Approve</button>
+                {% endif %}
                 {% else %}
-                <button type="button" class="btn btn-primary mx-2" id="loginButton">Login</button>
+                <button type="button" class="btn btn-success ms-2" id="proposalSubmit">Submit</button>
+                {% endif %}
+                {% if proposal.editable %}
+                <button type="button" class="btn btn-danger ms-2" id="proposalDelete">Delete</button>
+                {% endif %}
+                {% else %}
+                <button type="button" class="btn btn-primary ms-2" id="proposalButton">Start proposal</button>
+                {% endif %}
+                {% else %}
+                <button type="button" class="btn btn-primary ms-2" id="loginButton">Login</button>
                 {% endif %}
             </div>
         </nav>
@@ -96,21 +103,9 @@
                 </form>
                 <div class="modal-footer">
                     {% if proposal %}
-                    <button type="button" class="btn btn-secondary" id="proposalLeave" form="proposalForm">
-                        Leave
-                    </button>
-                    <button type="button" class="btn btn-danger" id="proposalDelete" form="proposalForm">
-                        Delete
-                    </button>
-                    {% if proposal.channel_id %}
-                    {% if user.category != 'BASIC' %}
-                    <button type="button" class="btn btn-success" id="proposalApprove" form="proposalForm">
-                        Approve
-                    </button>
-                    {% endif %}
-                    {% else %}
-                    <button type="button" class="btn btn-success" id="proposalSubmit" form="proposalForm">
-                        Submit
+                    {% if proposal.editable %}
+                    <button type="button" class="btn btn-primary" id="proposalSave" form="proposalForm">
+                        Save
                     </button>
                     {% endif %}
                     {% else %}
@@ -197,7 +192,13 @@
         {% if proposal %}
         <div class="accordion" id="proposalAcc" data-data='{{ proposal | tojson }}'>
             <div class="accordion-item">
-                <h2 class="accordion-header">
+                <h2 class="accordion-header d-flex align-items-center">
+                    <button type="button" class="btn btn-success m-2" id="proposalButton">
+                        <i class="bi bi-pencil-fill"></i>
+                    </button>
+                    <button type="button" class="btn btn-secondary m-2" id="proposalLeave">
+                        <i class="bi bi-box-arrow-left"></i>
+                    </button>
                     <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
                         data-bs-target="#collapseOne" aria-expanded="true" aria-controls="collapseOne">
                         <h4>Proposal: {{ proposal.name }}</h4>

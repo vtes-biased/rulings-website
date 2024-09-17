@@ -158,12 +158,18 @@ async def index(page=None):
     if hasattr(quart.g, "proposal"):
         prop = quart.g.proposal
         proposal_dict = {
+            "uid": prop.uid,
             "channel_id": prop.channel_id,
             "name": prop.name,
             "description": prop.description,
             "groups": [],
             "cards": [],
         }
+        if quart.g.user and (
+            quart.g.proposal.usr == str(quart.g.user.uid)
+            or quart.g.user.category != db.UserCategory.BASIC
+        ):
+            proposal_dict["editable"] = True
         for target in prop.rulings.keys():
             if target.startswith(("G", "P")):
                 if target in prop.groups:

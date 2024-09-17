@@ -606,26 +606,35 @@ async function checkConsistency(): Promise<boolean> {
     return false
 }
 
-async function submitProposal(event: MouseEvent, proposalModal: bootstrap.Modal) {
-    const form = (event.currentTarget as HTMLButtonElement).form
+async function submitProposal(event: MouseEvent) {
+    const button = event.currentTarget as HTMLButtonElement
     if (await checkConsistency()) { return }
-    const response = await do_fetch("/api/proposal/submit", { method: "post", body: new FormData(form) })
+    button.innerHTML = '<div class="spinner-border" role="status"></div>'
+    const response = await do_fetch("/api/proposal/submit", { method: "post" })
+    button.innerHTML = "Submit"
     if (!response) { return }
     window.location.reload()
 }
 
-async function approveProposal(event: MouseEvent, proposalModal: bootstrap.Modal) {
+async function approveProposal(event: MouseEvent) {
     const button = event.currentTarget as HTMLButtonElement
-    const form = button.form
     if (await checkConsistency()) { return }
+    const url = new URL(window.location.href)
     button.innerHTML = '<div class="spinner-border" role="status"></div>'
-    const response = await do_fetch("/api/proposal/approve", { method: "post", body: new FormData(form) })
+    const response = await do_fetch("/api/proposal/approve", { method: "post" })
     button.innerHTML = "Approve"
     if (!response) { return }
-    const url = new URL(window.location.href)
     url.searchParams.delete("prop")
     url.searchParams.delete("uid")  // avoid 404
     window.location.href = url.href
+}
+
+async function saveProposal(event: MouseEvent) {
+    const button = event.currentTarget as HTMLButtonElement
+    const form = button.form
+    const response = await do_fetch("/api/proposal/approve", { method: "put", body: new FormData(form) })
+    if (!response) { return }
+    window.location.reload()
 }
 
 async function deleteProposal(event: MouseEvent) {
@@ -648,6 +657,7 @@ function mapProposalModal() {
     const proposalSubmit = document.getElementById('proposalSubmit') as HTMLButtonElement
     const proposalApprove = document.getElementById('proposalApprove') as HTMLButtonElement
     const proposalDelete = document.getElementById('proposalDelete') as HTMLButtonElement
+    const proposalSave = document.getElementById('proposalSave') as HTMLButtonElement
     const proposalModal = new bootstrap.Modal('#proposalModal')
     const proposalButton = document.getElementById('proposalButton') as HTMLButtonElement
     if (!proposalButton) { return }
@@ -659,10 +669,13 @@ function mapProposalModal() {
         proposalLeave.addEventListener("click", leaveProposal)
     }
     if (proposalSubmit) {
-        proposalSubmit.addEventListener("click", (ev) => submitProposal(ev, proposalModal))
+        proposalSubmit.addEventListener("click", submitProposal)
     }
     if (proposalApprove) {
-        proposalApprove.addEventListener("click", (ev) => approveProposal(ev, proposalModal))
+        proposalApprove.addEventListener("click", approveProposal)
+    }
+    if (proposalSave) {
+        proposalSave.addEventListener("click", saveProposal)
     }
     if (proposalDelete) {
         proposalDelete.addEventListener("click", deleteProposal)
