@@ -11,19 +11,20 @@
         }
     },
     "scripts": {
-        "watch": "parcel watch -p 1234",
-        "build": "parcel build"
+        "front": "parcel watch -p 1234",
+        "build": "parcel build",
+        "back": "QUART_APP=\"vtesrulings:app\" quart run --reload"
     },
-    "dependencies": {
-        "@popperjs/core": "^2.11",
-        "bootstrap": "^5.3",
-        "bootstrap-icons": "^1.11",
-        "bootstrap5-autocomplete": "latest"
-    },
+    "dependencies": {},
     "devDependencies": {
+        "@popperjs/core": "^2.11",
         "@parcel/transformer-sass": "^2.12.0",
         "@types/bootstrap": "^5.2",
+        "bootstrap": "^5.3",
+        "bootstrap-icons": "^1.11",
+        "bootstrap5-autocomplete": "latest",
         "parcel": "^2.12.0",
+        "pm2": "^5.4.3",
         "typescript": "^5.5.2"
     }
 }

@@ -1,4 +1,4 @@
-.PHONY: check-porcelain clean release-local release test update
+.PHONY: check-porcelain clean release-local release test update serve-front serve
 
 NEXT_VERSION = `python -m setuptools_scm --strip-dev`
 
@@ -8,6 +8,7 @@ check-porcelain:
 clean:
 	rm -rf "src.egg-info"
 	rm -rf dist
+	rm -rf src/vtesrulings/static/dist
 
 release-local: check-porcelain clean
 	npm run build
@@ -25,8 +26,13 @@ test:
 	QUART_TESTING=1 pytest -vvs
 
 update:
-	pip install --upgrade --upgrade-strategy eager -e ".[dev]"
 	npm install --include=dev
+	npm update --include=dev
+	pip install --upgrade --upgrade-strategy eager -e ".[dev]"
 
-serve:
-	npm run watch & source .env && quart run --reload
+serve-front:
+	pm2 --name front start npm -- run front
+
+serve: serve-front
+	pm2 --name back start npm -- run back
+	pm2 logs
