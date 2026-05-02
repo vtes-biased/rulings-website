@@ -38,17 +38,13 @@ async def submit_proposal(prop: proposal.Proposal):
                     {
                         "title": prop.name,
                         "description": prop.description,
-                        "url": urllib.parse.urljoin(
-                            SITE_URL_BASE, proposal.get_proposal_url(prop)
-                        ),
+                        "url": urllib.parse.urljoin(SITE_URL_BASE, proposal.get_proposal_url(prop)),
                         "fields": [
                             {
                                 "name": "Groups",
                                 "inline": True,
                                 "value": (
-                                    f"{len(prop.groups)} change(s)"
-                                    if prop.groups
-                                    else "No change"
+                                    f"{len(prop.groups)} change(s)" if prop.groups else "No change"
                                 ),
                             },
                             {

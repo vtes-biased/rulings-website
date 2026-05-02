@@ -132,9 +132,7 @@ RULING_AUTHORS = {
     "RBK": ("Rulebook", None, None),
 }
 
-RE_RULING_REFERENCE = re.compile(
-    r"\[(?:" + r"|".join(RULING_AUTHORS) + r")\s[\w0-9-]+\]"
-)
+RE_RULING_REFERENCE = re.compile(r"\[(?:" + r"|".join(RULING_AUTHORS) + r")\s[\w0-9-]+\]")
 RE_SYMBOL = re.compile(r"\[(?:" + r"|".join(ANKHA_SYMBOLS) + r")\]")
 RE_CARD = re.compile(r"{[^}]+}")
 
@@ -252,9 +250,7 @@ def build_ruling(
     return ruling
 
 
-def build_base_card(
-    card_map: krcg.cards.CardMap, card_id_or_name: int | str
-) -> models.BaseCard:
+def build_base_card(card_map: krcg.cards.CardMap, card_id_or_name: int | str) -> models.BaseCard:
     """Get the BaseCard matching the ID. Yield KeyError if not found.
     WARNINGS:
         - a card ID _must_ be an int, or it will not be found,

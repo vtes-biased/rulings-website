@@ -131,9 +131,7 @@ async def update_proposal_from_params():
 async def start_proposal():
     if not quart.g.user:
         quart.abort(401)
-    quart.g.proposal = proposal.Proposal(
-        uid=utils.random_uid8(), usr=str(quart.g.user.uid)
-    )
+    quart.g.proposal = proposal.Proposal(uid=utils.random_uid8(), usr=str(quart.g.user.uid))
     await update_proposal_from_params()
     existing_ids = await db.all_proposal_ids()
     while quart.g.proposal.uid in existing_ids:
@@ -284,9 +282,7 @@ async def delete_ruling(target_id: str, ruling_id: str):
 async def post_group():
     params = await get_params()
     ret = get_manager().insert_group(**params)
-    return quart.redirect(
-        f"/groups.html?uid={ret.uid}&prop={quart.g.proposal.uid}", 302
-    )
+    return quart.redirect(f"/groups.html?uid={ret.uid}&prop={quart.g.proposal.uid}", 302)
 
 
 @api.route("/group/<group_id>", methods=["PUT"])

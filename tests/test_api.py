@@ -8,9 +8,7 @@ async def login_and_proposal(client: quart.typing.TestClientProtocol):
     """Helper function: login and start a proposal"""
     response = await client.post("/login", form={"username": "test-user"})
     assert response.status_code == 302
-    response = await client.post(
-        "/api/proposal", json={"name": "Test", "description": "Foobar"}
-    )
+    response = await client.post("/api/proposal", json={"name": "Test", "description": "Foobar"})
     assert response.status_code == 200
     data = await response.json
     assert "uid" in data
@@ -480,9 +478,7 @@ async def test_add_card_ruling(app: quart.typing.TestAppProtocol):
     assert response.status_code == 400
     assert await response.json == ["ANK 20210101"]
     # A real reference will work
-    response = await client.post(
-        "/api/ruling/100015", json={"text": "Test ruling [RTR 20070707]"}
-    )
+    response = await client.post("/api/ruling/100015", json={"text": "Test ruling [RTR 20070707]"})
     assert response.status_code == 200
     assert await response.json == {
         "cards": [],
@@ -636,8 +632,7 @@ async def test_update_card_ruling(app: quart.typing.TestAppProtocol):
                 "symbols": [],
                 "target": {"name": "419 Operation", "uid": "100002"},
                 "text": (
-                    "You can burn the edge to burn the card if it has no counter. [ANK "
-                    "20221011-3]"
+                    "You can burn the edge to burn the card if it has no counter. [ANK 20221011-3]"
                 ),
             },
         ],
@@ -723,9 +718,7 @@ async def test_delete_card_ruling(app: quart.typing.TestAppProtocol):
 async def test_add_group_ruling(app: quart.typing.TestAppProtocol):
     client = app.test_client()
     await login_and_proposal(client)
-    response = await client.post(
-        "/api/ruling/G00008", json={"text": "Test ruling [RTR 20070707]"}
-    )
+    response = await client.post("/api/ruling/G00008", json={"text": "Test ruling [RTR 20070707]"})
     assert response.status_code == 200
     assert await response.json == {
         "cards": [],

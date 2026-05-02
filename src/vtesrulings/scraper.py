@@ -49,11 +49,7 @@ class VEKNParser(SmartParser):
         self.date: datetime.date = None
 
     def on_tag(self, tag: str, attrs: dict[str, str | None]) -> None:
-        if (
-            "MESSAGE" not in self.state
-            and tag == "span"
-            and "kdate" in attrs.get("class", "")
-        ):
+        if "MESSAGE" not in self.state and tag == "span" and "kdate" in attrs.get("class", ""):
             self.set_state("DATE")
         if tag == "a" and attrs.get("id", "") == self.msg_id:
             self.state.add("MESSAGE")

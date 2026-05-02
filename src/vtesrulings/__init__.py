@@ -84,8 +84,7 @@ def symbol_replace(s: str, d: list):
     for symbol in d:
         s = s.replace(
             symbol["text"],
-            '<span class="krcg-icon" contenteditable="false">'
-            f'{symbol["symbol"]}</span>',
+            f'<span class="krcg-icon" contenteditable="false">{symbol["symbol"]}</span>',
         )
     return s
 
@@ -190,9 +189,7 @@ async def index(page=None):
         if prop.channel_id:
             context["proposal"]["url"] = discord.proposal_discussion_url(prop)
         context["rbk_references"] = [
-            ref
-            for ref in manager.base.references.values()
-            if ref.uid.startswith("RBK ")
+            ref for ref in manager.base.references.values() if ref.uid.startswith("RBK ")
         ]
         context["search_params"] = f"?prop={prop.uid}"
         context["search_params_2"] = f"&prop={prop.uid}"
@@ -205,9 +202,7 @@ async def index(page=None):
         if uid:
             try:
                 current = asdict(manager.get_group(uid, deleted=True))
-                current["rulings"] = [
-                    asdict(r) for r in manager.get_rulings(uid, deleted=True)
-                ]
+                current["rulings"] = [asdict(r) for r in manager.get_rulings(uid, deleted=True)]
                 context["current"] = current
             except KeyError:
                 quart.abort(404)
@@ -216,9 +211,7 @@ async def index(page=None):
         if uid:
             try:
                 current = asdict(manager.get_card(int(uid)))
-                current["rulings"] = [
-                    asdict(r) for r in manager.get_rulings(uid, deleted=True)
-                ]
+                current["rulings"] = [asdict(r) for r in manager.get_rulings(uid, deleted=True)]
                 context["current"] = current
             except KeyError:
                 quart.abort(404)

@@ -73,9 +73,7 @@ def reset():
 async def get_or_create_user(vekn: str) -> User:
     async with POOL.connection() as conn:
         async with conn.cursor(row_factory=psycopg.rows.class_row(User)) as cursor:
-            ret = await cursor.execute(
-                "SELECT * FROM users WHERE vekn=%s FOR UPDATE", [vekn]
-            )
+            ret = await cursor.execute("SELECT * FROM users WHERE vekn=%s FOR UPDATE", [vekn])
             ret = await ret.fetchone()
             if ret:
                 return ret
@@ -178,9 +176,7 @@ async def get_proposal(proposal_uid: str):
     async with POOL.connection() as connection:
         async with connection.cursor() as cursor:
             ret = await (
-                await cursor.execute(
-                    "SELECT data FROM proposals WHERE uid=%s", [proposal_uid]
-                )
+                await cursor.execute("SELECT data FROM proposals WHERE uid=%s", [proposal_uid])
             ).fetchone()
         if ret:
             return ret[0]
@@ -191,18 +187,14 @@ async def get_user_proposals(user_id: uuid.UUID):
     async with POOL.connection() as connection:
         async with connection.cursor() as cursor:
             ret = await (
-                await cursor.execute(
-                    "SELECT data FROM proposals WHERE usr=%s", [user_id]
-                )
+                await cursor.execute("SELECT data FROM proposals WHERE usr=%s", [user_id])
             ).fetchall()
         if ret:
             return [r[0] for r in ret]
         return []
 
 
-async def get_proposal_for_update(
-    connection: psycopg.AsyncConnection, proposal_uid: str
-):
+async def get_proposal_for_update(connection: psycopg.AsyncConnection, proposal_uid: str):
     async with connection.cursor() as cursor:
         ret = await (
             await cursor.execute(

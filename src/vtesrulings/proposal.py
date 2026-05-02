@@ -59,9 +59,7 @@ class Manager:
             return self.base.references[uid]
         raise KeyError()
 
-    def get_reference_by_url(
-        self, url: str = "", deleted: bool = False
-    ) -> models.Reference:
+    def get_reference_by_url(self, url: str = "", deleted: bool = False) -> models.Reference:
         if url:
             rev_proposal = {
                 ref.url: ref
@@ -76,18 +74,12 @@ class Manager:
                 if not deleted and ref.state == models.State.DELETED
             )
             rev_base = {
-                ref.url: ref
-                for ref in self.base.references.values()
-                if ref.uid not in remove
+                ref.url: ref for ref in self.base.references.values() if ref.uid not in remove
             }
             return rev_base[url]
 
-    def all_groups(
-        self, deleted: bool = False
-    ) -> typing.Generator[None, None, models.Group]:
-        for group in sorted(
-            self.prop.groups.values(), key=lambda g: g.name if g else ""
-        ):
+    def all_groups(self, deleted: bool = False) -> typing.Generator[None, None, models.Group]:
+        for group in sorted(self.prop.groups.values(), key=lambda g: g.name if g else ""):
             if group.state == models.State.DELETED and not deleted:
                 continue
             yield group
@@ -105,9 +97,7 @@ class Manager:
             return ret
         return self.base.groups[uid]
 
-    def all_rulings(
-        self, deleted: bool = False
-    ) -> typing.Generator[models.Ruling, None, None]:
+    def all_rulings(self, deleted: bool = False) -> typing.Generator[models.Ruling, None, None]:
         """Allows iteration on all Ruling objects"""
         for uid in self.base.rulings:
             yield from self.get_rulings(uid, False, deleted)
@@ -145,9 +135,7 @@ class Manager:
                     uid=ruling.uid,
                     target=ruling.target,
                     text=(
-                        card_in_group.prefix
-                        + (" " if card_in_group.prefix else "")
-                        + ruling.text
+                        card_in_group.prefix + (" " if card_in_group.prefix else "") + ruling.text
                     ),
                     state=ruling.state,
                     symbols=ruling.symbols + card_in_group.symbols,
@@ -155,9 +143,7 @@ class Manager:
                     cards=ruling.cards,
                 )
 
-    def get_ruling(
-        self, target_uid: str, ruling_uid: str, deleted: bool = False
-    ) -> models.Ruling:
+    def get_ruling(self, target_uid: str, ruling_uid: str, deleted: bool = False) -> models.Ruling:
         """Retrieve a ruling by its target (card or group) and its uid.
         A ruling ID is the stable_hash() of its text, to avoid collisions.
         Raises a KeyError if the ruling does not exist or has been removed or modified
@@ -205,9 +191,7 @@ class Manager:
             if match:
                 yield group, match[0]
 
-    def get_groups_of_card(
-        self, card_uid: str
-    ) -> typing.Generator[models.GroupOfCard, None, None]:
+    def get_groups_of_card(self, card_uid: str) -> typing.Generator[models.GroupOfCard, None, None]:
         """Yield the groups the card is a part of, as GroupOfCard objects.
         The GroupOfCard object includes the prefix the card uses in the group.
         """
@@ -220,9 +204,7 @@ class Manager:
                 symbols=card.symbols,
             )
 
-    def get_backrefs(
-        self, card_uid: str
-    ) -> typing.Generator[models.BaseCard, None, None]:
+    def get_backrefs(self, card_uid: str) -> typing.Generator[models.BaseCard, None, None]:
         """Yield the cards that have a ruling mentioning the given card."""
         backrefs = []
         for target_uid, rulings in self.prop.rulings.items():
@@ -279,9 +261,7 @@ class Manager:
         )
 
     @functools.cache
-    def get_card(
-        self, card_id_or_name: int | str
-    ) -> models.CryptCard | models.LibraryCard:
+    def get_card(self, card_id_or_name: int | str) -> models.CryptCard | models.LibraryCard:
         """
         Retrieve a card. Yield KeyError if not found.
         WARNINGS:
@@ -322,13 +302,9 @@ class Manager:
         ret = cls(**kwargs)
         for s in ret.types:
             if s in utils.ANKHA_SYMBOLS:
-                ret.symbols.append(
-                    models.SymbolSubstitution(text=s, symbol=utils.ANKHA_SYMBOLS[s])
-                )
+                ret.symbols.append(models.SymbolSubstitution(text=s, symbol=utils.ANKHA_SYMBOLS[s]))
         for s in card.disciplines:
-            ret.symbols.append(
-                models.SymbolSubstitution(text=s, symbol=utils.ANKHA_SYMBOLS[s])
-            )
+            ret.symbols.append(models.SymbolSubstitution(text=s, symbol=utils.ANKHA_SYMBOLS[s]))
         for key, uid in card.variants.items():
             ret.variants.append(
                 models.CardVariant(
@@ -394,9 +370,9 @@ class Manager:
 
     def delete_ruling(self, target_uid: str, uid: str) -> models.Ruling | None:
         """Delete the given ruling. Yield KeyError if not found."""
-        if uid in self.prop.rulings.get(
+        if uid in self.prop.rulings.get(target_uid, {}) and uid not in self.base.rulings.get(
             target_uid, {}
-        ) and uid not in self.base.rulings.get(target_uid, {}):
+        ):
             del self.prop.rulings[target_uid][uid]
             if not self.prop.rulings[target_uid]:
                 del self.prop.rulings[target_uid]
@@ -425,9 +401,7 @@ class Manager:
         self.prop.groups[uid] = group
         return group
 
-    def update_group(
-        self, uid: str, name: str = "", cards: dict[str, str] = None
-    ) -> models.Group:
+    def update_group(self, uid: str, name: str = "", cards: dict[str, str] = None) -> models.Group:
         """Insert or Update a group. It's an update if the `uid` is given.
         It can be used to update a group's name.
         """
@@ -468,17 +442,19 @@ class Manager:
                 symbols = list(utils.parse_symbols(prefix))
             except KeyError:
                 raise ValueError(f'Invalid symbol for card {cid}: "{prefix}"')
-            group.cards.append(
-                models.CardInGroup(
-                    uid=card.uid,
-                    name=card.name,
-                    printed_name=card.printed_name,
-                    img=card.img,
-                    prefix=prefix,
-                    state=state,
-                    symbols=symbols,
-                )
-            ),
+            (
+                group.cards.append(
+                    models.CardInGroup(
+                        uid=card.uid,
+                        name=card.name,
+                        printed_name=card.printed_name,
+                        img=card.img,
+                        prefix=prefix,
+                        state=state,
+                        symbols=symbols,
+                    )
+                ),
+            )
         if group.state == models.State.ORIGINAL:
             self.prop.groups.pop(uid, None)
         self.prop.groups[uid] = group
@@ -546,9 +522,7 @@ class Manager:
         reference = utils.build_reference(uid=uid, url=url, state=models.State.NEW)
         utils.check_reference(reference)
         if reference.source == "RBK":
-            raise ValueError(
-                "New RBK references cannot be added, they are all listed already."
-            )
+            raise ValueError("New RBK references cannot be added, they are all listed already.")
         try:
             self.get_reference_by_url(url)
             raise ValueError("Reference URL exists already")
@@ -658,9 +632,7 @@ class Manager:
             if value.state == models.State.DELETED:
                 ret.groups.pop(key, None)
                 continue
-            ret.groups[key] = models.Group(
-                uid=value.uid, name=value.name, state=value.state
-            )
+            ret.groups[key] = models.Group(uid=value.uid, name=value.name, state=value.state)
             for card in value.cards:
                 if card.state == models.State.DELETED:
                     continue

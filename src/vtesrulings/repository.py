@@ -170,9 +170,7 @@ async def load_base(repo: git.Repo, card_map: krcg.cards.CardMap) -> models.Inde
     return ret
 
 
-async def async_yaml_dump(
-    f: aiofiles.threadpool.text.AsyncTextIOWrapper, data: typing.Any
-) -> None:
+async def async_yaml_dump(f: aiofiles.threadpool.text.AsyncTextIOWrapper, data: typing.Any) -> None:
     buffer = io.StringIO()
     yaml.dump(data, buffer, **YAML_PARAMS)
     await f.write(buffer.getvalue())
@@ -197,20 +195,13 @@ async def _commit_index(
     rulings_dir = pathlib.Path(repo.working_tree_dir) / RULINGS_FILES_PATH
     all_groups = sorted(index.groups.values(), key=lambda x: x.uid)
     goup_ids_map = {}  # map with new stable group IDs assignments
-    async with aiofiles.open(
-        rulings_dir / "references.yaml", "w", encoding="utf-8"
-    ) as f:
+    async with aiofiles.open(rulings_dir / "references.yaml", "w", encoding="utf-8") as f:
         await f.write(REFERENCES_COMMENT)
-        data = {
-            ref.uid: ref.url
-            for ref in sorted(index.references.values(), key=lambda x: x.uid)
-        }
+        data = {ref.uid: ref.url for ref in sorted(index.references.values(), key=lambda x: x.uid)}
         await async_yaml_dump(f, data)
     async with aiofiles.open(rulings_dir / "groups.yaml", "w", encoding="utf-8") as f:
         data = {}
-        group_counter = (
-            max(int(g.uid[1:]) for g in all_groups if g.uid.startswith("G")) + 1
-        )
+        group_counter = max(int(g.uid[1:]) for g in all_groups if g.uid.startswith("G")) + 1
         for group in all_groups:
             if group.uid.startswith("P"):
                 goup_ids_map[group.uid] = f"G{group_counter:0>5}"
