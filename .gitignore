@@ -9,3 +9,5 @@ src/vtesrulings/static/dist/
 .venv/
 package-lock.json
 dist/
+build/
+.parcel-cache/

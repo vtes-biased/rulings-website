@@ -1,24 +1,23 @@
 [build-system]
-requires = ["setuptools>=68", "setuptools-scm>=8"]
-build-backend = "setuptools.build_meta"
+requires = ["uv_build>=0.7.19,<0.8"]
+build-backend = "uv_build"
 
 [project]
 name = "vtes-rulings"
-dynamic = ["version"]
+version = "0.9"
 authors = [{ name = "VEKN" }]
 description = "Website for VTES cards rulings"
 keywords = ["vtes", "Vampire: The Eternal Struggle", "CCG"]
 readme = "README.md"
-requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.13"
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Web Environment",
-    "License :: OSI Approved :: MIT License",
     "Natural Language :: English",
     "Operating System :: OS Independent",
     "Programming Language :: JavaScript",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Topic :: Games/Entertainment",
     "Topic :: Internet :: WWW/HTTP",
@@ -29,43 +28,42 @@ dependencies = [
     "arrow>=1",
     "asgiref>=3",
     "click>=8",
-    "quart>=0",
     "gitpython>=3",
-    "unidecode>=1",
     "jinja2>=3",
-    "orjson>=3",
-    "pydantic>=2",
-    "psycopg[pool]>=3",
-    "pyyaml>=6",
-    "yamlfix>=1",
     "krcg>=4.6",
-]
-
-[project.optional-dependencies]
-dev = [
-    "black>=24",
-    "build>=1",
-    "ipdb>=0",
-    "ipython>=8",
-    "pytest>=8",
-    "pytest-asyncio>=0",
-    "python-dotenv",
-    "ruff>=0",
-    "setuptools-scm>=8",
-    "twine>=5",
+    "orjson>=3",
+    "psycopg[pool]>=3",
+    "pydantic>=2",
+    "pyyaml>=6",
+    "quart>=0",
+    "unidecode>=1",
+    "yamlfix>=1",
 ]
 
 [project.scripts]
 rulings-web = "vtesrulings:main"
 
 [project.urls]
-Repository = "https://github.com/vtes-biased/vtesrulings-website"
+Repository = "https://github.com/vtes-biased/rulings-website"
 
-[tool.setuptools.packages.find]
-where = ["src"]
-include = ["vtesrulings*"]
+[dependency-groups]
+dev = [
+    "ipdb",
+    "ipython",
+    "pytest>=8",
+    "pytest-asyncio",
+    "python-dotenv",
+    "ruff",
+]
 
-[tool.setuptools_scm]
+[tool.uv.build-backend]
+module-name = "vtesrulings"
+wheel-exclude = ["**/.DS_Store"]
+source-exclude = ["**/.DS_Store"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
 
 [tool.pytest.ini_options]
 addopts = "-vvs --strict-markers -m 'not discord'"
