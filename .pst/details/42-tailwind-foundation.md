@@ -39,12 +39,18 @@ A ruling renders as a **record card**: thin left state-spine + a state chip (mon
 petrol discipline glyphs, accent-colored `{card}` refs, and monospace citation tags (`§`-free, a small
 dot + `SRC YYYYMMDD`). Modern/restrained — no wax-seal or illuminated ornament.
 
-## Build wiring (this ticket)
-- `npm i -D tailwindcss @tailwindcss/vite`; add the plugin to `vite.config.ts`.
-- Replace the `layout.scss` entry with a Tailwind CSS entry (`@import "tailwindcss";` + `@theme {…}` +
-  `@font-face` + the `.krcg-*` helpers + krcg hover-modal bits). Keep the `css/layout.css` output name.
-- Drop `bootstrap`, `sass`, `@parcel/transformer-sass` (sass already only there for Bootstrap) from the
-  CSS entry; full Bootstrap dep removal lands in #41 once templates (#43) no longer reference it.
-- Default theme light; dark via `prefers-color-scheme` + a manual toggle (chrome bundle, #37).
+## Build wiring — DONE (coexistence approach)
+- `tailwindcss` + `@tailwindcss/vite` (v4.3.3) installed; plugin added to `vite.config.ts`; new `app`
+  entry (`src/front/css/app.css`) → `css/app.css`, loaded in `layout.html` head after `layout.css`.
+- `app.css` = **tokens + fonts only** for now: `@import "tailwindcss/theme.css"` + `@theme {…}` +
+  4 self-hosted `@font-face` (Bricolage/Hanken variable via weight ranges; static Hanken-italic + mono).
+  Preflight AND the utilities import are intentionally omitted so it stays inert against the still-
+  Bootstrap pages (utilities generated off Bootstrap markup collide on `.collapse`, `.h-90`, …).
+- Bootstrap (`layout.scss` → `css/layout.css`) still loads and still styles the unconverted templates.
+- **Deferred to #43:** add `@import "tailwindcss/utilities.css"` + `@source` (templates become Tailwind);
+  the `light-dark()` token cleanup + the manual toggle. **Deferred to #41:** re-add preflight, migrate
+  the `.krcg-*`/krcg-modal/backref helpers + ankha/vtes-clans `@font-face` out of `layout.scss`, and
+  drop `bootstrap`/`sass` deps.
+- Default theme light; dark flips the semantic tokens via `prefers-color-scheme` + `[data-theme]`.
 
 Preview artifacts (reference): design system + icon proposals were approved by the user.
