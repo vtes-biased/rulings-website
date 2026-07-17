@@ -183,11 +183,13 @@ async def get_proposal(proposal_uid: str):
         return None
 
 
-async def get_user_proposals(user_id: uuid.UUID):
+async def get_user_proposals(user_id: uuid.UUID, limit: int = 100):
     async with POOL.connection() as connection:
         async with connection.cursor() as cursor:
             ret = await (
-                await cursor.execute("SELECT data FROM proposals WHERE usr=%s", [user_id])
+                await cursor.execute(
+                    "SELECT data FROM proposals WHERE usr=%s LIMIT %s", [user_id, limit]
+                )
             ).fetchall()
         if ret:
             return [r[0] for r in ret]
@@ -201,4 +203,4 @@ async def get_proposal_for_update(connection: psycopg.AsyncConnection, proposal_
                 "SELECT data FROM proposals WHERE uid=%s FOR UPDATE", [proposal_uid]
             )
         ).fetchone()
-    return ret[0]
+    return ret[0] if ret else None

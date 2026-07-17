@@ -16,14 +16,15 @@ fmt:
     uv run ruff check --fix
     uv run ruff format
 
-# Run tests (Quart testing mode, excludes discord marker)
+# Run tests (testing mode bypasses VEKN login, excludes discord marker)
 test:
-    QUART_TESTING=1 uv run pytest
+    TESTING=1 uv run pytest
 
-# Run frontend watcher in the background, then run quart dev server in foreground
+# Run frontend watcher in the background, then run the ASGI dev server in foreground.
+# Single worker is mandatory: the rulings Index lives in-process and is mutated on approval.
 serve:
     pm2 --name front start npm -- run front
-    set -a && source .env && set +a && QUART_APP="vtesrulings:app" uv run quart run --reload
+    set -a && source .env && set +a && uv run hypercorn "vtesrulings:app" --reload --workers 1 --bind 127.0.0.1:5000
 
 # Stop the pm2 frontend process
 stop:

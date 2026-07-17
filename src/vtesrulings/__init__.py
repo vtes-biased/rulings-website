@@ -1,19 +1,23 @@
-from dataclasses import asdict
-import aiofiles
-import aiohttp
-import asgiref
-import asgiref.sync
-import click
-import krcg.loader
-import quart
-import importlib
-import jinja2.exceptions
+import contextlib
+import importlib.metadata
 import logging
 import os
 import urllib
 import uuid
-import markupsafe
+from dataclasses import asdict
 
+import aiofiles
+import aiohttp
+import asgiref.sync
+import click
+import jinja2.exceptions
+import krcg.loader
+import markupsafe
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from starlette.middleware.sessions import SessionMiddleware
 
 from . import api
 from . import db
@@ -21,61 +25,53 @@ from . import discord
 from . import proposal
 from . import repository
 
-
 logger = logging.getLogger()
 version = importlib.metadata.version("vtes-rulings")
-app = quart.Quart(__name__, template_folder="templates")
-app.config.from_prefixed_env()
-app.secret_key = os.getenv("SESSION_SECRET_KEY", "FAKE_SECRET_DEBUG").encode()
-app.register_blueprint(api.api, url_prefix="/api")
+TESTING = bool(os.getenv("TESTING"))
+#: Bound on the active-proposals alert — both the query and the rendered links are capped (#30).
+ACTIVE_PROPOSALS_CAP = 15
+PACKAGE_DIR = os.path.dirname(__file__)
 
 
-@app.while_serving
-async def lifespan():
-    app.cards_map = await asgiref.sync.SyncToAsync(krcg.loader.load_local)()
+# Single-worker in-memory index model: `app.state.rulings_index` is the live view of the
+# rulings, mutated in place on approval (see api.approve_proposal). Running more than one worker
+# would give each its own divergent index and racing repo checkouts, so the app MUST run with a
+# single worker (enforced at the ASGI/systemd layer, see `just serve` and epic #2).
+@contextlib.asynccontextmanager
+async def lifespan(app: FastAPI):
+    app.state.cards_map = await asgiref.sync.SyncToAsync(krcg.loader.load_local)()
     async with aiofiles.tempfile.TemporaryDirectory() as repo_dir, db.POOL:
         logger.warning("Initializing database")
         await db.init()
         logger.warning("Using temporary repo: %s", repo_dir)
-        app.rulings_repo = await repository.clone(repo_dir)
-        app.rulings_index = await repository.load_base(app.rulings_repo, app.cards_map)
+        app.state.rulings_repo = await repository.clone(repo_dir)
+        app.state.rulings_index = await repository.load_base(
+            app.state.rulings_repo, app.state.cards_map
+        )
         yield
 
 
-# Defining Errors
-@app.errorhandler(jinja2.exceptions.TemplateNotFound)
-@app.errorhandler(404)
-async def page_not_found(error):
-    return quart.Response(await quart.render_template("404.html"), 404)
+app = FastAPI(lifespan=lifespan, redirect_slashes=False)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=os.getenv("SESSION_SECRET_KEY", "FAKE_SECRET_DEBUG"),
+    max_age=30 * 24 * 3600,
+)
+app.mount("/static", StaticFiles(directory=os.path.join(PACKAGE_DIR, "static")), name="static")
+app.include_router(api.router, prefix="/api")
+
+templates = Jinja2Templates(directory=os.path.join(PACKAGE_DIR, "templates"))
 
 
-@app.errorhandler(ValueError)
-@app.errorhandler(KeyError)
-def data_error(error: Exception):
-    logger.exception("%s: %s", error.__class__, error.args[:1], exc_info=error)
-    return quart.jsonify(error.args[:1]), 400
+def external_link(name, url, anchor=None, class_=None, params=None):
+    if params:
+        url += "?" + urllib.parse.urlencode(params)
+    if anchor:
+        url += "#" + anchor
+    class_ = f"class={class_} " if class_ else ""
+    return markupsafe.Markup(f'<a {class_}target="_blank" href="{url}">{name}</a>')
 
 
-# Helper for hyperlinks
-@app.context_processor
-def linker():
-
-    def external_link(name, url, anchor=None, class_=None, params=None):
-        if params:
-            url += "?" + urllib.parse.urlencode(params)
-        if anchor:
-            url += "#" + anchor
-
-        class_ = f"class={class_} " if class_ else ""
-        return markupsafe.Markup(f'<a {class_}target="_blank" href="{url}">{name}</a>')
-
-    return dict(
-        external_link=external_link,
-    )
-
-
-# Filter for dict replacements (symbols, cards, etc.)
-@app.template_filter("symbolreplace")
 def symbol_replace(s: str, d: list):
     for symbol in d:
         s = s.replace(
@@ -85,73 +81,126 @@ def symbol_replace(s: str, d: list):
     return s
 
 
-@app.template_filter("cardreplace")
 def card_replace(s: str, d: list):
     for card in d:
         s = s.replace(card["text"], f'<span class="krcg-card">{card["name"]}</span>')
     return s
 
 
-@app.template_filter("newlines")
 def newlines(s: str):
-    s = s.replace("\n", "<br>")
-    return s
+    return s.replace("\n", "<br>")
 
 
-@app.before_request
-def make_session_permanent():
-    quart.session.permanent = True
+templates.env.globals["version"] = version
+templates.env.globals["external_link"] = external_link
+templates.env.filters["symbolreplace"] = symbol_replace
+templates.env.filters["cardreplace"] = card_replace
+templates.env.filters["newlines"] = newlines
 
 
-@app.before_request
-async def load_user():
-    quart.g.user = None
-    user_id = quart.session.get("user_id", None)
-    if user_id:
-        quart.g.user = await db.get_user(uuid.UUID(user_id))
+@app.exception_handler(404)
+@app.exception_handler(jinja2.exceptions.TemplateNotFound)
+async def page_not_found(request: Request, error):
+    return templates.TemplateResponse(request, "404.html", status_code=404)
 
 
-# Default route
-@app.route("/")
-@app.route("/<path:page>")
-async def index(page=None):
+@app.exception_handler(ValueError)
+@app.exception_handler(KeyError)
+async def data_error(request: Request, error: Exception):
+    logger.exception("%s: %s", error.__class__, error.args[:1], exc_info=error)
+    return JSONResponse(error.args[:1], status_code=400)
+
+
+@app.get("/user/search")
+async def user_search(request: Request, user: db.User = Depends(api.require_admin)):
+    vekn = request.query_params.get("query", None)
+    if not vekn:
+        return []
+    users = await db.complete_user_vekn(vekn)
+    return [{"label": u.vekn, "value": str(u.uid)} for u in users]
+
+
+@app.post("/user/promote")
+async def user_promote(request: Request, user: db.User = Depends(api.require_admin)):
+    uid = (await api.get_params(request)).get("uid", None)
+    if not uid:
+        raise HTTPException(404)
+    await db.make_user(uid, db.UserCategory.RULEMONGER)
+    return RedirectResponse("/admin.html", status_code=302)
+
+
+@app.post("/user/demote")
+async def user_demote(request: Request, user: db.User = Depends(api.require_admin)):
+    uid = (await api.get_params(request)).get("uid", None)
+    if not uid:
+        raise HTTPException(404)
+    await db.make_user(uid, db.UserCategory.BASIC)
+    return RedirectResponse("/admin.html", status_code=302)
+
+
+@app.post("/login")
+async def login(request: Request):
+    next = request.query_params.get("next", "/index.html")
+    params = await api.get_params(request)
+    if not TESTING:
+        async with aiohttp.ClientSession() as session:
+            async with session.post("https://www.vekn.net/api/vekn/login", data=params) as response:
+                result = await response.json()
+                try:
+                    token = result["data"]["auth"]
+                except:  # noqa: E722
+                    token = None
+            if not token:
+                raise HTTPException(401)
+    user = await db.get_or_create_user(params["username"])
+    request.session["user_id"] = str(user.uid)
+    return RedirectResponse(next, status_code=302)
+
+
+@app.post("/logout")
+async def logout(request: Request):
+    next = request.query_params.get("next", "index.html")
+    request.session.pop("user_id", None)
+    request.session.pop("proposal", None)
+    return RedirectResponse(next, status_code=302)
+
+
+@app.get("/")
+async def root():
+    return RedirectResponse("index.html", status_code=301)
+
+
+@app.get("/{page:path}")
+async def index(request: Request, page: str, user: db.User | None = Depends(api.get_current_user)):
     context = {}
-    prop_uid = quart.request.args.get("prop", None)
-    if prop_uid and quart.g.user:
+    prop_uid = request.query_params.get("prop", None)
+    current_prop = None
+    if prop_uid and user:
         prop = await db.get_proposal(prop_uid)
         if prop:
-            quart.g.proposal = proposal.Proposal(**prop)
-            quart.session["proposal"] = prop_uid
+            current_prop = proposal.Proposal(**prop)
+            request.session["proposal"] = prop_uid
         else:
             context["alert"] = {"text": "This proposal has been approved and merged"}
-            quart.session.pop("proposal", None)
-            quart.g.pop("proposal", None)
-    else:
-        quart.g.pop("proposal", None)
-    if quart.g.user:
+            request.session.pop("proposal", None)
+    if user:
         proposals = [
             proposal.Proposal(**p)
-            for p in await db.get_user_proposals(quart.g.user.uid)
+            for p in await db.get_user_proposals(user.uid, ACTIVE_PROPOSALS_CAP)
             if p["uid"] != prop_uid and not p.get("channel_id")
         ]
         if proposals and "alert" not in context:
             context["alert"] = {
                 "text": "You have active proposals waiting for submission",
                 "links": [
-                    {
-                        "url": proposal.get_proposal_url(p),
-                        "label": p.name,
-                    }
-                    for p in proposals
+                    {"url": proposal.get_proposal_url(p), "label": p.name} for p in proposals
                 ],
             }
-    if not page:
-        return quart.redirect("index.html", 301)
-    if quart.g.user:
-        context["user"] = asdict(quart.g.user)
-    manager = api.get_manager()
-    if hasattr(quart.g, "proposal"):
-        prop = quart.g.proposal
+    if user:
+        context["user"] = asdict(user)
+    manager = api.build_manager(request, current_prop)
+    if current_prop is not None:
+        prop = current_prop
         proposal_dict = {
             "uid": prop.uid,
             "channel_id": prop.channel_id,
@@ -160,10 +209,7 @@ async def index(page=None):
             "groups": [],
             "cards": [],
         }
-        if quart.g.user and (
-            quart.g.proposal.usr == str(quart.g.user.uid)
-            or quart.g.user.category != db.UserCategory.BASIC
-        ):
+        if user and (prop.usr == str(user.uid) or user.category != db.UserCategory.BASIC):
             proposal_dict["editable"] = True
         for target in prop.rulings.keys():
             if target.startswith(("G", "P")):
@@ -185,7 +231,7 @@ async def index(page=None):
         if prop.channel_id:
             context["proposal"]["url"] = discord.proposal_discussion_url(prop)
         context["rbk_references"] = [
-            ref for ref in manager.base.references.values() if ref.uid.startswith("RBK ")
+            asdict(ref) for ref in manager.base.references.values() if ref.uid.startswith("RBK ")
         ]
         context["search_params"] = f"?prop={prop.uid}"
         context["search_params_2"] = f"&prop={prop.uid}"
@@ -194,108 +240,45 @@ async def index(page=None):
         context["search_params_2"] = ""
     if page == "groups.html":
         context["groups"] = list(asdict(g) for g in manager.all_groups(deleted=True))
-        uid = quart.request.args.get("uid", None)
+        uid = request.query_params.get("uid", None)
         if uid:
             try:
                 current = asdict(manager.get_group(uid, deleted=True))
                 current["rulings"] = [asdict(r) for r in manager.get_rulings(uid, deleted=True)]
                 context["current"] = current
             except KeyError:
-                quart.abort(404)
+                raise HTTPException(404)
     elif page == "index.html":
-        uid = quart.request.args.get("uid", None)
+        uid = request.query_params.get("uid", None)
         if uid:
             try:
                 current = asdict(manager.get_card(int(uid)))
                 current["rulings"] = [asdict(r) for r in manager.get_rulings(uid, deleted=True)]
                 context["current"] = current
             except KeyError:
-                quart.abort(404)
+                raise HTTPException(404)
     elif page == "admin.html":
-        if not quart.g.user or quart.g.user.category != db.UserCategory.ADMIN:
-            quart.abort(401)
-        uid = quart.request.args.get("uid", None)
+        if not user or user.category != db.UserCategory.ADMIN:
+            raise HTTPException(401)
+        uid = request.query_params.get("uid", None)
         if uid:
-            users = [await db.get_user(uuid.UUID(uid))]
+            context["users"] = [await db.get_user(uuid.UUID(uid))]
         else:
-            users = await db.get_50_users()
-        context["users"] = users
-    return await quart.render_template(page, **context)
+            context["users"] = await db.get_50_users()
+    return templates.TemplateResponse(request, page, context)
 
 
-@app.route("/user/search")
-async def user_search():
-    if not quart.g.user or quart.g.user.category != db.UserCategory.ADMIN:
-        quart.abort(401)
-    vekn = quart.request.args.get("query", None)
-    if not vekn:
-        return []
-    users = await db.complete_user_vekn(vekn)
-    ret = [{"label": user.vekn, "value": user.uid} for user in users]
-    return ret
+@click.group()
+def main():
+    """vtes-rulings admin CLI."""
 
 
-@app.route("/user/promote", methods=["POST"])
-async def user_promote():
-    if not quart.g.user or quart.g.user.category != db.UserCategory.ADMIN:
-        quart.abort(401)
-    params = await quart.request.form
-    uid = params.get("uid", None)
-    if not uid:
-        quart.abort(404)
-    await db.make_user(uid, db.UserCategory.RULEMONGER)
-    return quart.redirect("/admin.html", 302)
-
-
-@app.route("/user/demote", methods=["POST"])
-async def user_demote():
-    if not quart.g.user or quart.g.user.category != db.UserCategory.ADMIN:
-        quart.abort(401)
-    params = await quart.request.form
-    uid = params.get("uid", None)
-    if not uid:
-        quart.abort(404)
-    await db.make_user(uid, db.UserCategory.BASIC)
-    return quart.redirect("/admin.html", 302)
-
-
-@app.route("/login", methods=["POST"])
-async def login():
-    next = quart.request.args.get("next", "/index.html")
-    params = await api.get_params()
-    if not quart.current_app.config["TESTING"]:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                "https://www.vekn.net/api/vekn/login",
-                data=params,
-            ) as response:
-                result = await response.json()
-                try:
-                    token = result["data"]["auth"]
-                except:  # noqa: E722
-                    token = None
-            if not token:
-                quart.abort(401)
-    user = await db.get_or_create_user(params["username"])
-    quart.session["user_id"] = str(user.uid)
-    return quart.redirect(next, 302)
-
-
-@app.route("/logout", methods=["POST"])
-async def logout():
-    next = quart.request.args.get("next", "index.html")
-    quart.session.pop("user_id", None)
-    quart.session.pop("user", None)
-    quart.session.pop("proposal", None)
-    return quart.redirect(next, 302)
-
-
-@app.cli.command()
+@main.command()
 def resetdb():
     db.reset()
 
 
-@app.cli.command()
+@main.command()
 @click.argument("username")
 def makeadmin(username: str):
     db.make_admin(username)

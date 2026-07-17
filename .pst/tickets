@@ -3,12 +3,12 @@ open  	epic,deploy	Epic: Deploy via server-setup (gravelines) + GitHub App for v
 open  	epic,ci	Epic: Build & CI — add ty typecheck, real-but-safe test harness (Postgres container + sandbox rulings remote + pinned card snapshot), unify tag/release with deploy.
 open  	epic,bug	Epic: Bug pass — reproduce & catalog via local run (Chrome+Firefox), then fix. Known: Firefox editing broken, proposal description not saving.
 open  	epic,feature	Epic: Features — proposal diff (site + Discord), mobile-first, supersede group-ruling text, RULING/REMINDER two-kind model. See children.
-open  	stack,backend	Scaffold FastAPI app + ASGI lifespan (card load, repo clone, in-memory Index); replace Quart app + blueprint. parent:#1
-open  	stack,backend	Port SSR pages + auth to FastAPI+Jinja: index/groups/admin, error handlers, template filters, VEKN login, current-user. parent:#1
-open  	stack,backend	Port the /api JSON surface; convert proposal_update/proposal_readonly decorators to FastAPI dependencies. parent:#1
+closed	stack,backend	Scaffold FastAPI app + ASGI lifespan (card load, repo clone, in-memory Index); replace Quart app + blueprint. parent:#1
+closed	stack,backend	Port SSR pages + auth to FastAPI+Jinja: index/groups/admin, error handlers, template filters, VEKN login, current-user. parent:#1
+closed	stack,backend	Port the /api JSON surface; convert proposal_update/proposal_readonly decorators to FastAPI dependencies. parent:#1
 open  	stack,frontend	Build Svelte editor island + Vite build: ruling editing, symbol/card/reference insertion, NEW/MODIFIED/DELETED overlay; retire layout.ts + Parcel. parent:#1
 closed	stack	Bump krcg to >=5.6 and reconcile loader/CardMap API changes. parent:#1
-open  	stack,backend	Enforce single-worker in-memory index model: one worker; refresh Index on approval; document the constraint. parent:#1
+closed	stack,backend	Enforce single-worker in-memory index model: one worker; refresh Index on approval; document the constraint. parent:#1
 open  	deploy,backend	Create GitHub App (contents:write on vtes-rulings); replace repository.py SSH push with HTTPS + installation token; bot commit identity. parent:#2
 open  	deploy	systemd unit + ASGI server (hypercorn/uvicorn) single worker; env + secrets layout on the host. parent:#2
 open  	deploy	nginx_site vhost + certbot TLS for the app on gravelines. parent:#2
@@ -31,3 +31,4 @@ closed	bug,superseded	Active-proposals alert lists every unsubmitted proposal as
 closed	bug,superseded	Error toast from a failed fetch never auto-dismisses — stays stuck on screen indefinitely (do_fetch error handler in layout.ts). parent:#4
 open  	ci	Tests share the real local Postgres DB and leave orphaned test-user 'Test' proposals behind; harness must use an isolated DB and clean up per-test. parent:#3 relates:#19
 open  	data	One-time: next commit_index reformats ~78 rulings.yaml/groups.yaml nid keys (krcg 5.6 printed_name normalization: 'Admonitions, The'->'The Admonitions'; plus renames Mind Rape->Puppet Master, Pentex(TM)->Pentex-TM). Land as one deliberate reformat commit, not inside an unrelated ruling change. Loading unaffected (id-keyed). relates:#10
+open  	ci	Un-xfail the data-snapshot API tests (test_get_card/test_get_group/test_update_group/test_complete) once the pinned card+rulings snapshot lands; they currently assert live data drifted by krcg 5.6 + repo updates. parent:#3 relates:#19
