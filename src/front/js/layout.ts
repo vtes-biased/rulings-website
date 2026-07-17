@@ -632,7 +632,7 @@ async function approveProposal(event: MouseEvent) {
 async function saveProposal(event: MouseEvent) {
     const button = event.currentTarget as HTMLButtonElement
     const form = button.form
-    const response = await do_fetch("/api/proposal/approve", { method: "put", body: new FormData(form) })
+    const response = await do_fetch("/api/proposal", { method: "put", body: new FormData(form) })
     if (!response) { return }
     window.location.reload()
 }
