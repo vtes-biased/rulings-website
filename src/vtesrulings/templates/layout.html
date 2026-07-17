@@ -21,6 +21,9 @@
     <link rel="stylesheet" href="/static/dist/css/app.css?v={{ version }}">
     <script async src="https://static.krcg.org/web/krcg.js"></script>
     {% block scripts %}{% endblock %}
+    {% if proposal and proposal.editable and current %}
+    <script async src="/static/dist/js/island.js?v={{ version }}" type="module"></script>
+    {% endif %}
     <title>V:TES Rulings Database</title>
     {% endblock %}
 </head>

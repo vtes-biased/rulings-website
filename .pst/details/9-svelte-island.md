@@ -63,14 +63,25 @@ to the front.
 - **#43** ✅ Convert Jinja templates to Tailwind + retire Bootstrap CSS (layout/index/groups/admin/404). *(done)*
 - **#36** ✅ SSR ruling macro (`_macros.html` + `ruling_body` filter); read pages render rulings server-side; client read-render retired. *(done)*
 - **#37** ✅ Chrome bundle (`chrome.ts`): vanilla modal/collapse/toast #31 + keyboard autocomplete + nav/theme/login/proposal. Tooltips → native `title`; the icon-picker dropdown moved with the editor to the island. *(done)*
-- **#38** Ruling token editor island (symbol/card insert, overlay, restore/delete, save).
+- **#38** ✅ Ruling token editor island: `island/` = `main.ts` (hydrates `#rulingsList` from SSR
+  `data-ruling`), `RulingsEditor` (list + add), `RulingCard` (state chip/spine, restore/delete,
+  coalesced debounced save), `TokenEditor` (contenteditable host + glyph picker + card autocomplete),
+  `tokens.ts` (tokenize/serialize), `types.ts`. Shared `js/net.ts` extracted from `chrome.ts`
+  (`do_fetch`/`displayError`/`debounce`/`postJSON`/`putJSON`) so the island reuses them without
+  re-running chrome init. Verified live (Chrome): mount, read-only inherited rulings, add/type/save,
+  `[sym]`/`{card}` insert round-trip, MODIFIED+ref-preserve, restore (cancels pending save), delete.
+  Firefox editing (#24) still needs a manual check — uses only standard contenteditable APIs. *(done)*
 - **#39** Reference editing in the island (footer badges + reference modal).
 - **#40** Group editor island (name/cards/prefixes) + `POST /group` → JSON.
 - **#41** Final retire — **retire half done**: deleted `layout.ts`/`layout.scss`, dropped
   bootstrap/@popperjs/bootstrap5-autocomplete/sass/bootstrap-icons/@types deps, inlined the icons as
   SVG (`icon()` macro), asserted no Bootstrap class/import remains; verified #30/#31 + mobile-first
   **read**. Still open (blocked on the island): Firefox **editing** (#24) + mobile-first **edit** +
-  close #9 — no editor exists to exercise yet.
+  close #9 — no editor exists to exercise yet. Carry-forward from #38 review: island-rendered
+  `.krcg-card` spans (editor chips + read-only bodies) get no krcg hover/click glue (chrome's
+  `bindCardHover` runs once at `ready`, before the async mount) — re-bind after mount or accept the
+  edit-mode gap; and the card autocomplete in `TokenEditor` duplicates chrome's `setupAutocomplete`
+  fetch/menu core (framework boundary makes full reuse awkward).
 
 ## Landed together (43+37+36, then the #41 retire)
 The read side is fully Tailwind and Bootstrap-free (CSS, JS, and the icon font). Edit mode is

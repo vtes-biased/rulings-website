@@ -1,43 +1,8 @@
 // Always-on chrome behaviors (no framework): modals, toast, collapse, autocomplete, nav, theme
 // toggle, login, and the proposal lifecycle. Ruling/group editing is not here — it is the island.
-
-interface SelectItem { label: string; value: string }
-
-export function ready(fn: () => void) {
-    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", fn)
-    else fn()
-}
-
-function debounce(func: (...a: any) => void, timeout = 300) {
-    let timer: number | undefined
-    return (...args: any) => { clearTimeout(timer); timer = setTimeout(() => func(...args), timeout) }
-}
-
-export async function do_fetch(url: string, options: object) {
-    try {
-        const response = await fetch(url, options)
-        if (!response.ok) throw new Error((await response.json())[0])
-        return response
-    } catch (error: any) {
-        console.log(`Error fetching ${url}`, error.message)
-        displayError(error.message)
-    }
-}
-
-// --- toast ---
-let toastTimer: number | undefined
-function showToast(toast: HTMLElement, autohide = true) {
-    toast.hidden = false
-    clearTimeout(toastTimer)
-    // consistency errors carry navigation links, so they stay until dismissed
-    if (autohide) toastTimer = setTimeout(() => { toast.hidden = true }, 6000)
-}
-
-export function displayError(msg: string) {
-    const toast = document.getElementById("errorToast") as HTMLElement
-    ;(toast.querySelector(".toast__body") as HTMLElement).textContent = msg
-    showToast(toast)
-}
+import { ready, debounce, showToast, displayError, do_fetch } from "./net.js"
+import type { SelectItem } from "./net.js"
+export { ready, do_fetch, displayError } from "./net.js"
 
 function displayConsistencyErrors(errors: ConsistencyError[]) {
     const toast = document.getElementById("errorToast") as HTMLElement
