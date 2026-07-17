@@ -298,14 +298,13 @@ class Manager:
             )
         else:
             cls = models.LibraryCard
-            cost_type = str(card.cost.type).lower() if card.cost else ""
-            cost_value = str(card.cost.value) if card.cost else ""
+            costs = {"pool": "", "blood": "", "conviction": ""}
+            if card.cost:
+                costs[str(card.cost.type).lower()] = str(card.cost.value)
             kwargs.update(
-                {
-                    "pool_cost": cost_value if cost_type == "pool" else "",
-                    "blood_cost": cost_value if cost_type == "blood" else "",
-                    "conviction_cost": cost_value if cost_type == "conviction" else "",
-                }
+                pool_cost=costs["pool"],
+                blood_cost=costs["blood"],
+                conviction_cost=costs["conviction"],
             )
 
         ret = cls(**kwargs)
@@ -313,7 +312,11 @@ class Manager:
             if s in utils.ANKHA_SYMBOLS:
                 ret.symbols.append(models.SymbolSubstitution(text=s, symbol=utils.ANKHA_SYMBOLS[s]))
         for s in disciplines:
-            ret.symbols.append(models.SymbolSubstitution(text=s, symbol=utils.ANKHA_SYMBOLS[s]))
+            key = "FLIGHT" if s == "fli" else s
+            if key in utils.ANKHA_SYMBOLS:
+                ret.symbols.append(
+                    models.SymbolSubstitution(text=s, symbol=utils.ANKHA_SYMBOLS[key])
+                )
         for variant in card.variants:
             suffix = variant.suffix
             ret.variants.append(

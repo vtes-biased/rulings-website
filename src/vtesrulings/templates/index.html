@@ -24,10 +24,10 @@
             <div class="badge bg-info-subtle text-info-emphasis">{{ current.uid }}</div>
             <h2 class="px-3">{{ current.printed_name }}</h2>
             {% if current.group %}
-            {% if current.group == "ANY "%}
+            {% if current.group == "Any" %}
             <div class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis">ANY</div>
             {% else %}
-            <div class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis">G{{ current.group }}</div>
+            <div class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis">{{ current.group }}</div>
             {% endif %}
             {% endif %}
             {% if current.advanced %}
