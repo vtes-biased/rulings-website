@@ -1,82 +1,138 @@
-/* Tailwind v4 foundation: design tokens + self-hosted fonts only. Utilities and preflight are NOT
-   emitted yet — this loads alongside the retiring Bootstrap (layout.scss) during the template
-   migration, so generating utilities off still-Bootstrap markup would collide with Bootstrap's own
-   class names (.collapse, .h-90…). #43 adds the utilities import + @source once the templates are
-   Tailwind; #41 re-adds preflight once Bootstrap is gone. */
+/* The single stylesheet: cold-V5 design tokens, self-hosted fonts, and a small component layer.
+   Bootstrap is gone from the read side — Tailwind preflight is the reset, tokens flip via light-dark(). */
+@layer theme, base, components, utilities;
 @import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/preflight.css" layer(base);
+@import "tailwindcss/utilities.css" layer(utilities);
+@import "bootstrap-icons/font/bootstrap-icons.css";
+
+/* scan the Jinja templates and the small vanilla chrome that injects markup at runtime */
+@source "../../vtesrulings/templates";
+@source "../js";
 
 /* self-hosted faces (latin). Bricolage & Hanken are variable fonts — one file, a weight range. */
 @font-face { font-family: "Bricolage Grotesque"; font-style: normal; font-weight: 200 800; font-display: swap; src: url("../fonts/bricolage-grotesque.woff2") format("woff2"); }
 @font-face { font-family: "Hanken Grotesk"; font-style: normal; font-weight: 100 900; font-display: swap; src: url("../fonts/hanken-grotesk.woff2") format("woff2"); }
 @font-face { font-family: "Hanken Grotesk"; font-style: italic; font-weight: 400; font-display: swap; src: url("../fonts/hanken-grotesk-400-italic.woff2") format("woff2"); }
 @font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 500; font-display: swap; src: url("../fonts/jetbrains-mono-500.woff2") format("woff2"); }
+/* discipline/type glyphs and clan icons (krcg webfonts) */
+@font-face { font-family: "Ankha VTES"; src: url("https://static.krcg.org/web/ankha2.otf") format("opentype"); }
+@font-face { font-family: "VTES Clans"; src: url("https://static.krcg.org/web/vtes-clans.otf") format("opentype"); }
 
-/* approved cold-V5 tokens — light values; dark flips the same custom properties below */
+/* approved cold-V5 tokens. light-dark() picks per color-scheme; the toggle stamps [data-theme]. */
 @theme {
-    --color-bg: #e7e6ec;
-    --color-surface: #f7f6fa;
-    --color-surface-2: #edecf3;
-    --color-text: #1b1c26;
-    --color-text-muted: #6a6b7c;
-    --color-hairline: #d7d6e1;
-    --color-chrome-bg: #101017;
-    --color-chrome-2: #191922;
+    --color-bg: light-dark(#e7e6ec, #0f1016);
+    --color-surface: light-dark(#f7f6fa, #191a24);
+    --color-surface-2: light-dark(#edecf3, #22232f);
+    --color-text: light-dark(#1b1c26, #e5e4ef);
+    --color-text-muted: light-dark(#6a6b7c, #9c9caf);
+    --color-hairline: light-dark(#d7d6e1, #2c2d3a);
+    --color-chrome-bg: light-dark(#101017, #0a0a11);
+    --color-chrome-2: light-dark(#191922, #14141d);
     --color-chrome-text: #e7e6ef;
     --color-chrome-muted: #8d8da1;
-    --color-primary: #6d55a6;
-    --color-primary-bright: #8b70c6;
-    --color-secondary: #35818f;
-    --color-secondary-bright: #4aa3b1;
-    --color-orchid: #a25f97;
-    --color-state-original: #82869a;
-    --color-state-new: #4d997a;
-    --color-state-modified: #6d82c6;
-    --color-state-deleted: #bb6d8d;
+    --color-primary: light-dark(#6d55a6, #a488cc);
+    --color-primary-bright: light-dark(#8b70c6, #bba2dd);
+    --color-secondary: light-dark(#35818f, #55b1c0);
+    --color-secondary-bright: light-dark(#4aa3b1, #70cad8);
+    --color-orchid: light-dark(#a25f97, #c58fb8);
+    --color-state-original: light-dark(#82869a, #999db2);
+    --color-state-new: light-dark(#4d997a, #63bd97);
+    --color-state-modified: light-dark(#6d82c6, #8fa1e0);
+    --color-state-deleted: light-dark(#bb6d8d, #d98cad);
 
     --font-display: "Bricolage Grotesque", "Arial Narrow", system-ui, sans-serif;
     --font-text: "Hanken Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
     --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
 }
 
-/* dark theme: override the semantic tokens so every color utility flips at once.
-   Chrome stays dark in both themes (just deepened). Toggle (#37) stamps data-theme on the root. */
-@media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-        --color-bg: #0f1016;
-        --color-surface: #191a24;
-        --color-surface-2: #22232f;
-        --color-text: #e5e4ef;
-        --color-text-muted: #9c9caf;
-        --color-hairline: #2c2d3a;
-        --color-chrome-bg: #0a0a11;
-        --color-chrome-2: #14141d;
-        --color-primary: #a488cc;
-        --color-primary-bright: #bba2dd;
-        --color-secondary: #55b1c0;
-        --color-secondary-bright: #70cad8;
-        --color-orchid: #c58fb8;
-        --color-state-original: #999db2;
-        --color-state-new: #63bd97;
-        --color-state-modified: #8fa1e0;
-        --color-state-deleted: #d98cad;
-    }
+/* auto-follow the OS; the toggle overrides by stamping data-theme on <html> */
+:root { color-scheme: light dark; }
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+
+@layer base {
+    body { @apply bg-bg font-text text-text antialiased; }
+    h1, h2, h3, h4 { @apply font-display font-bold text-text; }
+    a { @apply text-primary; }
+    a:hover { @apply text-primary-bright; }
+
+    /* card names in ruling/prefix text — petrol, italic */
+    .krcg-card { @apply cursor-pointer italic text-secondary; }
+    .krcg-card:hover { @apply underline; text-underline-offset: 0.25em; }
+    /* discipline / type glyphs (ankha webfont), petrol */
+    .krcg-icon { font-family: "Ankha VTES"; font-style: normal; @apply text-secondary; }
+    .krcg-clan { font-family: "VTES Clans"; font-style: normal; }
+
+    /* krcg.js hover-preview modals (injected by the external script) */
+    #krcg-click-modal, #krcg-over-modal { display: none; position: fixed; padding: 10vh 0.5vw; right: 0; top: 0; text-align: right; }
+    #krcg-click-modal { z-index: 40; background-color: rgb(0 0 0 / 0.4); width: 100%; height: 100%; }
+    #krcg-over-modal { z-index: 30; }
+    img.krcg-modal-image { max-height: min(70vh, 500px); max-width: min(89vw, 340px); border: 0; padding: 0; outline: 0; margin: 0.5em; object-fit: contain; }
 }
-:root[data-theme="dark"] {
-    --color-bg: #0f1016;
-    --color-surface: #191a24;
-    --color-surface-2: #22232f;
-    --color-text: #e5e4ef;
-    --color-text-muted: #9c9caf;
-    --color-hairline: #2c2d3a;
-    --color-chrome-bg: #0a0a11;
-    --color-chrome-2: #14141d;
-    --color-primary: #a488cc;
-    --color-primary-bright: #bba2dd;
-    --color-secondary: #55b1c0;
-    --color-secondary-bright: #70cad8;
-    --color-orchid: #c58fb8;
-    --color-state-original: #999db2;
-    --color-state-new: #63bd97;
-    --color-state-modified: #8fa1e0;
-    --color-state-deleted: #d98cad;
+
+@layer components {
+    /* buttons — restrained: solid primary CTA, soft-tinted variants that read on chrome and surface alike */
+    .btn { @apply inline-flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors disabled:cursor-default disabled:opacity-50; }
+    .btn-sm { @apply px-2 py-1 text-xs; }
+    .btn-primary { @apply bg-primary text-white hover:bg-primary-bright; }
+    .btn-secondary { @apply border border-hairline bg-surface-2 text-text hover:bg-hairline; }
+    .btn-success { @apply border border-state-new/40 bg-state-new/15 text-state-new hover:bg-state-new/25; }
+    .btn-danger { @apply border border-state-deleted/40 bg-state-deleted/15 text-state-deleted hover:bg-state-deleted/25; }
+
+    /* pills */
+    .badge { @apply inline-flex items-center gap-1 rounded-full border border-hairline bg-surface-2 px-2 py-0.5 text-xs font-medium text-text-muted; }
+    .badge-id { @apply font-mono text-secondary; }
+
+    /* form controls */
+    .input { @apply w-full rounded-md border border-hairline bg-surface px-3 py-2 text-text placeholder:text-text-muted focus:border-primary focus:outline-none; }
+
+    /* modal — vanilla-driven: [hidden] closed, otherwise a flex-centered overlay */
+    .modal { @apply fixed inset-0 z-50 items-start justify-center bg-black/50 p-4 pt-[10vh]; }
+    .modal:not([hidden]) { @apply flex; }
+    .modal__dialog { @apply w-full max-w-md overflow-hidden rounded-lg border border-hairline bg-surface shadow-2xl; }
+    .modal__header { @apply flex items-center justify-between border-b border-hairline px-4 py-3; }
+    .modal__title { @apply text-lg; }
+    .modal__body { @apply flex flex-col gap-2 px-4 py-4; }
+    .modal__footer { @apply flex justify-end gap-2 border-t border-hairline px-4 py-3; }
+    .modal__close { @apply cursor-pointer rounded p-1 text-xl leading-none text-text-muted hover:text-text; }
+
+    /* toast — bottom-right, vanilla-driven auto-dismiss or manual close */
+    .toast { @apply fixed bottom-4 right-4 z-50 max-w-sm overflow-hidden rounded-lg border border-hairline bg-surface shadow-2xl; }
+    .toast__header { @apply flex items-center gap-2 border-b border-hairline px-3 py-2 text-sm font-semibold text-state-deleted; }
+    .toast__body { @apply px-3 py-2 text-sm text-text; }
+
+    /* autocomplete dropdown (vanilla, replaces bootstrap5-autocomplete) */
+    .ac-menu { @apply absolute z-40 mt-1 max-h-[50vh] w-full overflow-y-auto rounded-md border border-hairline bg-surface shadow-lg; }
+    .ac-item { @apply cursor-pointer px-3 py-2 text-sm text-text hover:bg-surface-2; }
+    .ac-item[aria-selected="true"] { @apply bg-surface-2; }
+
+    /* the signature record card: a state-spined ruling */
+    .ruling { @apply relative my-2 rounded-lg border border-hairline bg-surface p-4; border-left-width: 3px; border-left-color: var(--color-state-original); }
+    .ruling--new { border-left-color: var(--color-state-new); }
+    .ruling--modified { border-left-color: var(--color-state-modified); }
+    .ruling--deleted { border-left-color: var(--color-state-deleted); }
+    .ruling__chip { @apply mb-1 inline-block font-mono text-[0.65rem] font-semibold uppercase tracking-wide; }
+    .ruling--new .ruling__chip { @apply text-state-new; }
+    .ruling--modified .ruling__chip { @apply text-state-modified; }
+    .ruling--deleted .ruling__chip { @apply text-state-deleted; }
+    .ruling__group { @apply mb-1 inline-block rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary no-underline hover:bg-primary/20; }
+    .ruling__text { @apply leading-relaxed; }
+    .ruling--deleted .ruling__text { @apply text-text-muted line-through; }
+    .ruling__refs { @apply mt-3 flex flex-wrap gap-3; }
+    .ruling__empty { @apply mt-3 text-sm text-state-deleted; }
+
+    /* reference citation tag: a small dot + mono SRC YYYYMMDD */
+    .ref { @apply font-mono text-xs text-secondary no-underline hover:text-secondary-bright; }
+    .ref::before { content: "• "; @apply text-text-muted; }
+
+    /* top navbar links */
+    .nav-link { @apply rounded px-3 py-2 text-sm font-medium text-chrome-muted no-underline hover:text-chrome-text; }
+    .nav-link.active { @apply text-chrome-text; }
+
+    /* list rows (group cards, admin users) */
+    .row-item { @apply flex flex-wrap items-center gap-2 border-b border-hairline px-3 py-2 last:border-b-0; }
+    /* nav list (groups picker) */
+    .nav-row { @apply flex items-center justify-between gap-2 border-b border-hairline px-3 py-2 text-text no-underline last:border-b-0 hover:bg-surface-2; }
+    .nav-row.active { @apply bg-primary/10 text-primary; }
 }

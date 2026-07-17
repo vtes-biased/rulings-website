@@ -3,8 +3,8 @@ import { svelte } from "@sveltejs/vite-plugin-svelte"
 import tailwindcss from "@tailwindcss/vite"
 
 // Entry points keep stable, hashless names because the Jinja templates reference them
-// directly (e.g. /static/dist/js/index.js, /static/dist/css/layout.css). Shared chunks and
-// fonts get hashes. base is set so url() references inside layout.css resolve under the
+// directly (e.g. /static/dist/js/index.js, /static/dist/css/app.css). Shared chunks and
+// fonts get hashes. base is set so url() references inside app.css resolve under the
 // StaticFiles mount at /static/dist/.
 export default defineConfig({
     base: "/static/dist/",
@@ -17,7 +17,6 @@ export default defineConfig({
                 index: "src/front/js/index.ts",
                 groups: "src/front/js/groups.ts",
                 admin: "src/front/js/admin.ts",
-                layout: "src/front/css/layout.scss",
                 app: "src/front/css/app.css",
                 island: "src/front/island/main.ts",
             },

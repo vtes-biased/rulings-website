@@ -5,45 +5,41 @@
 {% endblock%}
 
 {% block content %}
+<search>
+    <form id="userSearchForm" class="relative my-3 max-w-sm" onsubmit="return false;">
+        <input type="search" id="userSearchInput" placeholder="VEKN login" class="input autocomplete"
+            data-server="/user/search" data-suggestions-threshold="3" autocomplete="off" autocapitalize="off"
+            spellcheck="false">
+    </form>
+</search>
 
-<div class="list-group p-0" id="usersList">
-    <div id="searchUser" class="row my-3">
-        <search>
-            <form id="userSearchForm" class="col-md-4">
-                <input type="search" id="userSearchInput" placeholder="VEKN login" class="form-control autocomplete"
-                    data-server="/user/search" data-live-server="true" data-suggestions-threshold="3" autocomplete="off"
-                    autocapitalize="off" spellcheck=false>
-            </form>
-        </search>
-    </div>
+<div class="rounded-lg border border-hairline bg-surface" id="usersList">
     {% for user in users %}
-    <div class="list-group-item d-flex align-items-center">
-        <div class="flex-grow-1">{{ user.vekn }}</div>
-        <div class="mx-2">{{ user.category }}</div>
+    <div class="row-item">
+        <div class="grow">{{ user.vekn }}</div>
+        <div class="text-text-muted">{{ user.category }}</div>
         {% if user.category != 'ADMIN' %}
         <form action="" method="post">
-            <input type="text" name="uid" hidden="true" value="{{ user.uid }}">
+            <input type="text" name="uid" hidden value="{{ user.uid }}">
             {% if user.category == 'BASIC' %}
-            <input class="btn btn-primary" type="submit" formaction="/user/promote" value="Promote"></button>
+            <input class="btn btn-primary" type="submit" formaction="/user/promote" value="Promote">
             {% else %}
-            <input class="btn btn-warning" type="submit" formaction="/user/demote" value="Demote"></button>
+            <input class="btn btn-danger" type="submit" formaction="/user/demote" value="Demote">
             {% endif %}
         </form>
         {% endif %}
     </div>
     {% endfor %}
-    {% if pagination %}
-    <nav aria-label="Pagination">
-        <ul class="pagination">
-            {% if pagination.previous %}
-            <li class="page-item"><a class="page-link" href="{{pagination.previous}}">Previous</a></li>
-            {% endif %}
-            {% if pagination.next %}
-            <li class="page-item"><a class="page-link" href="{{pagination.next}}">Next</a></li>
-            {% endif %}
-        </ul>
-    </nav>
-    {% endif %}
 </div>
 
+{% if pagination %}
+<nav class="my-3 flex gap-2" aria-label="Pagination">
+    {% if pagination.previous %}
+    <a class="btn btn-secondary" href="{{ pagination.previous }}">Previous</a>
+    {% endif %}
+    {% if pagination.next %}
+    <a class="btn btn-secondary" href="{{ pagination.next }}">Next</a>
+    {% endif %}
+</nav>
+{% endif %}
 {% endblock %}

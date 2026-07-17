@@ -1,76 +1,66 @@
 {% extends "layout.html" %}
+{% from "_macros.html" import ruling_card with context %}
 
 {% block scripts %}
 <script async src="/static/dist/js/index.js" type="module"></script>
 {% endblock%}
 
 {% block content %}
-<div id="SearchByCard" class="row my-3">
-    <search>
-        <form id="cardSearchForm" class="col-md-4">
-            <input type="search" id="cardSearchInput" list="cardOptions" placeholder="Card name"
-                class="form-control autocomplete" data-server="/api/complete" data-live-server="true"
-                data-suggestions-threshold="3" autocomplete="off" autocapitalize="off" spellcheck=false>
-        </form>
-    </search>
-</div>
+<search>
+    <form id="cardSearchForm" class="relative my-3 max-w-sm" onsubmit="return false;">
+        <input type="search" id="cardSearchInput" placeholder="Card name" class="input autocomplete"
+            data-server="/api/complete" data-suggestions-threshold="3" autocomplete="off" autocapitalize="off"
+            spellcheck="false">
+    </form>
+</search>
+
 {% if current %}
-<div id="cardDisplay" class="row my-3 krcg-current" data-data='{{ current | tojson }}'>
-    <div class="col-md-auto" id="column">
-        <img src="{{ current.img }}" alt="{{ current.printed_name }} card image" class="h-90">
+<section id="cardDisplay" class="krcg-current my-4 flex flex-col gap-4 md:flex-row" data-data='{{ current | tojson }}'>
+    <div class="shrink-0">
+        <img src="{{ current.img }}" alt="{{ current.printed_name }} card image" class="w-56 max-w-full rounded-lg">
     </div>
-    <div class="col-md">
-        <div class="d-flex align-items-center">
-            <div class="badge bg-info-subtle text-info-emphasis">{{ current.uid }}</div>
-            <h2 class="px-3">{{ current.printed_name }}</h2>
+    <div class="grow">
+        <div class="flex flex-wrap items-center gap-2">
+            <span class="badge badge-id">{{ current.uid }}</span>
+            <h2 class="text-2xl">{{ current.printed_name }}</h2>
             {% if current.group %}
-            {% if current.group == "Any" %}
-            <div class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis">ANY</div>
-            {% else %}
-            <div class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis">{{ current.group }}</div>
-            {% endif %}
+            <span class="badge">{{ "ANY" if current.group == "Any" else current.group }}</span>
             {% endif %}
             {% if current.advanced %}
-            <div class="krcg-icon">|</div>
+            <span class="krcg-icon text-lg">|</span>
             {% endif %}
         </div>
-        <div class="row justify-content-start">
-            <p class="col-8" id="cardText">{{ current.text | newlines | symbolreplace(current.text_symbols) | safe }}
-            </p>
-        </div>
+        <p class="mt-3 max-w-prose leading-relaxed" id="cardText">{{ current.text | newlines | symbolreplace(current.text_symbols) | safe }}</p>
     </div>
-</div>
-<div class="container-fluid my-3" id="rulingsDiv">
-    <h4>Rulings</h4>
+</section>
+
+<section class="my-4" id="rulingsDiv">
+    <h4 class="text-lg">Rulings</h4>
     {% if not proposal %}
     <button class="btn btn-primary my-2" id="quickProposalButton">Add/Edit rulings</button>
     {% endif %}
     <div id="rulingsList" data-source="{{ current.uid }}">
-        {% if current.rulings %}
         {% for ruling in current.rulings %}
-        <div class="card my-1 krcg-ruling" data-source="{{ current.uid }}" data-ruling='{{ ruling | tojson }}'>
-            <!-- Content added by JS -->
-        </div>
+        {{ ruling_card(ruling, current.uid) }}
+        {% else %}
+        <div class="my-2 text-text-muted">No ruling</div>
         {% endfor %}
     </div>
-    {% else %}
-    <div class="my-2">No Ruling</div>
-    {% endif %}
-</div>
-</div>
+</section>
+
 {% if current.backrefs %}
-<div class="container-fluid my-3" id="backrefTitle">
-    <h4>Referenced by</h4>
-</div>
+<section class="my-4">
+    <h4 class="text-lg">Referenced by</h4>
+    <div class="mt-2 flex flex-wrap gap-3">
+        {% for backref in current.backrefs %}
+        <a class="block w-48 overflow-hidden rounded-lg border border-hairline bg-surface no-underline hover:border-primary"
+            href="index.html?uid={{ backref.uid }}{{ search_params_2 }}">
+            <img class="h-40 w-full object-cover object-left-top" src="{{ backref.img }}" alt="{{ backref.name }}">
+            <p class="p-2 text-sm text-text">{{ backref.name }}</p>
+        </a>
+        {% endfor %}
+    </div>
+</section>
 {% endif %}
-<div class="row my-3 gx-0" id="backrefList">
-    {% for backref in current.backrefs %}
-    <a class="card m-1 bg-primary-subtle link-underline link-underline-opacity-0 backref"
-        href="?uid={{ current.uid }}{{ search_params_2 }}">
-        <img class="card-img-top backref-img" src="{{ current.img }}" alt="{{ current.name }}">
-        <p>{{ current.name }}</p>
-    </a>
-    {% endfor %}
-</div>
 {% endif %}
 {% endblock %}

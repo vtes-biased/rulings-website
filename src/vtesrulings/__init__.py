@@ -91,11 +91,23 @@ def newlines(s: str):
     return s.replace("\n", "<br>")
 
 
+def ruling_body(ruling: dict):
+    """Resolve a ruling's text for read-mode SSR: glyphs, card spans, references stripped out."""
+    s = ruling["text"]
+    s = symbol_replace(s, ruling["symbols"])
+    for card in ruling["cards"]:
+        s = s.replace(card["text"], f'<span class="krcg-card">{card["printed_name"]}</span>')
+    for reference in ruling["references"]:
+        s = s.replace(reference["text"], "")
+    return markupsafe.Markup(newlines(s.strip()))
+
+
 templates.env.globals["version"] = version
 templates.env.globals["external_link"] = external_link
 templates.env.filters["symbolreplace"] = symbol_replace
 templates.env.filters["cardreplace"] = card_replace
 templates.env.filters["newlines"] = newlines
+templates.env.filters["rulingbody"] = ruling_body
 
 
 @app.exception_handler(404)

@@ -1,0 +1,21 @@
+{# Read-mode ruling record card. The island (#38) hydrates edit mode from data-ruling/data-source. #}
+{% macro ruling_card(ruling, source) %}
+<article class="ruling ruling--{{ ruling.state|lower }}" data-source="{{ source }}" data-ruling='{{ ruling | tojson }}'>
+    {% if ruling.state != 'ORIGINAL' %}
+    <span class="ruling__chip">{{ ruling.state|lower }}</span>
+    {% endif %}
+    {% if ruling.target.uid != source %}
+    <a class="ruling__group" href="groups.html?uid={{ ruling.target.uid }}{{ search_params_2 }}">{{ ruling.target.name }}</a>
+    {% endif %}
+    <div class="ruling__text">{{ ruling | rulingbody | safe }}</div>
+    {% if ruling.references %}
+    <div class="ruling__refs">
+        {% for reference in ruling.references %}
+        <a class="ref" href="{{ reference.url }}" target="_blank" rel="noopener">{{ reference.uid }}</a>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="ruling__empty">A reference is required</div>
+    {% endif %}
+</article>
+{% endmacro %}

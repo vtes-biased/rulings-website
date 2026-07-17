@@ -13,7 +13,10 @@
     <link rel="apple-touch-icon" href="/static/img/apple-touch-icon.png">
     <link rel="manifest" href="/static/site.webmanifest">
     <meta name="theme-color" content="#101017">
-    <link rel="stylesheet" href="/static/dist/css/layout.css?v={{ version }}">
+    <script>
+        // stamp the saved theme before paint to avoid a flash
+        try { var t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t } catch (e) { }
+    </script>
     <link rel="stylesheet" href="/static/dist/css/app.css?v={{ version }}">
     <script async src="https://static.krcg.org/web/krcg.js"></script>
     {% block scripts %}{% endblock %}
@@ -22,241 +25,156 @@
 </head>
 
 <body>
-    <header role="banner">
-        <nav id="navigation" class="navbar bg-dark navbar-expand-sm" data-bs-theme="dark">
-            <div class="container-fluid">
-                <a class="navbar-brand" href="#">
-                    <img src="/static/img/black-chantry-icon.webp" alt="BCP logo"
-                        width="48px">
-                </a>
-                <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="index.html{{ search_params }}">Card</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="groups.html{{ search_params }}">Group</a>
-                    </li>
-                    {% if user and user.category == 'ADMIN' %}
-                    <li class="nav-item">
-                        <a class="nav-link" href="admin.html{{ search_params }}">Admin</a>
-                    </li>
-                    {% endif %}
-                </ul>
+    <header>
+        <nav id="navigation" class="flex flex-wrap items-center gap-2 bg-chrome-bg px-4 py-2">
+            <a class="mr-2 shrink-0" href="index.html{{ search_params }}">
+                <img src="/static/img/black-chantry-icon.webp" alt="BCP logo" width="40" height="40">
+            </a>
+            <a class="nav-link" href="index.html{{ search_params }}">Card</a>
+            <a class="nav-link" href="groups.html{{ search_params }}">Group</a>
+            {% if user and user.category == 'ADMIN' %}
+            <a class="nav-link" href="admin.html{{ search_params }}">Admin</a>
+            {% endif %}
+            <div class="ml-auto flex flex-wrap items-center gap-2">
+                <button type="button" id="themeToggle" class="nav-link" aria-label="Toggle theme">
+                    <i class="bi bi-circle-half"></i>
+                </button>
                 {% if user %}
-                <button type="button" class="btn btn-secondary ms-2" id="logoutButton">Logout</button>
+                <button type="button" class="btn btn-secondary" id="logoutButton">Logout</button>
                 {% if proposal %}
                 {% if proposal.channel_id %}
                 {% if user.category != 'BASIC' %}
-                <button type="button" class="btn btn-success ms-2" id="proposalApprove">Approve</button>
+                <button type="button" class="btn btn-success" id="proposalApprove">Approve</button>
                 {% endif %}
                 {% else %}
-                <button type="button" class="btn btn-success ms-2" id="proposalSubmit">Submit</button>
+                <button type="button" class="btn btn-success" id="proposalSubmit">Submit</button>
                 {% endif %}
                 {% if proposal.editable %}
-                <button type="button" class="btn btn-danger ms-2" id="proposalDelete">Delete</button>
+                <button type="button" class="btn btn-danger" id="proposalDelete">Delete</button>
                 {% endif %}
                 {% else %}
-                <button type="button" class="btn btn-primary ms-2" id="proposalButton">Start proposal</button>
+                <button type="button" class="btn btn-primary" id="proposalButton">Start proposal</button>
                 {% endif %}
                 {% else %}
-                <button type="button" class="btn btn-primary ms-2" id="loginButton">Login</button>
+                <button type="button" class="btn btn-primary" id="loginButton">Login</button>
                 {% endif %}
             </div>
         </nav>
     </header>
-    <div class="modal fade" id="loginModal" tabindex="-1" aria-hidden="true" aria-labelledby="loginModalLabel">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h1 class="modal-title fs-5" id="loginModalLabel">Login</h1>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <form class="modal-body" id="loginForm" method="post" action="/login">
-                    <input type="text" class="form-control my-2" placeholder="VEKN login" name="username">
-                    <input type="password" class="form-control my-2" placeholder="VEKN password" name="password">
-                </form>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-success" id="loginSubmit" form="loginForm">Login</button>
-                </div>
+
+    <div class="modal" id="loginModal" hidden>
+        <div class="modal__dialog">
+            <div class="modal__header">
+                <h1 class="modal__title">Login</h1>
+                <button type="button" class="modal__close" data-close aria-label="Close">&times;</button>
+            </div>
+            <form class="modal__body" id="loginForm" method="post" action="/login">
+                <input type="text" class="input" placeholder="VEKN login" name="username">
+                <input type="password" class="input" placeholder="VEKN password" name="password">
+            </form>
+            <div class="modal__footer">
+                <button type="button" class="btn btn-secondary" data-close>Cancel</button>
+                <button type="button" class="btn btn-primary" id="loginSubmit" form="loginForm">Login</button>
             </div>
         </div>
     </div>
-    <div class="modal fade" id="proposalModal" tabindex="-1" aria-hidden="true" aria-labelledby="proposalModalLabel">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h1 class="modal-title fs-5" id="proposalModalLabel">
-                        {% if proposal %}
-                        Proposal
-                        {% else %}
-                        Start proposal
-                        {% endif %}
-                    </h1>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <form class="modal-body" id="proposalForm" onsubmit="return false;"><!-- form sent to API via JS -->
-                    <input type="text" class="form-control my-2" placeholder="Name" id="proposalName" name="name"
-                        value="{{ proposal.name if proposal else ''}}">
-                    {% if proposal %}
-                    <textarea class="form-control my-2" id="proposalDescription" name="description"
-                        placeholder="Description">{{ proposal.description }}</textarea>
-                    {% else %}
-                    <textarea class="form-control" id="proposalDescription" placeholder="Description"
-                        name="description"></textarea>
-                    {% endif %}
-                </form>
-                <div class="modal-footer">
-                    {% if proposal %}
-                    {% if proposal.editable %}
-                    <button type="button" class="btn btn-primary" id="proposalSave" form="proposalForm">
-                        Save
-                    </button>
-                    {% endif %}
-                    {% else %}
-                    <button type="button" class="btn btn-success" id="proposalStart" form="proposalForm">
-                        Start
-                    </button>
-                    {% endif %}
-                </div>
+
+    <div class="modal" id="proposalModal" hidden>
+        <div class="modal__dialog">
+            <div class="modal__header">
+                <h1 class="modal__title">{{ "Proposal" if proposal else "Start proposal" }}</h1>
+                <button type="button" class="modal__close" data-close aria-label="Close">&times;</button>
+            </div>
+            <form class="modal__body" id="proposalForm" onsubmit="return false;"><!-- form sent to API via JS -->
+                <input type="text" class="input" placeholder="Name" id="proposalName" name="name"
+                    value="{{ proposal.name if proposal else '' }}">
+                <textarea class="input" id="proposalDescription" name="description"
+                    placeholder="Description">{{ proposal.description if proposal else '' }}</textarea>
+            </form>
+            <div class="modal__footer">
+                {% if proposal %}
+                {% if proposal.editable %}
+                <button type="button" class="btn btn-primary" id="proposalSave" form="proposalForm">Save</button>
+                {% endif %}
+                {% else %}
+                <button type="button" class="btn btn-success" id="proposalStart" form="proposalForm">Start</button>
+                {% endif %}
             </div>
         </div>
     </div>
-    {% if proposal %}
-    <div class="modal fade" id="referenceModal" tabindex="-1" aria-hidden="true" aria-labelledby="referenceModalLabel">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h1 class="modal-title fs-5" id="referenceModalLabel">
-                        Add reference
-                    </h1>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <form id="referenceForm">
-                        <p class="mb-3">Provide URL or name to search for an existing reference</p>
-                        <div class="mb-3">
-                            <input type="text" class="form-control my-2" placeholder="URL" id="referenceURL" name="url"
-                                data-bs-toggle="tooltip" title="Direct link to a rules director meessage">
-                            <div id="referenceUrlError" class="form-text invisible text-danger"></div>
-                        </div>
-                        <div class="mb-3">
-                            <input type="text" class="form-control my-2" placeholder="Label" id="referenceName"
-                                name="uid" data-bs-toggle="tooltip" title="Author trigram followed by date (YYYYMMDD)">
-                            <div id="referenceNameHelp" class="form-text">
-                                Example: "ANK 20240224" (suffix, if any, will be computed)
-                            </div>
-                        </div>
-                    </form>
-                    <hr>
-                    <div>
-                        <select id="selectRulebookRef" class="form-select" aria-label="Select Rulebook reference">
-                            <option value="" selected>--Or choose a Rulebook reference--</option>
-                            {% for reference in rbk_references %}
-                            <option value="{{ reference.uid }}" data-reference='{{ reference | tojson }}'>{{
-                                reference.uid[4:]
-                                }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-primary" id="referenceAddNewButton" form="referenceForm">
-                        Add new reference
-                    </button>
-                    <button type="button" class="btn btn-success" id="referenceAddExistingButton" form="referenceForm"
-                        hidden="true">
-                        Add existing reference
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-    {% endif %}
-    <div class="container" id="contentContainer">
+
+    <main class="mx-auto w-full max-w-5xl px-4 py-4" id="contentContainer">
         {% if alert %}
-        <div class="alert alert-warning alert-dismissible fade show" role="alert">
-            <div class="d-flex align-items-center">
-                <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                <div>
-                    {{ alert.text }}
-                </div>
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        <div class="my-3 rounded-lg border border-state-modified/40 bg-state-modified/10 p-3" role="alert">
+            <div class="flex items-center gap-2">
+                <i class="bi bi-exclamation-triangle-fill text-state-modified"></i>
+                <div class="grow">{{ alert.text }}</div>
+                <button type="button" class="modal__close" data-dismiss aria-label="Close">&times;</button>
             </div>
             {% if alert.links %}
-            <hr>
-            <div class="d-flex align-items-center flex-wrap">
+            <div class="mt-2 flex flex-wrap gap-2 border-t border-hairline pt-2">
                 {% for link in alert.links %}
-                <a class="m-2 badge bg-secondary text-decoration-none" href="{{ link.url }}">{{ link.label }}</a>
+                <a class="badge no-underline hover:bg-hairline" href="{{ link.url }}">{{ link.label }}</a>
                 {% endfor %}
             </div>
             {% endif %}
         </div>
         {% endif %}
+
         {% if proposal %}
-        <div class="accordion" id="proposalAcc" data-data='{{ proposal | tojson }}'>
-            <div class="accordion-item">
-                <h2 class="accordion-header d-flex align-items-center">
-                    <button type="button" class="btn btn-success m-2" id="proposalButton">
-                        <i class="bi bi-pencil-fill"></i>
-                    </button>
-                    <button type="button" class="btn btn-secondary m-2" id="proposalLeave">
-                        <i class="bi bi-box-arrow-left"></i>
-                    </button>
-                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
-                        data-bs-target="#collapseOne" aria-expanded="true" aria-controls="collapseOne">
-                        <h4>Proposal: {{ proposal.name }}</h4>
-                    </button>
-                </h2>
-                <div id="collapseOne" class="accordion-collapse collapse" data-bs-parent="#proposalAcc">
-                    <div id="proposalAccBody" class="accordion-body">
-                        <div id="proposalDescription">{{ proposal.description }}</div>
-                        {% if proposal.url %}
-                        <a href="{{ proposal.url }}" target="_blank" class="my-2">
-                            <i class="bi bi-discord"></i> Discord discussion
-                        </a>
-                        {% endif %}
-                        <div id="proposalGroups" class="d-flex flex-wrap align-items-center d-none">
-                            <!-- Content managed by JS -->
-                        </div>
-                        <div id="proposalCards" class="d-flex flex-wrap align-items-center d-none">
-                            <!-- Content managed by JS -->
-                        </div>
-                    </div>
-                </div>
+        <section class="my-3 rounded-lg border border-state-new/40 bg-state-new/5">
+            <div class="flex items-center gap-2 p-2">
+                <button type="button" class="btn btn-success btn-sm" id="proposalButton" aria-label="Edit proposal">
+                    <i class="bi bi-pencil-fill"></i>
+                </button>
+                <button type="button" class="btn btn-secondary btn-sm" id="proposalLeave" aria-label="Leave proposal">
+                    <i class="bi bi-box-arrow-left"></i>
+                </button>
+                <button type="button" class="ml-1 flex grow items-center gap-2 text-left" data-collapse-toggle
+                    aria-expanded="false" aria-controls="proposalBody">
+                    <h4 class="text-base">Proposal: {{ proposal.name }}</h4>
+                </button>
             </div>
-        </div>
+            <div id="proposalBody" class="border-t border-hairline p-3" hidden>
+                <div>{{ proposal.description }}</div>
+                {% if proposal.url %}
+                <a href="{{ proposal.url }}" target="_blank" class="my-2 inline-flex items-center gap-1">
+                    <i class="bi bi-discord"></i> Discord discussion
+                </a>
+                {% endif %}
+                {% if proposal.groups %}
+                <div class="mt-2 flex flex-wrap items-center gap-2">
+                    <strong>Groups:</strong>
+                    {% for group in proposal.groups %}
+                    <a class="badge no-underline hover:bg-hairline" href="groups.html?uid={{ group.uid }}{{ search_params_2 }}">{{ group.name }}</a>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% if proposal.cards %}
+                <div class="mt-2 flex flex-wrap items-center gap-2">
+                    <strong>Cards:</strong>
+                    {% for card in proposal.cards %}
+                    <a class="badge no-underline hover:bg-hairline" href="index.html?uid={{ card.uid }}{{ search_params_2 }}">{{ card.name }}</a>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </section>
         {% endif %}
+
         {% block content %}{% endblock %}
-        <div id="editControls" class="container d-flex flex-row invisible">
-            <div class="btn-group">
-                <button type="button" data-bs-toggle="dropdown" aria-expanded="false"
-                    class="btn btn-secondary btn-sm dropdown-toggle">Icon</button>
-                <ul class="dropdown-menu"><!-- Icons added by JS --></ul>
-            </div>
-            <form>
-                <input class="form-control autocomplete mx-2" type="search" placeholder="Card name"
-                    data-server="/api/complete" data-live-server="true" data-suggestions-threshold="3"
-                    autocomplete="off" autocapitalize="off" spellcheck=false>
-            </form>
+    </main>
+
+    <div id="errorToast" class="toast" role="alert" aria-live="assertive" hidden>
+        <div class="toast__header">
+            <i class="bi bi-exclamation-circle-fill"></i>
+            <strong class="mr-auto">Error</strong>
+            <button type="button" class="modal__close" data-dismiss aria-label="Close">&times;</button>
         </div>
+        <div class="toast__body"></div>
     </div>
-    <div aria-live="polite" aria-atomic="true" class="position-static">
-        <div class="toast-container bottom-0 end-0 p-3">
-            <div id="errorToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
-                <div class="toast-header">
-                    <i class="bi-exclamation-circle-fill text-danger"></i>
-                    <strong class="me-auto">Error</strong>
-                    <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
-                </div>
-                <div class="toast-body">
-                    Error
-                </div>
-            </div>
-        </div>
-    </div>
-    <footer class="container-fluid">
+
+    <footer class="mx-auto w-full max-w-5xl px-4 py-6 text-sm text-text-muted">
         {% block footer %}{% endblock %}
     </footer>
 </body>
