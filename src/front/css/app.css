@@ -1,0 +1,82 @@
+/* Tailwind v4 foundation: design tokens + self-hosted fonts only. Utilities and preflight are NOT
+   emitted yet — this loads alongside the retiring Bootstrap (layout.scss) during the template
+   migration, so generating utilities off still-Bootstrap markup would collide with Bootstrap's own
+   class names (.collapse, .h-90…). #43 adds the utilities import + @source once the templates are
+   Tailwind; #41 re-adds preflight once Bootstrap is gone. */
+@import "tailwindcss/theme.css" layer(theme);
+
+/* self-hosted faces (latin). Bricolage & Hanken are variable fonts — one file, a weight range. */
+@font-face { font-family: "Bricolage Grotesque"; font-style: normal; font-weight: 200 800; font-display: swap; src: url("../fonts/bricolage-grotesque.woff2") format("woff2"); }
+@font-face { font-family: "Hanken Grotesk"; font-style: normal; font-weight: 100 900; font-display: swap; src: url("../fonts/hanken-grotesk.woff2") format("woff2"); }
+@font-face { font-family: "Hanken Grotesk"; font-style: italic; font-weight: 400; font-display: swap; src: url("../fonts/hanken-grotesk-400-italic.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 500; font-display: swap; src: url("../fonts/jetbrains-mono-500.woff2") format("woff2"); }
+
+/* approved cold-V5 tokens — light values; dark flips the same custom properties below */
+@theme {
+    --color-bg: #e7e6ec;
+    --color-surface: #f7f6fa;
+    --color-surface-2: #edecf3;
+    --color-text: #1b1c26;
+    --color-text-muted: #6a6b7c;
+    --color-hairline: #d7d6e1;
+    --color-chrome-bg: #101017;
+    --color-chrome-2: #191922;
+    --color-chrome-text: #e7e6ef;
+    --color-chrome-muted: #8d8da1;
+    --color-primary: #6d55a6;
+    --color-primary-bright: #8b70c6;
+    --color-secondary: #35818f;
+    --color-secondary-bright: #4aa3b1;
+    --color-orchid: #a25f97;
+    --color-state-original: #82869a;
+    --color-state-new: #4d997a;
+    --color-state-modified: #6d82c6;
+    --color-state-deleted: #bb6d8d;
+
+    --font-display: "Bricolage Grotesque", "Arial Narrow", system-ui, sans-serif;
+    --font-text: "Hanken Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+/* dark theme: override the semantic tokens so every color utility flips at once.
+   Chrome stays dark in both themes (just deepened). Toggle (#37) stamps data-theme on the root. */
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        --color-bg: #0f1016;
+        --color-surface: #191a24;
+        --color-surface-2: #22232f;
+        --color-text: #e5e4ef;
+        --color-text-muted: #9c9caf;
+        --color-hairline: #2c2d3a;
+        --color-chrome-bg: #0a0a11;
+        --color-chrome-2: #14141d;
+        --color-primary: #a488cc;
+        --color-primary-bright: #bba2dd;
+        --color-secondary: #55b1c0;
+        --color-secondary-bright: #70cad8;
+        --color-orchid: #c58fb8;
+        --color-state-original: #999db2;
+        --color-state-new: #63bd97;
+        --color-state-modified: #8fa1e0;
+        --color-state-deleted: #d98cad;
+    }
+}
+:root[data-theme="dark"] {
+    --color-bg: #0f1016;
+    --color-surface: #191a24;
+    --color-surface-2: #22232f;
+    --color-text: #e5e4ef;
+    --color-text-muted: #9c9caf;
+    --color-hairline: #2c2d3a;
+    --color-chrome-bg: #0a0a11;
+    --color-chrome-2: #14141d;
+    --color-primary: #a488cc;
+    --color-primary-bright: #bba2dd;
+    --color-secondary: #55b1c0;
+    --color-secondary-bright: #70cad8;
+    --color-orchid: #c58fb8;
+    --color-state-original: #999db2;
+    --color-state-new: #63bd97;
+    --color-state-modified: #8fa1e0;
+    --color-state-deleted: #d98cad;
+}

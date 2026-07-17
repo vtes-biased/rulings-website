@@ -1,5 +1,6 @@
 import { defineConfig } from "vite"
 import { svelte } from "@sveltejs/vite-plugin-svelte"
+import tailwindcss from "@tailwindcss/vite"
 
 // Entry points keep stable, hashless names because the Jinja templates reference them
 // directly (e.g. /static/dist/js/index.js, /static/dist/css/layout.css). Shared chunks and
@@ -7,7 +8,7 @@ import { svelte } from "@sveltejs/vite-plugin-svelte"
 // StaticFiles mount at /static/dist/.
 export default defineConfig({
     base: "/static/dist/",
-    plugins: [svelte()],
+    plugins: [svelte(), tailwindcss()],
     build: {
         outDir: "src/vtesrulings/static/dist",
         emptyOutDir: true,
@@ -17,6 +18,7 @@ export default defineConfig({
                 groups: "src/front/js/groups.ts",
                 admin: "src/front/js/admin.ts",
                 layout: "src/front/css/layout.scss",
+                app: "src/front/css/app.css",
                 island: "src/front/island/main.ts",
             },
             output: {
