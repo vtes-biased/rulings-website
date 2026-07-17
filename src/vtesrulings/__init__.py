@@ -4,7 +4,7 @@ import aiohttp
 import asgiref
 import asgiref.sync
 import click
-import krcg.cards
+import krcg.loader
 import quart
 import importlib
 import jinja2.exceptions
@@ -32,11 +32,7 @@ app.register_blueprint(api.api, url_prefix="/api")
 
 @app.while_serving
 async def lifespan():
-    app.cards_map = krcg.cards.CardMap()
-    await asgiref.sync.SyncToAsync(app.cards_map.load_from_vekn)()
-    app.cards_search = krcg.cards.CardSearch()
-    for card in app.cards_map:
-        app.cards_search.add(card)
+    app.cards_map = await asgiref.sync.SyncToAsync(krcg.loader.load_local)()
     async with aiofiles.tempfile.TemporaryDirectory() as repo_dir, db.POOL:
         logger.warning("Initializing database")
         await db.init()

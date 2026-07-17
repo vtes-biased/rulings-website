@@ -80,12 +80,8 @@ async def complete_card():
     if not text:
         quart.abort(404)
     text = urllib.parse.unquote(text)
-    ret = quart.current_app.cards_search.name.search(text)["en"]
-    ret = [
-        {"label": card.usual_name, "value": card.id}
-        for card, _ in sorted(ret.items(), key=lambda x: (-x[1], x[0]))
-    ]
-    return ret
+    ret = quart.current_app.cards_map.complete(text)
+    return [{"label": card.unique_name, "value": card.id} for card in ret]
 
 
 @api.route("/card/<int:card_id>")

@@ -1,7 +1,8 @@
 import collections.abc
 import copy
 import functools
-import krcg.cards
+import krcg.collections
+import krcg.models
 import pydantic.dataclasses
 import typing
 from . import models
@@ -29,7 +30,7 @@ def get_proposal_url(prop: Proposal):
 class Manager:
     def __init__(
         self,
-        card_map: krcg.cards.CardMap,
+        card_map: krcg.collections.CardDict,
         index: models.Index,
         proposal: Proposal | None = None,
     ):
@@ -243,7 +244,7 @@ class Manager:
             return models.NID(group.uid, group.name)
         else:
             card = self.card_map[int(card_or_group_id)]
-            return models.NID(uid=str(card.id), name=card.name)
+            return models.NID(uid=str(card.id), name=card.unique_name)
 
     @functools.cache
     def get_base_card(self, card_id_or_name: int | str) -> models.BaseCard:
@@ -255,7 +256,7 @@ class Manager:
         card = self.card_map[card_id_or_name]
         return models.BaseCard(
             uid=str(card.id),
-            name=card.usual_name,
+            name=card.unique_name,
             printed_name=card.printed_name,
             img=card.url,
         )
@@ -269,33 +270,41 @@ class Manager:
             - this is cached: groups, backrefs and rulings must be set outside.
         """
         card = self.card_map[card_id_or_name]
+        is_crypt = isinstance(card, krcg.models.CryptCard)
+        if is_crypt:
+            disciplines = card.disciplines
+        else:
+            req = card.discipline_requirement
+            disciplines = req.disciplines if req else []
         kwargs = {
             "uid": str(card.id),
-            "name": card._name,
+            "name": card.printed_name,
             "types": [s.upper() for s in card.types],
-            "text": card.card_text,
-            "text_symbols": list(utils.parse_symbols(card.card_text)),
-            "disciplines": card.disciplines,
+            "text": card.text,
+            "text_symbols": list(utils.parse_symbols(card.text)),
+            "disciplines": disciplines,
             "printed_name": card.printed_name,
             "img": card.url,
         }
-        if card.crypt:
+        if is_crypt:
             cls = models.CryptCard
             kwargs.update(
                 {
-                    "clan": card.clans[0],
+                    "clan": card.clan,
                     "capacity": card.capacity,
-                    "group": card.group,
-                    "advanced": card.adv,
+                    "group": str(card.group) if card.group else "",
+                    "advanced": card.advanced,
                 }
             )
         else:
             cls = models.LibraryCard
+            cost_type = str(card.cost.type).lower() if card.cost else ""
+            cost_value = str(card.cost.value) if card.cost else ""
             kwargs.update(
                 {
-                    "pool_cost": card.pool_cost or "",
-                    "blood_cost": card.blood_cost or "",
-                    "conviction_cost": card.conviction_cost or "",
+                    "pool_cost": cost_value if cost_type == "pool" else "",
+                    "blood_cost": cost_value if cost_type == "blood" else "",
+                    "conviction_cost": cost_value if cost_type == "conviction" else "",
                 }
             )
 
@@ -303,14 +312,15 @@ class Manager:
         for s in ret.types:
             if s in utils.ANKHA_SYMBOLS:
                 ret.symbols.append(models.SymbolSubstitution(text=s, symbol=utils.ANKHA_SYMBOLS[s]))
-        for s in card.disciplines:
+        for s in disciplines:
             ret.symbols.append(models.SymbolSubstitution(text=s, symbol=utils.ANKHA_SYMBOLS[s]))
-        for key, uid in card.variants.items():
+        for variant in card.variants:
+            suffix = variant.suffix
             ret.variants.append(
                 models.CardVariant(
-                    uid=str(uid),
-                    group=int(key[1]) if key[0] == "G" else None,
-                    advanced=True if key[-3:] == "ADV" else False,
+                    uid=str(variant.id),
+                    group=int(suffix[1]) if suffix and suffix[0] == "G" else None,
+                    advanced=suffix.endswith("ADV"),
                 )
             )
         return ret

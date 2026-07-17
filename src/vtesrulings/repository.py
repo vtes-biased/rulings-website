@@ -4,7 +4,7 @@ import asgiref.sync
 import asyncio
 import git
 import io
-import krcg.cards
+import krcg.collections
 import logging
 import os
 import pathlib
@@ -112,7 +112,7 @@ async def async_yaml_load(f: aiofiles.threadpool.text.AsyncTextIOWrapper) -> typ
     return yaml.safe_load(buffer)
 
 
-async def load_base(repo: git.Repo, card_map: krcg.cards.CardMap) -> models.Index:
+async def load_base(repo: git.Repo, card_map: krcg.collections.CardDict) -> models.Index:
     ret = models.Index()
     rulings_dir = pathlib.Path(repo.working_tree_dir) / RULINGS_FILES_PATH
     # build references index
@@ -134,7 +134,7 @@ async def load_base(repo: git.Repo, card_map: krcg.cards.CardMap) -> models.Inde
             group.cards.append(
                 models.CardInGroup(
                     uid=card_ref.uid,
-                    name=card.name,
+                    name=card.unique_name,
                     printed_name=card.printed_name,
                     img=card.url,
                     prefix=prefix,
@@ -151,7 +151,7 @@ async def load_base(repo: git.Repo, card_map: krcg.cards.CardMap) -> models.Inde
     yaml_rulings = {utils.build_nid(k): v for k, v in data.items()}
     for nid, rulings in yaml_rulings.items():
         if not nid.uid.startswith("G"):
-            nid = models.NID(uid=nid.uid, name=card_map[int(nid.uid)].name)
+            nid = models.NID(uid=nid.uid, name=card_map[int(nid.uid)].unique_name)
         ret.rulings[nid.uid] = {}
         for line in rulings:
             uid = utils.stable_hash(line)
@@ -177,7 +177,7 @@ async def async_yaml_dump(f: aiofiles.threadpool.text.AsyncTextIOWrapper, data: 
 
 
 async def commit_index(
-    repo: git.Repo, card_map: krcg.cards.CardMap, index: models.Index, description: str
+    repo: git.Repo, card_map: krcg.collections.CardDict, index: models.Index, description: str
 ) -> None:
     """YAML generation and github commit
 
@@ -189,7 +189,7 @@ async def commit_index(
 
 
 async def _commit_index(
-    repo: git.Repo, card_map: krcg.cards.CardMap, index: models.Index, description: str
+    repo: git.Repo, card_map: krcg.collections.CardDict, index: models.Index, description: str
 ) -> None:
     """YAML generation and github commit"""
     rulings_dir = pathlib.Path(repo.working_tree_dir) / RULINGS_FILES_PATH
@@ -210,18 +210,18 @@ async def _commit_index(
             data[group_nid] = {}
             for card in group.cards:
                 krcg_card = card_map[int(card.uid)]
-                card_nid = f"{krcg_card.id}|{krcg_card._name}"
+                card_nid = f"{krcg_card.id}|{krcg_card.printed_name}"
                 data[group_nid][card_nid] = card.prefix
         await async_yaml_dump(f, data)
     async with aiofiles.open(rulings_dir / "rulings.yaml", "w", encoding="utf-8") as f:
         await f.write(RULINGS_COMMENT)
         data = {}
-        for card in sorted(card_map, key=lambda x: x.id):
+        for card in sorted(card_map.cards(), key=lambda x: x.id):
             for ruling in index.rulings.get(str(card.id), {}).values():
                 # skip group rulings
                 if ruling.target.uid != str(card.id):
                     continue
-                key = f"{card.id}|{card._name}"
+                key = f"{card.id}|{card.printed_name}"
                 data.setdefault(key, [])
                 data[key].append(ruling.text)
         for group in all_groups:

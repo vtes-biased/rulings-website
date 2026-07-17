@@ -1,7 +1,7 @@
 import base64
 import datetime
 import hashlib
-import krcg.cards
+import krcg.collections
 import random
 import re
 import typing
@@ -188,7 +188,7 @@ def parse_symbols(text: str) -> typing.Generator[None, None, models.SymbolSubsti
 
 
 def parse_cards(
-    card_map: krcg.cards.CardMap, text: str
+    card_map: krcg.collections.CardDict, text: str
 ) -> typing.Generator[None, None, models.CardSubstitution]:
     """Yield all cards in the given text."""
     for token in RE_CARD.findall(text):
@@ -196,7 +196,7 @@ def parse_cards(
         yield models.CardSubstitution(
             text=token,
             uid=str(card.id),
-            name=card.name,
+            name=card.unique_name,
             printed_name=card.printed_name,
             img=card.url,
         )
@@ -231,7 +231,7 @@ def random_uid8() -> str:
 
 
 def build_ruling(
-    card_map: krcg.cards.CardMap,
+    card_map: krcg.collections.CardDict,
     references: dict[str, models.Reference],
     text: str,
     target: models.NID,
@@ -250,7 +250,9 @@ def build_ruling(
     return ruling
 
 
-def build_base_card(card_map: krcg.cards.CardMap, card_id_or_name: int | str) -> models.BaseCard:
+def build_base_card(
+    card_map: krcg.collections.CardDict, card_id_or_name: int | str
+) -> models.BaseCard:
     """Get the BaseCard matching the ID. Yield KeyError if not found.
     WARNINGS:
         - a card ID _must_ be an int, or it will not be found,
@@ -259,7 +261,7 @@ def build_base_card(card_map: krcg.cards.CardMap, card_id_or_name: int | str) ->
     card = card_map[card_id_or_name]
     return models.BaseCard(
         uid=str(card.id),
-        name=card.name,
+        name=card.unique_name,
         printed_name=card.printed_name,
         img=card.url,
     )
