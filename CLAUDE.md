@@ -1,0 +1,78 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## What this is
+
+A web app for curating official rulings for **VTES** (Vampire: The Eternal Struggle). Authenticated players draft **proposals** to add/edit rulings, groups, and references; proposals are discussed on Discord; a rulemonger/admin **approves** them, at which point the change is serialized to YAML and git-pushed to a **separate** repository (`git@github.com:vtes-biased/vtes-rulings.git`), which is the durable source of truth.
+
+The app is a Quart (async Flask) server rendering Jinja templates plus a JSON API, with a TypeScript/Bootstrap frontend built by Parcel. (A `v2` branch is migrating this to FastAPI + Jinja SSR + a Svelte editor island — see `.pst/tickets` and `.pst/details/`.)
+
+## Principles (enforced)
+
+**Data.** The `vtes-biased/vtes-rulings` YAML files are the reference/base data. Nothing permanent lives outside them. The DB holds only in-flight proposals; approving one serializes to YAML and drops it from the DB. Keep the YAML simple and human-readable.
+
+**Edit UX.** Edit mode is live: direct editing + continuous save, every action trivially revertible. No confirmation modals, no submit/save buttons, no multi-step commit flows. Ergonomy through simplicity and directness.
+
+**Code.** Tight, local, KISS. No patterns/abstractions/indirection for elegance's sake — they must earn their keep. Don't write for a human reader's comfort; keep it terse for agentic workers. Comments never narrate code; a comment is justified only for a non-obvious consideration that isn't visible in the code itself.
+
+**Workflow.** Don't postpone work or fixes that can be done now. The amount of code needing a rewrite is never a reason to defer — the coding loop is agentic and rewrites fast. After any non-trivial change, invoke the `reviewer` subagent before committing and address its findings.
+
+## Commands
+
+Tooling is `just` + `uv` (npm for the frontend). **Note the README is stale** — it references `make update`/`make serve`, but the Makefile is gone; use `just`.
+
+- `just update` — install/refresh deps (`npm install` + `uv sync --group dev`)
+- `just serve` — run Parcel watcher (via pm2) + Quart dev server with `--reload`; sources `.env`
+- `just stop` — stop the pm2 frontend process
+- `just lint` / `just fmt` — ruff check + format (line length 100, target py313)
+- `just test` — `QUART_TESTING=1 uv run pytest` (excludes the `discord` marker)
+- `just clean` — remove build artifacts and caches
+- `just release [minor|major]` — bump version, build wheel, tag, push, create GitHub release (versioning is `major.minor` only)
+
+Run a single test: `QUART_TESTING=1 uv run pytest tests/test_api.py::test_get_card`
+Frontend build only: `npm run build` (or `npm run front` to watch).
+
+## Runtime prerequisites
+
+- **PostgreSQL** running locally: database `vtes-rulings`, user `vtes-rulings` (see `db.py` `CONNINFO`, override with `DB_USER`/`DB_PWD`).
+- **SSH access** to push to the rulings git repo (`GIT_SSH_COMMAND`, defaults to `ssh -i ~/.ssh/id_rsa`). Approving a proposal commits and pushes to GitHub.
+- Network access: on startup the app clones the rulings repo to a temp dir and loads the full VEKN card database via `krcg` (`load_from_vekn`). **This happens in tests too** (the lifespan runs under `test_app()`), so tests need DB + network + SSH.
+
+Key env vars (`.env`): `QUART_APP="vtesrulings:app"`, `DISCORD_WEBHOOK`, `DISCORD_SERVER_ID`. Also read: `SESSION_SECRET_KEY`, `SITE_URL_BASE`, `GIT_SSH_COMMAND`. The app calls `config.from_prefixed_env()`, so any `QUART_*` var becomes Quart config — e.g. `QUART_TESTING=1` sets `config["TESTING"]`, which bypasses real VEKN login validation.
+
+## Architecture
+
+### Three data sources, deliberately separated
+1. **Card data** — loaded from `krcg` (VEKN CSV) into `app.cards_map` / `app.cards_search` at startup. Cards are never edited here, only referenced.
+2. **Rulings base** — the `rulings/` YAML files (`references.yaml`, `groups.yaml`, `rulings.yaml`) in the *external* git repo, cloned at startup and parsed into an in-memory `models.Index` (`app.rulings_index`). See `repository.py` for load/serialize and the long design-note comments explaining the YAML-as-forever-format philosophy.
+3. **PostgreSQL** — stores only `users` and `proposals` (proposal payload is a JSON blob). Everything else lives in git.
+
+### The proposal overlay model (the core concept)
+A `Proposal` (`proposal.py`) is an **overlay** on top of the base `Index`, not a copy. The `proposal.Manager` class merges base + overlay to present a unified view to the API. Every item (ruling/group/reference/card-in-group) carries a `models.State`: `ORIGINAL`, `NEW`, `MODIFIED`, or `DELETED`. The manager's `get_*`/`all_*` methods reconcile the two layers and compute effective state; `Manager.merge()` collapses them into a fresh `Index` at approval time.
+
+Request lifecycle for edits: `api.py` decorators `@proposal_update` (loads proposal `FOR UPDATE`, runs handler, persists) and `@proposal_readonly` wrap endpoints. The current proposal is tracked in the session (`quart.session["proposal"]`).
+
+### Approval flow
+`api.approve_proposal` → `Manager.merge()` → `repository.commit_index()` regenerates all three YAML files, runs `yamlfix`, commits and pushes. A module-level `COMMIT_LOCK` serializes approvals because pending groups (`P…` ids) get renumbered to stable `G…` ids during serialization and concurrent runs would collide. After a successful commit the in-memory `rulings_index` is reloaded from the repo.
+
+### Identifiers & text format
+- Card ids are VEKN CSV integer ids (as strings). Group ids start with `G` (stable, in-repo) or `P` (pending, proposal-only). References are keyed `SRC YYYYMMDD` (e.g. `LSJ 20040518`).
+- Ruling id = `utils.stable_hash(text)` (shake_128 → base32). Editing text changes the id; `update_ruling` tracks the old id so reverting drops the change.
+- Ruling text embeds: discipline/type **symbols** in brackets `[pot]`, **card names** in braces `{Abbot}`, and **reference ids** in brackets `[LSJ 20040518]`. `utils.py` holds the regexes, the `ANKHA_SYMBOLS` map (text→font glyph), and reference validation (`RULING_AUTHORS` date windows + allowed `RULING_DOMAINS`).
+
+### Users & auth
+Login proxies to the VEKN site API (`/login`), stores `user_id` in session. `db.UserCategory` is `BASIC` / `RULEMONGER` / `ADMIN`; rulemongers+admins can approve, admins manage users (`admin.html`, `/user/*` routes). CLI: `quart resetdb`, `quart makeadmin <vekn>`.
+
+## Module map (`src/vtesrulings/`)
+- `__init__.py` — Quart app, lifespan (loads cards + clones rulings repo), page routes, template filters (`symbolreplace`, `cardreplace`), login/admin routes, CLI commands.
+- `api.py` — `/api` blueprint; the proposal-editing REST surface and its `@proposal_update`/`@proposal_readonly` decorators.
+- `proposal.py` — `Proposal` + `Manager` (the base/overlay merge logic).
+- `repository.py` — clone, YAML load → `Index`, and `Index` → YAML serialize/commit/push.
+- `models.py` — pydantic dataclasses for the domain (`Index`, `Ruling`, `Group`, `Reference`, `Card`, `State`, …).
+- `db.py` — psycopg async pool; users & proposals persistence.
+- `utils.py` — hashing, symbol/card/reference parsing, reference building & validation.
+- `discord.py` — webhook posts (submit creates a thread, approve posts to it).
+- `scraper.py` — scrapes VEKN forum pages to auto-derive a reference id from a URL.
+
+Frontend lives in `src/front/{js,css}` (entry points listed in `package.json` targets); Parcel outputs to `src/vtesrulings/static/dist/`. Templates are in `src/vtesrulings/templates/` (`index.html` cards, `groups.html` groups, `admin.html` users).

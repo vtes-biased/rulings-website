@@ -1,0 +1,32 @@
+open  	epic,stack	Epic: Tech stack rework — Quart→FastAPI, Jinja SSR read side + Svelte editor island, single-worker in-memory index, bump krcg. See details.
+open  	epic,deploy	Epic: Deploy via server-setup (gravelines) + GitHub App for vtes-rulings writes — systemd ASGI service, nginx_site, managed postgres_db, tag→deploy CI, Alloy. See details.
+open  	epic,ci	Epic: Build & CI — add ty typecheck, real-but-safe test harness (Postgres container + sandbox rulings remote + pinned card snapshot), unify tag/release with deploy.
+open  	epic,bug	Epic: Bug pass — reproduce & catalog via local run (Chrome+Firefox), then fix. Known: Firefox editing broken, proposal description not saving.
+open  	epic,feature	Epic: Features — proposal diff (site + Discord), mobile-first, supersede group-ruling text, RULING/REMINDER two-kind model. See children.
+open  	stack,backend	Scaffold FastAPI app + ASGI lifespan (card load, repo clone, in-memory Index); replace Quart app + blueprint. parent:#1
+open  	stack,backend	Port SSR pages + auth to FastAPI+Jinja: index/groups/admin, error handlers, template filters, VEKN login, current-user. parent:#1
+open  	stack,backend	Port the /api JSON surface; convert proposal_update/proposal_readonly decorators to FastAPI dependencies. parent:#1
+open  	stack,frontend	Build Svelte editor island + Vite build: ruling editing, symbol/card/reference insertion, NEW/MODIFIED/DELETED overlay; retire layout.ts + Parcel. parent:#1
+closed	stack	Bump krcg to >=5.6 and reconcile loader/CardMap API changes. parent:#1
+open  	stack,backend	Enforce single-worker in-memory index model: one worker; refresh Index on approval; document the constraint. parent:#1
+open  	deploy,backend	Create GitHub App (contents:write on vtes-rulings); replace repository.py SSH push with HTTPS + installation token; bot commit identity. parent:#2
+open  	deploy	systemd unit + ASGI server (hypercorn/uvicorn) single worker; env + secrets layout on the host. parent:#2
+open  	deploy	nginx_site vhost + certbot TLS for the app on gravelines. parent:#2
+open  	deploy	Use managed postgres_db role: provision DB + backups; drop the localhost DB assumption. parent:#2
+open  	deploy,ci	tag→deploy GitHub Actions workflow: build frontend + artifact; ship; migrate; restart service. parent:#2
+open  	deploy	Alloy observability wiring + approval→krcg-static rebuild dispatch (repository_dispatch). parent:#2
+open  	ci	Add ty typecheck to justfile + CI; fix the initial batch of type errors. parent:#3
+open  	ci	Dev/test harness: Postgres container + seeded sandbox rulings remote + pinned card snapshot; wire just dev and just test. parent:#3
+open  	ci	Rework CI: real-but-safe test job (Postgres service, sandbox remote, snapshot) + lint + typecheck + frontend build. parent:#3
+open  	ci	Unify version/tag/release with the deploy trigger; drop the wheel-publish framing (this is an app not a library). parent:#3
+closed	bug	FIRST: boot app locally + browser-drive (Chrome + Firefox); catalog every bug found into new parent:#4 tickets. parent:#4
+closed	bug	Fix: proposal name/description not saving — saveProposal() in src/front/js/layout.ts:635 issues PUT /api/proposal/approve (405, HTML body → JSON parse error) instead of PUT /api/proposal. One-line endpoint fix. parent:#4
+closed	bug,superseded	Firefox dynamic editing broken — verify resolved by the Svelte island rewrite; patch only if still broken. parent:#4 addressed-by:#9
+open  	feature,frontend	Proposal diff view on the site: approver landing page (arriving from Discord) rendering the NEW/MODIFIED/DELETED overlay. parent:#5
+open  	feature,backend	Discord: adaptive diff in the initial proposal message (inline text / bullet list / truncated by size) + post updates to the same thread. parent:#5
+open  	feature	Supersede group-ruling text per card (same ruling identity + shared references; text override only). Design: see detail file. parent:#5
+open  	feature	Two-kind entry model RULING vs REMINDER (reminder reference optional); update check_consistency + YAML marker + editor. Design: see detail file. parent:#5
+open  	feature,frontend	Mobile-first pass on the read side (Jinja SSR); editor mobile-first is handled in the Svelte island (#9). parent:#5
+closed	bug,superseded	Active-proposals alert lists every unsubmitted proposal as an inline link with no cap — floods the page (hundreds of entries). Alert links built in __init__.py index route from get_user_proposals. parent:#4
+closed	bug,superseded	Error toast from a failed fetch never auto-dismisses — stays stuck on screen indefinitely (do_fetch error handler in layout.ts). parent:#4
+open  	ci	Tests share the real local Postgres DB and leave orphaned test-user 'Test' proposals behind; harness must use an isolated DB and clean up per-test. parent:#3 relates:#19

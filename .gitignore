@@ -11,3 +11,4 @@ package-lock.json
 dist/
 build/
 .parcel-cache/
+.claude/settings.local.json
