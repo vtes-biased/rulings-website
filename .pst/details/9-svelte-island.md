@@ -70,14 +70,14 @@ to the front.
   (`do_fetch`/`displayError`/`debounce`/`postJSON`/`putJSON`) so the island reuses them without
   re-running chrome init. Verified live (Chrome): mount, read-only inherited rulings, add/type/save,
   `[sym]`/`{card}` insert round-trip, MODIFIED+ref-preserve, restore (cancels pending save), delete.
-  Firefox editing (#24) still needs a manual check — uses only standard contenteditable APIs. *(done)*
+  Firefox **editing** verified good (#24, the plaintext-only reliance is gone). *(done)*
 - **#39** Reference editing in the island (footer badges + reference modal).
 - **#40** Group editor island (name/cards/prefixes) + `POST /group` → JSON.
 - **#41** Final retire — **retire half done**: deleted `layout.ts`/`layout.scss`, dropped
   bootstrap/@popperjs/bootstrap5-autocomplete/sass/bootstrap-icons/@types deps, inlined the icons as
   SVG (`icon()` macro), asserted no Bootstrap class/import remains; verified #30/#31 + mobile-first
-  **read**. Still open (blocked on the island): Firefox **editing** (#24) + mobile-first **edit** +
-  close #9 — no editor exists to exercise yet. Carry-forward from #38 review: island-rendered
+  **read**. Firefox **editing** (#24) ✅ verified good now the island exists. Still open: mobile-first
+  **edit** + close #9 (after #39/#40). Carry-forward from #38 review: island-rendered
   `.krcg-card` spans (editor chips + read-only bodies) get no krcg hover/click glue (chrome's
   `bindCardHover` runs once at `ready`, before the async mount) — re-bind after mount or accept the
   edit-mode gap; and the card autocomplete in `TokenEditor` duplicates chrome's `setupAutocomplete`
