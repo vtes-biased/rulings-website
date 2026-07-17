@@ -1,3 +1,4 @@
+{% from "_macros.html" import icon %}
 <!DOCTYPE html>
 <html lang="en-US">
 
@@ -37,7 +38,7 @@
             {% endif %}
             <div class="ml-auto flex flex-wrap items-center gap-2">
                 <button type="button" id="themeToggle" class="nav-link" aria-label="Toggle theme">
-                    <i class="bi bi-circle-half"></i>
+                    {{ icon("circle-half") }}
                 </button>
                 {% if user %}
                 <button type="button" class="btn btn-secondary" id="logoutButton">Logout</button>
@@ -107,7 +108,7 @@
         {% if alert %}
         <div class="my-3 rounded-lg border border-state-modified/40 bg-state-modified/10 p-3" role="alert">
             <div class="flex items-center gap-2">
-                <i class="bi bi-exclamation-triangle-fill text-state-modified"></i>
+                {{ icon("exclamation-triangle-fill", "text-state-modified") }}
                 <div class="grow">{{ alert.text }}</div>
                 <button type="button" class="modal__close" data-dismiss aria-label="Close">&times;</button>
             </div>
@@ -125,10 +126,10 @@
         <section class="my-3 rounded-lg border border-state-new/40 bg-state-new/5">
             <div class="flex items-center gap-2 p-2">
                 <button type="button" class="btn btn-success btn-sm" id="proposalButton" aria-label="Edit proposal">
-                    <i class="bi bi-pencil-fill"></i>
+                    {{ icon("pencil-fill") }}
                 </button>
                 <button type="button" class="btn btn-secondary btn-sm" id="proposalLeave" aria-label="Leave proposal">
-                    <i class="bi bi-box-arrow-left"></i>
+                    {{ icon("box-arrow-left") }}
                 </button>
                 <button type="button" class="ml-1 flex grow items-center gap-2 text-left" data-collapse-toggle
                     aria-expanded="false" aria-controls="proposalBody">
@@ -139,7 +140,7 @@
                 <div>{{ proposal.description }}</div>
                 {% if proposal.url %}
                 <a href="{{ proposal.url }}" target="_blank" class="my-2 inline-flex items-center gap-1">
-                    <i class="bi bi-discord"></i> Discord discussion
+                    {{ icon("discord") }} Discord discussion
                 </a>
                 {% endif %}
                 {% if proposal.groups %}
@@ -167,7 +168,7 @@
 
     <div id="errorToast" class="toast" role="alert" aria-live="assertive" hidden>
         <div class="toast__header">
-            <i class="bi bi-exclamation-circle-fill"></i>
+            {{ icon("exclamation-circle-fill") }}
             <strong class="mr-auto">Error</strong>
             <button type="button" class="modal__close" data-dismiss aria-label="Close">&times;</button>
         </div>

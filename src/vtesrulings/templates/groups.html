@@ -1,5 +1,5 @@
 {% extends "layout.html" %}
-{% from "_macros.html" import ruling_card with context %}
+{% from "_macros.html" import ruling_card, icon with context %}
 
 {% block scripts %}
 <script async src="/static/dist/js/groups.js" type="module"></script>
@@ -21,7 +21,7 @@
         <div class="my-3 rounded-lg border border-hairline bg-surface">
             {% for card in current.cards %}
             <div class="row-item" data-uid="{{ card.uid }}" data-name='{{ card.name }}' data-state="{{ card.state }}">
-                <i class="bi bi-circle-fill text-xs {{ state_text[card.state] }}" title="{{ card.state|capitalize }}"></i>
+                {{ icon("circle-fill", "text-xs " ~ state_text[card.state], card.state|capitalize) }}
                 <a href="index.html?uid={{ card.uid }}{{ search_params_2 }}" class="krcg-card mr-auto no-underline"
                     data-noclick="true" data-uid="{{ card.uid }}">{{ card.name }}</a>
                 <div class="krcg-prefix font-mono text-sm text-text-muted">{{ card.prefix | symbolreplace(card.symbols) | safe }}</div>
