@@ -59,8 +59,8 @@
     /* card names in ruling/prefix text — petrol, italic */
     .krcg-card { @apply cursor-pointer italic text-secondary; }
     .krcg-card:hover { @apply underline; text-underline-offset: 0.25em; }
-    /* discipline / type glyphs (ankha webfont), petrol */
-    .krcg-icon { font-family: "Ankha VTES"; font-style: normal; @apply text-secondary; }
+    /* discipline / type glyphs (ankha webfont) — inherit text color, the glyph shape carries the meaning */
+    .krcg-icon { font-family: "Ankha VTES"; font-style: normal; }
     .krcg-clan { font-family: "VTES Clans"; font-style: normal; }
 
     /* krcg.js hover-preview modals (injected by the external script) */
