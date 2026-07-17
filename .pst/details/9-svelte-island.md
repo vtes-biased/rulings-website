@@ -66,13 +66,20 @@ to the front.
 - **#38** Ruling token editor island (symbol/card insert, overlay, restore/delete, save).
 - **#39** Reference editing in the island (footer badges + reference modal).
 - **#40** Group editor island (name/cards/prefixes) + `POST /group` → JSON.
-- **#41** Final retire: delete old TS (`layout.ts`; the retired editor logic in the old `groups.ts` is in git history), drop bootstrap/@popperjs/autocomplete/sass deps + the full bootstrap-icons CSS (swap to inline SVGs); verify #24/#30/#31 + mobile; close #9.
+- **#41** Final retire — **retire half done**: deleted `layout.ts`/`layout.scss`, dropped
+  bootstrap/@popperjs/bootstrap5-autocomplete/sass/bootstrap-icons/@types deps, inlined the icons as
+  SVG (`icon()` macro), asserted no Bootstrap class/import remains; verified #30/#31 + mobile-first
+  **read**. Still open (blocked on the island): Firefox **editing** (#24) + mobile-first **edit** +
+  close #9 — no editor exists to exercise yet.
 
-## Landed together (43+37+36)
-The read side is now fully Tailwind and Bootstrap-CSS/JS-free. Edit mode is intentionally
-editor-less until the island (#38–40): the old contenteditable ruling/group editors were removed,
-so a proposal shows rulings read-only for now. `index/groups/admin.ts` are thin `chrome.ts` imports.
-Deferred: dropping the unused npm deps + deleting orphaned `layout.ts`/`layout.scss` (#41).
+## Landed together (43+37+36, then the #41 retire)
+The read side is fully Tailwind and Bootstrap-free (CSS, JS, and the icon font). Edit mode is
+intentionally editor-less until the island (#38–40): the old contenteditable ruling/group editors
+were removed (which also deletes the #24 Firefox root cause), so a proposal shows rulings read-only
+for now. `index/groups/admin.ts` are thin `chrome.ts` imports; icons are inline SVG via `_macros.html`.
+#41 stays open as the epic's final gate: its remaining clauses (Firefox/mobile **editing**, close #9)
+need the island. Firefox couldn't be automated here (Chrome-only tooling) — verify the read side
+manually in Firefox when convenient; it uses only cross-browser-standard APIs.
 
 ## Suggested sequence
 #35 done → **#42** (Tailwind foundation, before any template touches). Then #43 (convert templates)
