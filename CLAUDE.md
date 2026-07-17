@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A web app for curating official rulings for **VTES** (Vampire: The Eternal Struggle). Authenticated players draft **proposals** to add/edit rulings, groups, and references; proposals are discussed on Discord; a rulemonger/admin **approves** them, at which point the change is serialized to YAML and git-pushed to a **separate** repository (`git@github.com:vtes-biased/vtes-rulings.git`), which is the durable source of truth.
 
-The app is a FastAPI server rendering Jinja templates plus a JSON API, with a TypeScript/Bootstrap frontend built by Parcel. (This `v2` branch has migrated the backend Quart→FastAPI; still pending on the epic: the Svelte editor island replacing `layout.ts` + Parcel — see `.pst/tickets` and `.pst/details/`. `main` is still on Quart.)
+The app is a FastAPI server rendering Jinja templates plus a JSON API, with a TypeScript/Bootstrap frontend built by Vite. (This `v2` branch has migrated the backend Quart→FastAPI and the build Parcel→Vite; still pending on the epic: the Svelte editor island replacing `layout.ts`, and dropping Bootstrap for a modern CSS stack — see `.pst/tickets` and `.pst/details/`. `main` is still on Quart.)
 
 ## Principles (enforced)
 
@@ -25,7 +25,7 @@ The app is a FastAPI server rendering Jinja templates plus a JSON API, with a Ty
 Tooling is `just` + `uv` (npm for the frontend). **Note the README is stale** — it references `make update`/`make serve`, but the Makefile is gone; use `just`.
 
 - `just update` — install/refresh deps (`npm install` + `uv sync --group dev`)
-- `just serve` — run Parcel watcher (via pm2) + the hypercorn ASGI dev server with `--reload --workers 1`; sources `.env`
+- `just serve` — run Vite build watcher (via pm2) + the hypercorn ASGI dev server with `--reload --workers 1`; sources `.env`
 - `just stop` — stop the pm2 frontend process
 - `just lint` / `just fmt` — ruff check + format (line length 100, target py313)
 - `just test` — `TESTING=1 uv run pytest` (excludes the `discord` marker)
@@ -77,4 +77,4 @@ Login proxies to the VEKN site API (`/login`), stores `user_id` in session. `db.
 - `discord.py` — webhook posts (submit creates a thread, approve posts to it).
 - `scraper.py` — scrapes VEKN forum pages to auto-derive a reference id from a URL.
 
-Frontend lives in `src/front/{js,css}` (entry points listed in `package.json` targets); Parcel outputs to `src/vtesrulings/static/dist/`. Templates are in `src/vtesrulings/templates/` (`index.html` cards, `groups.html` groups, `admin.html` users).
+Frontend lives in `src/front/` (`js/` legacy entrypoints being retired, `island/` Svelte); Vite (`vite.config.ts`) outputs to `src/vtesrulings/static/dist/` (stable entry names `js/index.js`, `js/groups.js`, `js/admin.js`, `js/island.js`, `css/layout.css`). Templates are in `src/vtesrulings/templates/` (`index.html` cards, `groups.html` groups, `admin.html` users).

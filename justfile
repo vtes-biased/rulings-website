@@ -33,16 +33,16 @@ stop:
 
 # Remove build artifacts
 clean:
-    rm -rf dist build .parcel-cache *.egg-info src/*.egg-info src/vtesrulings/static/dist .pytest_cache .ruff_cache
+    rm -rf dist *.egg-info src/*.egg-info src/vtesrulings/static/dist .pytest_cache .ruff_cache node_modules/.vite
 
-# Bump version, build (parcel + python), tag, push, attach wheel to GitHub release.
+# Bump version, build (vite + python), tag, push, attach wheel to GitHub release.
 # Default bump is minor (project versioning is major.minor only); pass `just release major` for a major bump.
 release bump="minor":
     #!/usr/bin/env bash
     set -euo pipefail
     git diff --exit-code --quiet
-    rm -rf src/vtesrulings/static/dist dist .parcel-cache
-    NODE_ENV=production npm run build
+    rm -rf src/vtesrulings/static/dist dist
+    npm run build
     new=$(uv version --bump {{ bump }} --short)
     git add pyproject.toml uv.lock
     git commit -m "release: v$new"
