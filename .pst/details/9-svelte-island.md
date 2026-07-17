@@ -59,14 +59,20 @@ to the front.
 
 ## Children (parent:#9)
 - **#35** ✅ Vite+Svelte scaffold, Parcel retired, build/serve wired. *(done)*
-- **#42** Tailwind v4 foundation: `@tailwindcss/vite` + main CSS (`@theme` tokens, fonts, `.krcg-*`); drop bootstrap/sass from the CSS entry.
-- **#43** Convert Jinja templates to Tailwind + retire Bootstrap CSS (layout/index/groups/admin/404).
-- **#36** SSR ruling macro; read pages render rulings server-side; drop client read-render.
-- **#37** Chrome bundle (Tailwind + vanilla/Svelte modal/dropdown/collapse/tooltip/toast #31 + autocomplete).
+- **#42** ✅ Tailwind v4 foundation: `@tailwindcss/vite` + main CSS (`@theme` tokens, fonts, `.krcg-*`). *(done)*
+- **#43** ✅ Convert Jinja templates to Tailwind + retire Bootstrap CSS (layout/index/groups/admin/404). *(done)*
+- **#36** ✅ SSR ruling macro (`_macros.html` + `ruling_body` filter); read pages render rulings server-side; client read-render retired. *(done)*
+- **#37** ✅ Chrome bundle (`chrome.ts`): vanilla modal/collapse/toast #31 + keyboard autocomplete + nav/theme/login/proposal. Tooltips → native `title`; the icon-picker dropdown moved with the editor to the island. *(done)*
 - **#38** Ruling token editor island (symbol/card insert, overlay, restore/delete, save).
 - **#39** Reference editing in the island (footer badges + reference modal).
 - **#40** Group editor island (name/cards/prefixes) + `POST /group` → JSON.
-- **#41** Final retire: delete old TS, drop bootstrap/@popperjs/autocomplete/sass deps; verify #24/#30/#31 + mobile; close #9.
+- **#41** Final retire: delete old TS (`layout.ts`; the retired editor logic in the old `groups.ts` is in git history), drop bootstrap/@popperjs/autocomplete/sass deps + the full bootstrap-icons CSS (swap to inline SVGs); verify #24/#30/#31 + mobile; close #9.
+
+## Landed together (43+37+36)
+The read side is now fully Tailwind and Bootstrap-CSS/JS-free. Edit mode is intentionally
+editor-less until the island (#38–40): the old contenteditable ruling/group editors were removed,
+so a proposal shows rulings read-only for now. `index/groups/admin.ts` are thin `chrome.ts` imports.
+Deferred: dropping the unused npm deps + deleting orphaned `layout.ts`/`layout.scss` (#41).
 
 ## Suggested sequence
 #35 done → **#42** (Tailwind foundation, before any template touches). Then #43 (convert templates)
