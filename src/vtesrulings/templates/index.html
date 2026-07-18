@@ -41,7 +41,7 @@
     {% endif %}
     <div id="rulingsList" data-source="{{ current.uid }}" data-rulebook='{{ (rbk_references or []) | tojson }}'>
         {% for ruling in current.rulings %}
-        {{ ruling_card(ruling, current.uid) }}
+        {{ ruling_card(ruling, current.uid, anchor=True) }}
         {% else %}
         <div class="my-2 text-text-muted">No ruling</div>
         {% endfor %}

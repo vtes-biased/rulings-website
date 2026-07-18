@@ -6,8 +6,21 @@
     {% block head %}
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="Vampire: the Eternal Struggle (VTES) rulings database">
+    <meta name="description" content="{{ og.description if og else 'Vampire: the Eternal Struggle (VTES) rulings database' }}">
     <meta name="keywords" content="Vampire, the Eternal Struggle, VtES, CCG">
+    {% if og %}
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="V:TES Rulings">
+    <meta property="og:title" content="{{ og.title }}">
+    <meta property="og:description" content="{{ og.description }}">
+    <meta property="og:url" content="{{ og.url }}">
+    {% if og.image %}
+    <meta property="og:image" content="{{ og.image }}">
+    <meta name="twitter:card" content="summary_large_image">
+    {% else %}
+    <meta name="twitter:card" content="summary">
+    {% endif %}
+    {% endif %}
     {% block meta %}{% endblock %}
     <link rel="icon" href="/static/img/favicon.ico" sizes="any">
     <link rel="icon" type="image/svg+xml" href="/static/img/favicon.svg">
@@ -31,7 +44,7 @@
     <link rel="stylesheet" href="/static/dist/css/island.css?v={{ version }}">
     <script async src="/static/dist/js/island.js?v={{ version }}" type="module"></script>
     {% endif %}
-    <title>V:TES Rulings Database</title>
+    <title>{{ page_title or 'V:TES Rulings Database' }}</title>
     {% endblock %}
 </head>
 

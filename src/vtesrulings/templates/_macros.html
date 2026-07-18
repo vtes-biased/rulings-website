@@ -1,15 +1,12 @@
-{# Read-mode ruling record card. The island (#38) hydrates edit mode from data-ruling/data-source. #}
-{% macro ruling_card(ruling, source) %}
-<article class="ruling ruling--{{ ruling.state|lower }}" data-source="{{ source }}" data-ruling='{{ ruling | tojson }}'>
-    {% if ruling.state != 'ORIGINAL' %}
-    <span class="ruling__chip">{{ ruling.state|lower }}</span>
-    {% endif %}
-    {% if ruling.kind == 'REMINDER' %}
-    <span class="ruling__reminder">reminder</span>
-    {% endif %}
-    {% if ruling.target.uid != source %}
-    <a class="ruling__group" href="groups.html?uid={{ ruling.target.uid }}{{ search_params_2 }}">{{ ruling.target.name }}</a>
-    {% endif %}
+{# Read-mode ruling record card. The island (#38) hydrates edit mode from data-ruling/data-source.
+   `anchor` adds a stable #r-<uid> target + copy-link (read pages only, not the proposal diff). #}
+{% macro ruling_card(ruling, source, anchor=false) %}
+<article class="ruling ruling--{{ ruling.state|lower }}"{% if anchor %} id="r-{{ ruling.uid }}"{% endif %} data-source="{{ source }}" data-ruling='{{ ruling | tojson }}'>
+    {% if anchor %}<div class="ruling__head">{% endif %}
+    {% if ruling.state != 'ORIGINAL' %}<span class="ruling__chip">{{ ruling.state|lower }}</span>{% endif %}
+    {% if ruling.kind == 'REMINDER' %}<span class="ruling__reminder">reminder</span>{% endif %}
+    {% if ruling.target.uid != source %}<a class="ruling__group" href="groups.html?uid={{ ruling.target.uid }}{{ search_params_2 }}">{{ ruling.target.name }}</a>{% endif %}
+    {% if anchor %}<a class="ruling__anchor" href="#r-{{ ruling.uid }}" data-copy-link aria-label="Copy link to this ruling" title="Copy link to this ruling">{{ icon("link") }}</a></div>{% endif %}
     <div class="ruling__text">{{ ruling | rulingbody | safe }}</div>
     {% if ruling.references %}
     <div class="ruling__refs">
@@ -36,6 +33,7 @@
 "circle-fill": '<circle cx="8" cy="8" r="8"/>',
 "discord": '<path d="M13.545 2.907a13.2 13.2 0 0 0-3.257-1.011.05.05 0 0 0-.052.025c-.141.25-.297.577-.406.833a12.2 12.2 0 0 0-3.658 0 8 8 0 0 0-.412-.833.05.05 0 0 0-.052-.025c-1.125.194-2.22.534-3.257 1.011a.04.04 0 0 0-.021.018C.356 6.024-.213 9.047.066 12.032q.003.022.021.037a13.3 13.3 0 0 0 3.995 2.02.05.05 0 0 0 .056-.019q.463-.63.818-1.329a.05.05 0 0 0-.01-.059l-.018-.011a9 9 0 0 1-1.248-.595.05.05 0 0 1-.02-.066l.015-.019q.127-.095.248-.195a.05.05 0 0 1 .051-.007c2.619 1.196 5.454 1.196 8.041 0a.05.05 0 0 1 .053.007q.121.1.248.195a.05.05 0 0 1-.004.085 8 8 0 0 1-1.249.594.05.05 0 0 0-.03.03.05.05 0 0 0 .003.041c.24.465.515.909.817 1.329a.05.05 0 0 0 .056.019 13.2 13.2 0 0 0 4.001-2.02.05.05 0 0 0 .021-.037c.334-3.451-.559-6.449-2.366-9.106a.03.03 0 0 0-.02-.019m-8.198 7.307c-.789 0-1.438-.724-1.438-1.612s.637-1.613 1.438-1.613c.807 0 1.45.73 1.438 1.613 0 .888-.637 1.612-1.438 1.612m5.316 0c-.788 0-1.438-.724-1.438-1.612s.637-1.613 1.438-1.613c.807 0 1.451.73 1.438 1.613 0 .888-.631 1.612-1.438 1.612"/>',
 "exclamation-triangle-fill": '<path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5m.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2"/>',
-"exclamation-circle-fill": '<path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0M8 4a.905.905 0 0 0-.9.995l.35 3.507a.552.552 0 0 0 1.1 0l.35-3.507A.905.905 0 0 0 8 4m.002 6a1 1 0 1 0 0 2 1 1 0 0 0 0-2"/>'
+"exclamation-circle-fill": '<path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0M8 4a.905.905 0 0 0-.9.995l.35 3.507a.552.552 0 0 0 1.1 0l.35-3.507A.905.905 0 0 0 8 4m.002 6a1 1 0 1 0 0 2 1 1 0 0 0 0-2"/>',
+"link": '<path d="M4.715 6.542 3.343 7.914a3 3 0 1 0 4.243 4.243l1.828-1.829A3 3 0 0 0 8.586 5.5L8 6.086a1 1 0 0 0-.154.199 2 2 0 0 1 .861 3.337L6.88 11.45a2 2 0 1 1-2.83-2.83l.793-.792a4 4 0 0 1-.128-1.287z"/><path d="M6.586 4.672A3 3 0 0 0 7.414 9.5l.775-.776a2 2 0 0 1-.896-3.346L9.12 3.55a2 2 0 1 1 2.83 2.83l-.793.792c.112.42.155.855.128 1.287l1.372-1.372a3 3 0 1 0-4.243-4.243z"/>'
 } %}
 {% macro icon(name, cls="", title="") %}<svg viewBox="0 0 16 16" fill="currentColor" width="1em" height="1em" class="inline-block shrink-0 align-[-0.125em] {{ cls }}"{% if title %} role="img" aria-label="{{ title }}"{% else %} aria-hidden="true"{% endif %}>{% if title %}<title>{{ title }}</title>{% endif %}{{ _icons[name] | safe }}</svg>{%- endmacro %}

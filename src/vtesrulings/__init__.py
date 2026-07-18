@@ -260,6 +260,13 @@ async def index(request: Request, page: str, user: db.User | None = Depends(api.
                 current = asdict(manager.get_group(uid, deleted=True))
                 current["rulings"] = [asdict(r) for r in manager.get_rulings(uid, deleted=True)]
                 context["current"] = current
+                name = current["name"] or "Unnamed group"
+                context["page_title"] = f"{name} — V:TES Rulings"
+                context["og"] = {
+                    "title": name,
+                    "description": f"Official V:TES rulings for {name} — {len(current['cards'])} cards.",
+                    "url": f"{discord.SITE_URL_BASE.rstrip('/')}/groups.html?uid={uid}",
+                }
             except KeyError:
                 raise HTTPException(404)
     elif page == "index.html":
@@ -269,6 +276,14 @@ async def index(request: Request, page: str, user: db.User | None = Depends(api.
                 current = asdict(manager.get_card(int(uid)))
                 current["rulings"] = [asdict(r) for r in manager.get_rulings(uid, deleted=True)]
                 context["current"] = current
+                name = current["printed_name"]
+                context["page_title"] = f"{name} — V:TES Rulings"
+                context["og"] = {
+                    "title": name,
+                    "description": f"Rulings and official clarifications for the V:TES card {name}.",
+                    "image": current["img"],
+                    "url": f"{discord.SITE_URL_BASE.rstrip('/')}/index.html?uid={uid}",
+                }
             except KeyError:
                 raise HTTPException(404)
     elif page == "proposal.html":

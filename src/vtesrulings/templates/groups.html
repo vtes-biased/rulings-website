@@ -34,7 +34,7 @@
         <h3 class="my-2 text-lg">Rulings</h3>
         <div id="rulingsList" data-source="{{ current.uid }}" data-rulebook='{{ (rbk_references or []) | tojson }}'>
             {% for ruling in current.rulings %}
-            {{ ruling_card(ruling, current.uid) }}
+            {{ ruling_card(ruling, current.uid, anchor=True) }}
             {% endfor %}
         </div>
     </section>

@@ -266,6 +266,23 @@ function bindCardHover() {
     })
 }
 
+// Per-ruling copy-link: reflect the #r-<uid> anchor in the address bar and copy the permalink.
+function setupCopyLinks() {
+    document.addEventListener("click", async (ev) => {
+        const a = ev.target instanceof Element ? ev.target.closest<HTMLAnchorElement>("a[data-copy-link]") : null
+        if (!a) return
+        ev.preventDefault()
+        const url = new URL(window.location.href)
+        url.hash = a.getAttribute("href") || ""
+        history.replaceState(null, "", url.href)
+        try {
+            await navigator.clipboard.writeText(url.href)
+            a.classList.add("copied")
+            setTimeout(() => a.classList.remove("copied"), 1500)
+        } catch (e) { /* clipboard unavailable (insecure context) */ }
+    })
+}
+
 export function initChrome() {
     setupModals()
     setupAlerts()
@@ -276,6 +293,7 @@ export function initChrome() {
     setupGroups()
     for (const input of document.querySelectorAll<HTMLInputElement>("input.autocomplete")) setupAutocomplete(input)
     bindCardHover()
+    setupCopyLinks()
 }
 
 ready(initChrome)

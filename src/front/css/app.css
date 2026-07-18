@@ -117,6 +117,13 @@
     .ruling--deleted .ruling__chip { @apply text-state-deleted; }
     .ruling__group { @apply mb-1 inline-block rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary no-underline hover:bg-primary/20; }
     .ruling__reminder { @apply mb-1 mr-1.5 inline-block rounded bg-surface-2 px-1.5 text-xs text-text-muted; }
+    /* SSR read-mode header row: badges + a right-aligned copy-link. The island renders the same
+       badges without this wrapper (relying on their own mb-1), so neutralize it only in the row. */
+    .ruling__head { @apply mb-1 flex flex-wrap items-center gap-1.5; }
+    .ruling__head > * { @apply mb-0; }
+    .ruling__anchor { @apply relative ml-auto shrink-0 rounded p-1 text-text-muted no-underline hover:bg-surface-2 hover:text-text; }
+    .ruling__anchor.copied { @apply text-state-new; }
+    .ruling__anchor.copied::after { content: "Copied"; @apply absolute right-0 top-full z-10 mt-1 whitespace-nowrap rounded bg-surface-2 px-1.5 py-0.5 text-xs text-text-muted; }
     .ruling__text { @apply leading-relaxed; }
     .ruling--deleted .ruling__text { @apply text-text-muted line-through; }
     .ruling__refs { @apply mt-3 flex flex-wrap gap-3; }
