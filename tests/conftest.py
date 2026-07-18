@@ -27,12 +27,13 @@ def _test_database():
     # Belt-and-braces against a future edit weakening the line-8 hard-set: never drop a real DB.
     assert db.DB_NAME.endswith("-test"), db.DB_NAME
     maintenance = f"postgresql://{db.DB_USER}:{db.DB_PWD}@localhost/postgres"
+    # psycopg types the query as LiteralString to deter injection; DB_NAME is asserted -test above.
     with psycopg.connect(maintenance, autocommit=True) as conn:
-        conn.execute(f'DROP DATABASE IF EXISTS "{db.DB_NAME}" WITH (FORCE)')
-        conn.execute(f'CREATE DATABASE "{db.DB_NAME}"')
+        conn.execute(f'DROP DATABASE IF EXISTS "{db.DB_NAME}" WITH (FORCE)')  # ty: ignore[no-matching-overload]
+        conn.execute(f'CREATE DATABASE "{db.DB_NAME}"')  # ty: ignore[no-matching-overload]
     yield
     with psycopg.connect(maintenance, autocommit=True) as conn:
-        conn.execute(f'DROP DATABASE IF EXISTS "{db.DB_NAME}" WITH (FORCE)')
+        conn.execute(f'DROP DATABASE IF EXISTS "{db.DB_NAME}" WITH (FORCE)')  # ty: ignore[no-matching-overload]
 
 
 @pytest.fixture(name="rulings_remote", scope="session")

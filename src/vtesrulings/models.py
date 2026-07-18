@@ -41,7 +41,7 @@ class NID(UID):
         return super().__hash__()
 
     def __eq__(self, rhs):
-        return super().__eq__()
+        return super().__eq__(rhs)
 
 
 @pydantic.dataclasses.dataclass

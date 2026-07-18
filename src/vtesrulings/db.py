@@ -83,6 +83,7 @@ async def get_or_create_user(vekn: str) -> User:
                 [vekn, UserCategory.BASIC],
             )
             ret = await ret.fetchone()
+            assert ret is not None  # INSERT ... RETURNING * always yields a row
             return ret
 
 
@@ -133,7 +134,7 @@ def make_admin(username: str):
             logger.warning("%s is now admin", username)
 
 
-async def all_proposal_ids() -> None:
+async def all_proposal_ids() -> set[str]:
     async with POOL.connection() as conn:
         async with conn.cursor() as cursor:
             ret = await cursor.execute("SELECT uid FROM proposals")

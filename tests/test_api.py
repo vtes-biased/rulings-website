@@ -1,4 +1,6 @@
+import krcg.collections
 import pytest
+import typing
 
 import vtesrulings.discord
 from vtesrulings import models, repository
@@ -11,7 +13,9 @@ def test_serialize_ruling():
         def __init__(self, cid, name):
             self.id, self.printed_name = cid, name
 
-    card_map = {100015: FakeCard(100015, "Academic Hunting Ground")}
+    card_map = typing.cast(
+        krcg.collections.CardDict, {100015: FakeCard(100015, "Academic Hunting Ground")}
+    )
     target = models.NID(uid="G00008", name="Permanent not replaced")
 
     def ruling(**kw):
@@ -1186,7 +1190,9 @@ def test_diff_override_only_modified():
         def __init__(self, cid, name):
             self.id, self.unique_name = cid, name
 
-    card_map = {100015: FakeCard(100015, "Academic Hunting Ground")}
+    card_map = typing.cast(
+        krcg.collections.CardDict, {100015: FakeCard(100015, "Academic Hunting Ground")}
+    )
     tgt = models.NID(uid="G1", name="Grp")
 
     def gruling(state, overrides, text="Body [RTR 20070707]"):
@@ -1205,6 +1211,7 @@ def test_diff_override_only_modified():
         rulings={"G1": {"h": gruling(models.State.MODIFIED, {}, text="New body [RTR 20070707]")}}
     )
     change2 = proposal_mod.Manager(card_map, base, prop2).diff().rulings[0].rulings[0]
+    assert change2.previous is not None
     assert change2.previous.text == "Body [RTR 20070707]"
 
 

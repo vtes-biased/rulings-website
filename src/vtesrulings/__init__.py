@@ -102,9 +102,9 @@ def ruling_body(ruling: dict):
     return markupsafe.Markup(newlines(s.strip()))
 
 
-templates.env.globals["version"] = version
-templates.env.globals["external_link"] = external_link
-templates.env.globals["rulings_repo_url"] = repository.RULINGS_REPO_WEB
+templates.env.globals["version"] = version  # ty: ignore[invalid-assignment]  # jinja globals dict
+templates.env.globals["external_link"] = external_link  # ty: ignore[invalid-assignment]
+templates.env.globals["rulings_repo_url"] = repository.RULINGS_REPO_WEB  # ty: ignore[invalid-assignment]
 templates.env.filters["symbolreplace"] = symbol_replace
 templates.env.filters["cardreplace"] = card_replace
 templates.env.filters["newlines"] = newlines

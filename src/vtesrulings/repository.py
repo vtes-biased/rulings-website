@@ -11,6 +11,7 @@ import pathlib
 import typing
 import yaml
 import yamlfix
+import yamlfix.model
 
 from . import models
 from . import utils
@@ -127,12 +128,13 @@ async def recent_changes(repo: git.Repo, limit: int = 8) -> list[dict]:
 
 
 async def async_yaml_load(f: aiofiles.threadpool.text.AsyncTextIOWrapper) -> typing.Any:
-    buffer = io.StringIO(await f.read())
+    buffer = io.StringIO(await f.read())  # ty: ignore[unresolved-attribute]  # aiofiles stub gap
     return yaml.safe_load(buffer)
 
 
 async def load_base(repo: git.Repo, card_map: krcg.collections.CardDict) -> models.Index:
     ret = models.Index()
+    assert repo.working_tree_dir is not None  # never a bare repo
     rulings_dir = pathlib.Path(repo.working_tree_dir) / RULINGS_FILES_PATH
     # build references index
     async with aiofiles.open(rulings_dir / "references.yaml") as f:
@@ -226,7 +228,7 @@ def serialize_ruling(
 async def async_yaml_dump(f: aiofiles.threadpool.text.AsyncTextIOWrapper, data: typing.Any) -> None:
     buffer = io.StringIO()
     yaml.dump(data, buffer, **YAML_PARAMS)
-    await f.write(buffer.getvalue())
+    await f.write(buffer.getvalue())  # ty: ignore[unresolved-attribute]  # aiofiles stub gap
 
 
 async def commit_index(
@@ -245,6 +247,7 @@ async def _commit_index(
     repo: git.Repo, card_map: krcg.collections.CardDict, index: models.Index, description: str
 ) -> None:
     """YAML generation and github commit"""
+    assert repo.working_tree_dir is not None  # never a bare repo
     rulings_dir = pathlib.Path(repo.working_tree_dir) / RULINGS_FILES_PATH
     all_groups = sorted(index.groups.values(), key=lambda x: x.uid)
     goup_ids_map = {}  # map with new stable group IDs assignments
@@ -283,7 +286,7 @@ async def _commit_index(
                 data.setdefault(key, [])
                 data[key].append(serialize_ruling(ruling, card_map))
         await async_yaml_dump(f, data)
-    await asgiref.sync.SyncToAsync(yamlfix.fix_files)(
+    await asgiref.sync.SyncToAsync(yamlfix.fix_files)(  # ty: ignore[no-matching-overload]
         [str(rulings_dir / f) for f in RULINGS_FILES],
         config=yamlfix.model.YamlfixConfig(
             line_length=120,

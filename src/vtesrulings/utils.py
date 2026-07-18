@@ -171,6 +171,8 @@ def check_reference(reference: models.Reference) -> None:
         raise ValueError(f"Ruling URL not from a reference domain: {reference.url}")
     name, date_from, date_to = RULING_AUTHORS[reference.source]
     if date_from or date_to:
+        if not reference.date:
+            raise ValueError(f"Reference {reference.uid} has no date")
         ref_date = datetime.date.fromisoformat(reference.date)
         if date_from and ref_date < date_from:
             raise ValueError(f"{name} was not Rules Director yet on {ref_date}")
@@ -203,7 +205,7 @@ def parse_cards(
 
 
 def parse_references(
-    references: dict[str, models.Reference], text: str
+    references: typing.Mapping[str, models.Reference], text: str
 ) -> typing.Generator[models.ReferencesSubstitution, None, None]:
     """Yield all ruling references in the given text."""
     for token in RE_RULING_REFERENCE.findall(text):
@@ -241,7 +243,7 @@ def random_uid8() -> str:
 
 def build_ruling(
     card_map: krcg.collections.CardDict,
-    references: dict[str, models.Reference],
+    references: typing.Mapping[str, models.Reference],
     text: str,
     target: models.NID,
     uid: str = "",

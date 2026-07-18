@@ -73,6 +73,7 @@ class Manager:
                 ref.url: ref for ref in self.base.references.values() if ref.uid not in remove
             }
             return rev_base[url]
+        raise KeyError()
 
     def all_groups(self, deleted: bool = False) -> typing.Generator[models.Group, None, None]:
         for group in sorted(self.prop.groups.values(), key=lambda g: g.name if g else ""):
@@ -296,44 +297,52 @@ class Manager:
             - this is cached: groups, backrefs and rulings must be set outside.
         """
         card = self.card_map[card_id_or_name]
-        is_crypt = isinstance(card, krcg.models.CryptCard)
-        if is_crypt:
+        ret: models.CryptCard | models.LibraryCard
+        if isinstance(card, krcg.models.CryptCard):
             disciplines = card.disciplines
+            ret = models.CryptCard(
+                uid=str(card.id),
+                name=card.printed_name,
+                types=[s.upper() for s in card.types],
+                text=card.text,
+                text_symbols=list(utils.parse_symbols(card.text)),
+                disciplines=disciplines,
+                printed_name=card.printed_name,
+                img=card.url,
+                clan=card.clan,
+                capacity=card.capacity,
+                group=str(card.group) if card.group else "",
+                advanced=card.advanced,
+            )
+            for variant in card.variants:
+                suffix = variant.suffix
+                ret.variants.append(
+                    models.CardVariant(
+                        uid=str(variant.id),
+                        group=int(suffix[1]) if suffix and suffix[0] == "G" else None,
+                        advanced=suffix.endswith("ADV"),
+                    )
+                )
         else:
+            assert isinstance(card, krcg.models.LibraryCard)
             req = card.discipline_requirement
             disciplines = req.disciplines if req else []
-        kwargs = {
-            "uid": str(card.id),
-            "name": card.printed_name,
-            "types": [s.upper() for s in card.types],
-            "text": card.text,
-            "text_symbols": list(utils.parse_symbols(card.text)),
-            "disciplines": disciplines,
-            "printed_name": card.printed_name,
-            "img": card.url,
-        }
-        if is_crypt:
-            cls = models.CryptCard
-            kwargs.update(
-                {
-                    "clan": card.clan,
-                    "capacity": card.capacity,
-                    "group": str(card.group) if card.group else "",
-                    "advanced": card.advanced,
-                }
-            )
-        else:
-            cls = models.LibraryCard
             costs = {"pool": "", "blood": "", "conviction": ""}
             if card.cost:
                 costs[str(card.cost.type).lower()] = str(card.cost.value)
-            kwargs.update(
+            ret = models.LibraryCard(
+                uid=str(card.id),
+                name=card.printed_name,
+                types=[s.upper() for s in card.types],
+                text=card.text,
+                text_symbols=list(utils.parse_symbols(card.text)),
+                disciplines=disciplines,
+                printed_name=card.printed_name,
+                img=card.url,
                 pool_cost=costs["pool"],
                 blood_cost=costs["blood"],
                 conviction_cost=costs["conviction"],
             )
-
-        ret = cls(**kwargs)
         for s in ret.types:
             if s in utils.ANKHA_SYMBOLS:
                 ret.symbols.append(models.SymbolSubstitution(text=s, symbol=utils.ANKHA_SYMBOLS[s]))
@@ -343,15 +352,6 @@ class Manager:
                 ret.symbols.append(
                     models.SymbolSubstitution(text=s, symbol=utils.ANKHA_SYMBOLS[key])
                 )
-        for variant in card.variants:
-            suffix = variant.suffix
-            ret.variants.append(
-                models.CardVariant(
-                    uid=str(variant.id),
-                    group=int(suffix[1]) if suffix and suffix[0] == "G" else None,
-                    advanced=suffix.endswith("ADV"),
-                )
-            )
         return ret
 
     def build_ruling(
@@ -498,7 +498,9 @@ class Manager:
         self.prop.groups[uid] = group
         return group
 
-    def update_group(self, uid: str, name: str = "", cards: dict[str, str] = None) -> models.Group:
+    def update_group(
+        self, uid: str, name: str = "", cards: dict[str, str] | None = None
+    ) -> models.Group:
         """Insert or Update a group. It's an update if the `uid` is given.
         It can be used to update a group's name.
         """
@@ -841,15 +843,15 @@ class Manager:
         return ret
 
 
-class ModifiedDict(collections.abc.Mapping):
+class ModifiedDict(collections.abc.Mapping[str, models.Reference]):
     """Utility class used to provide a cheap no-copy dict overlay.
     Useful for building Ruling objects, since a references map is required."""
 
-    def __init__(self, base: dict, overlay: dict):
+    def __init__(self, base: dict[str, models.Reference], overlay: dict[str, models.Reference]):
         self.base = base
         self.overlay = overlay
 
-    def __getitem__(self, key: typing.Hashable):
+    def __getitem__(self, key: str):
         if key in self.overlay:
             ret = self.overlay[key]
             if ret.state == models.State.DELETED:

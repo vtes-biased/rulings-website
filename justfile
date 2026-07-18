@@ -16,9 +16,9 @@ fmt:
     uv run ruff check --fix
     uv run ruff format
 
-# Typecheck (advisory: a known backlog is being worked down, see epic on ty adoption)
+# Typecheck (blocking in CI: warnings are errors, so stale ignores/new issues fail)
 typecheck:
-    uv run ty check
+    uv run ty check --error-on-warning
 
 # Run tests (testing mode bypasses VEKN login, excludes discord marker)
 test:

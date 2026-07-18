@@ -46,10 +46,10 @@ class VEKNParser(SmartParser):
         super().__init__(*args, **kwargs)
         self.msg_id: str = msg_id
         self.author: str = ""
-        self.date: datetime.date = None
+        self.date: datetime.date | None = None
 
     def on_tag(self, tag: str, attrs: dict[str, str | None]) -> None:
-        if "MESSAGE" not in self.state and tag == "span" and "kdate" in attrs.get("class", ""):
+        if "MESSAGE" not in self.state and tag == "span" and "kdate" in (attrs.get("class") or ""):
             self.set_state("DATE")
         if tag == "a" and attrs.get("id", "") == self.msg_id:
             self.state.add("MESSAGE")
@@ -57,9 +57,9 @@ class VEKNParser(SmartParser):
             "MESSAGE" in self.state
             and not self.author
             and tag == "a"
-            and "kwho" in attrs.get("class", "")
+            and "kwho" in (attrs.get("class") or "")
         ):
-            author = attrs["href"].split("/")[-1]
+            author = (attrs.get("href") or "").split("/")[-1]
             self.author = VEKN_AUTHORS.get(author, author)
 
     def handle_data(self, data: str) -> None:
@@ -76,8 +76,6 @@ async def get_vekn_reference(url: str):
     parser = VEKNParser(parsed_url.fragment)
     async with aiohttp.ClientSession() as session:
         async with session.get(url) as response:
-            if response.history:
-                url = response.url
             parser.feed(await response.text())
     if not parser.author:
         raise ValueError("Message not found in VEKN forum")

@@ -131,6 +131,7 @@ async def _post(url: str, payload: dict) -> dict:
 
 async def submit_proposal(prop: proposal.Proposal, diff: models.ProposalDiff):
     """Create the discussion thread; the initial message carries the adaptive diff."""
+    assert DISCORD_WEBHOOK, "DISCORD_WEBHOOK not configured"
     data = await _post(
         DISCORD_WEBHOOK + "?wait=true",
         {
@@ -150,6 +151,7 @@ async def submit_proposal(prop: proposal.Proposal, diff: models.ProposalDiff):
 
 async def post_proposal_update(prop: proposal.Proposal, diff: models.ProposalDiff):
     """Post the current diff to the existing thread (the proposer flags edits during discussion)."""
+    assert DISCORD_WEBHOOK, "DISCORD_WEBHOOK not configured"
     await _post(
         DISCORD_WEBHOOK + f"?wait=true&thread_id={prop.channel_id}",
         {
@@ -165,6 +167,7 @@ async def post_proposal_update(prop: proposal.Proposal, diff: models.ProposalDif
 
 
 async def proposal_approved(prop: proposal.Proposal, diff: models.ProposalDiff):
+    assert DISCORD_WEBHOOK, "DISCORD_WEBHOOK not configured"
     await _post(
         DISCORD_WEBHOOK + f"?wait=true&thread_id={prop.channel_id}",
         {
