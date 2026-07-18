@@ -193,7 +193,9 @@ class Manager:
         The CardInGroup object includes the prefix the card should use in the group.
         """
         base = self.base.groups_of_card.get(card_uid, set())
-        for uid in base:
+        # sorted: groups_of_card is a set — a card's groups (and the group rulings derived from
+        # them) must surface in a stable order, not one that shifts with the hash seed.
+        for uid in sorted(base):
             try:
                 group = self.get_group(uid)
                 match = [c for c in group.cards if c.uid == card_uid]

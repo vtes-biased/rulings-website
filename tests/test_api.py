@@ -4,15 +4,6 @@ import vtesrulings.discord
 from vtesrulings import models, repository
 
 
-# These assert against the live card DB + rulings repo, which drift over time (krcg 5.6
-# renames/reordering, updated rulings, retired group ids). Until the pinned-snapshot test
-# harness lands (pst #19), they are expected-fail rather than chasing a moving target.
-LIVE_DATA_XFAIL = pytest.mark.xfail(
-    reason="asserts live card/rulings snapshot; needs pinned test data — pst #19",
-    strict=False,
-)
-
-
 def test_serialize_ruling():
     """A plain ruling serializes to a bare string; a REMINDER or an overridden ruling to a map."""
 
@@ -54,7 +45,6 @@ async def login_and_proposal(client):
     return prop_uid
 
 
-@LIVE_DATA_XFAIL
 @pytest.mark.asyncio
 async def test_get_card(client):
     response = await client.get("/api/card/100000")
@@ -62,122 +52,213 @@ async def test_get_card(client):
     response = await client.get("/api/card/100038")
     assert response.status_code == 200
     assert response.json() == {
+        "uid": "100038",
+        "name": "Alastor",
+        "printed_name": "Alastor",
+        "img": "https://static.krcg.org/card/alastor.jpg",
+        "types": ["POLITICAL ACTION"],
+        "disciplines": [],
+        "text": "Requires a justicar or Inner Circle member.\nChoose a ready Camarilla vampire. Successful referendum means you search your library for an equipment card and put this card and the equipment on the chosen vampire (ignore requirements; shuffle afterward); pay half the cost rounded down of the equipment. The attached vampire can enter combat with a vampire as a +1 stealth Ⓓ action. The attached vampire cannot commit diablerie. A vampire can have only one Alastor.",
+        "symbols": [{"text": "POLITICAL ACTION", "symbol": "2"}],
+        "text_symbols": [],
+        "pool_cost": "",
         "blood_cost": "",
         "conviction_cost": "",
-        "disciplines": [],
-        "groups": [],
-        "img": "https://static.krcg.org/card/alastor.jpg",
-        "name": "Alastor",
-        "pool_cost": "",
-        "printed_name": "Alastor",
-        "symbols": [{"text": "POLITICAL ACTION", "symbol": "2"}],
-        "text": "Requires a justicar or Inner Circle member.\n"
-        "Choose a ready Camarilla vampire. Successful referendum means you "
-        "search your library for an equipment card and put this card and the "
-        "equipment on the chosen vampire (ignore requirements; shuffle afterward); "
-        "pay half the cost rounded down of the "
-        "equipment. The attached vampire can enter combat with a vampire "
-        "as a +1 stealth Ⓓ action. The attached vampire cannot commit "
-        "diablerie. A vampire can have only one Alastor.",
-        "text_symbols": [],
-        "types": ["POLITICAL ACTION"],
-        "uid": "100038",
         "rulings": [
             {
                 "uid": "WUF4F3LL",
+                "target": {"uid": "100038", "name": "Alastor"},
+                "text": "If the weapon retrieved costs blood, that cost is paid by the vampire chosen by the terms. [LSJ 20040518]",
                 "state": "ORIGINAL",
-                "target": {"name": "Alastor", "uid": "100038"},
-                "cards": [],
+                "kind": "RULING",
+                "symbols": [],
                 "references": [
                     {
-                        "text": "[LSJ 20040518]",
-                        "date": "2004-05-18",
-                        "source": "LSJ",
                         "uid": "LSJ 20040518",
+                        "url": "https://groups.google.com/g/rec.games.trading-cards.jyhad/c/4emymfUPwAM/m/B2SCC7L6kuMJ",
+                        "source": "LSJ",
+                        "date": "2004-05-18",
                         "state": "ORIGINAL",
-                        "url": (
-                            "https://groups.google.com/g/"
-                            "rec.games.trading-cards.jyhad/c/4emymfUPwAM/m/B2SCC7L6kuMJ"
-                        ),
-                    },
+                        "text": "[LSJ 20040518]",
+                    }
                 ],
-                "symbols": [],
-                "text": "If the weapon retrieved costs blood, that cost is paid by the "
-                "vampire chosen by the terms. [LSJ 20040518]",
+                "cards": [],
+                "overrides": {},
             },
             {
-                "uid": "KHQHCLMP",
+                "uid": "JZHQGEPS",
+                "target": {"uid": "100038", "name": "Alastor"},
+                "text": "Finding equipment is optional. When no equipment is found, alastor is still attached. [LSJ 20050331-2]",
                 "state": "ORIGINAL",
-                "target": {"name": "Alastor", "uid": "100038"},
-                "cards": [
-                    {
-                        "img": "https://static.krcg.org/card/inscription.jpg",
-                        "name": "Inscription",
-                        "printed_name": "Inscription",
-                        "text": "{Inscription}",
-                        "uid": "100989",
-                    },
-                ],
+                "kind": "RULING",
+                "symbols": [],
                 "references": [
                     {
-                        "text": "[ANK 20200901]",
-                        "uid": "ANK 20200901",
+                        "uid": "LSJ 20050331-2",
+                        "url": "https://groups.google.com/g/rec.games.trading-cards.jyhad/c/NLFFYNok1Ns/m/n7mHhZ_oTRQJ",
+                        "source": "LSJ",
+                        "date": "2005-03-31",
                         "state": "ORIGINAL",
-                        "date": "2020-09-01",
-                        "source": "ANK",
-                        "url": (
-                            "https://www.vekn.net/forum/rules-questions/"
-                            "78830-alastor-and-ankara-citadel#100653"
-                        ),
+                        "text": "[LSJ 20050331-2]",
+                    }
+                ],
+                "cards": [],
+                "overrides": {},
+            },
+            {
+                "uid": "CZFA5NGR",
+                "target": {"uid": "G00110", "name": "Put card in play ignoring requirements"},
+                "text": "Cards requiring a discipline come in play at the inferior version. [RBK equip] [RBK recruit-ally] [RBK employ-retainer]",
+                "state": "ORIGINAL",
+                "kind": "RULING",
+                "symbols": [],
+                "references": [
+                    {
+                        "uid": "RBK equip",
+                        "url": "https://www.vekn.net/rulebook#equip",
+                        "source": "RBK",
+                        "date": None,
+                        "state": "ORIGINAL",
+                        "text": "[RBK equip]",
                     },
                     {
-                        "text": "[LSJ 20040518-2]",
-                        "uid": "LSJ 20040518-2",
+                        "uid": "RBK recruit-ally",
+                        "url": "https://www.vekn.net/rulebook#recruit-ally",
+                        "source": "RBK",
+                        "date": None,
                         "state": "ORIGINAL",
-                        "date": "2004-05-18",
-                        "source": "LSJ",
-                        "url": (
-                            "https://groups.google.com/g/rec.games.trading-cards.jyhad/"
-                            "c/4emymfUPwAM/m/JF_o7OOoCbkJ"
-                        ),
+                        "text": "[RBK recruit-ally]",
+                    },
+                    {
+                        "uid": "RBK employ-retainer",
+                        "url": "https://www.vekn.net/rulebook#employ-retainer",
+                        "source": "RBK",
+                        "date": None,
+                        "state": "ORIGINAL",
+                        "text": "[RBK employ-retainer]",
                     },
                 ],
+                "cards": [],
+                "overrides": {},
+            },
+            {
+                "uid": "WSPIAKSG",
+                "target": {"uid": "G00110", "name": "Put card in play ignoring requirements"},
+                "text": "Requirements do not apply. If the cost is X (e.g. {Reanimated Corpse}), X is zero. If the effect puts/moves a minion into the ready region, that minion can act this turn. [LSJ 20100204] [LSJ 20040518-2] [LSJ 20100302-1]",
+                "state": "ORIGINAL",
+                "kind": "RULING",
                 "symbols": [],
-                "text": "Requirements do not apply. If a discipline is required (eg. "
-                "{Inscription}) and the Alastor vampire does not have it, the "
-                "inferior version is used. [ANK 20200901] [LSJ 20040518-2]",
+                "references": [
+                    {
+                        "uid": "LSJ 20100204",
+                        "url": "https://groups.google.com/g/rec.games.trading-cards.jyhad/c/o5Xnzc8G774/m/yovVizGngKsJ",
+                        "source": "LSJ",
+                        "date": "2010-02-04",
+                        "state": "ORIGINAL",
+                        "text": "[LSJ 20100204]",
+                    },
+                    {
+                        "uid": "LSJ 20040518-2",
+                        "url": "https://groups.google.com/g/rec.games.trading-cards.jyhad/c/4emymfUPwAM/m/JF_o7OOoCbkJ",
+                        "source": "LSJ",
+                        "date": "2004-05-18",
+                        "state": "ORIGINAL",
+                        "text": "[LSJ 20040518-2]",
+                    },
+                    {
+                        "uid": "LSJ 20100302-1",
+                        "url": "https://groups.google.com/g/rec.games.trading-cards.jyhad/c/jmmm0WRUPvs/m/ny5F1OnSUsEJ",
+                        "source": "LSJ",
+                        "date": "2010-03-02",
+                        "state": "ORIGINAL",
+                        "text": "[LSJ 20100302-1]",
+                    },
+                ],
+                "cards": [
+                    {
+                        "uid": "101563",
+                        "name": "Reanimated Corpse",
+                        "printed_name": "Reanimated Corpse",
+                        "img": "https://static.krcg.org/card/reanimatedcorpse.jpg",
+                        "text": "{Reanimated Corpse}",
+                    }
+                ],
+                "overrides": {},
+            },
+            {
+                "uid": "JRJ2ZWBM",
+                "target": {"uid": "G00158", "name": "Political action with illegal terms"},
+                "text": "Cannot be used or played if the conditions for the terms of the referendum cannot be met (e.g. no legal selection, insufficient cards/players to choose from, prohibited by card text, uniqueness, etc). [LSJ 20100129] [ANK 20191228]",
+                "state": "ORIGINAL",
+                "kind": "RULING",
+                "symbols": [],
+                "references": [
+                    {
+                        "uid": "LSJ 20100129",
+                        "url": "https://groups.google.com/g/rec.games.trading-cards.jyhad/c/X8Uu7Sk56P4/m/fgP7NfnDpCkJ",
+                        "source": "LSJ",
+                        "date": "2010-01-29",
+                        "state": "ORIGINAL",
+                        "text": "[LSJ 20100129]",
+                    },
+                    {
+                        "uid": "ANK 20191228",
+                        "url": "https://www.vekn.net/forum/rules-questions/78262-parity-shift-without-target#98358",
+                        "source": "ANK",
+                        "date": "2019-12-28",
+                        "state": "ORIGINAL",
+                        "text": "[ANK 20191228]",
+                    },
+                ],
+                "cards": [],
+                "overrides": {},
+            },
+        ],
+        "groups": [
+            {
+                "uid": "G00110",
+                "name": "Put card in play ignoring requirements",
+                "state": "ORIGINAL",
+                "prefix": "",
+                "symbols": [],
+            },
+            {
+                "uid": "G00158",
+                "name": "Political action with illegal terms",
+                "state": "ORIGINAL",
+                "prefix": "",
+                "symbols": [],
             },
         ],
         "backrefs": [
             {
-                "img": "https://static.krcg.org/card/helicopter.jpg",
+                "uid": "100909",
                 "name": "Helicopter",
                 "printed_name": "Helicopter",
-                "uid": "100909",
+                "img": "https://static.krcg.org/card/helicopter.jpg",
             },
             {
-                "img": "https://static.krcg.org/card/incriminatingvideotape.jpg",
+                "uid": "100972",
                 "name": "Incriminating Videotape",
                 "printed_name": "Incriminating Videotape",
-                "uid": "100972",
+                "img": "https://static.krcg.org/card/incriminatingvideotape.jpg",
             },
             {
-                "img": "https://static.krcg.org/card/mokoleblood.jpg",
+                "uid": "101232",
                 "name": "Mokolé Blood",
                 "printed_name": "Mokolé Blood",
-                "uid": "101232",
+                "img": "https://static.krcg.org/card/mokoleblood.jpg",
             },
             {
-                "img": "https://static.krcg.org/card/shilmulotarot.jpg",
+                "uid": "101767",
                 "name": "Shilmulo Tarot",
                 "printed_name": "Shilmulo Tarot",
-                "uid": "101767",
+                "img": "https://static.krcg.org/card/shilmulotarot.jpg",
             },
         ],
     }
 
 
-@LIVE_DATA_XFAIL
 @pytest.mark.asyncio
 async def test_get_group(client):
     response = await client.get("/api/group/NotAGroup")
@@ -185,258 +266,240 @@ async def test_get_group(client):
     response = await client.get("/api/group/G00005")
     assert response.status_code == 200
     assert response.json() == {
+        "uid": "G00005",
+        "name": "Prevent normal unlock",
+        "state": "ORIGINAL",
         "cards": [
             {
-                "img": "https://static.krcg.org/card/childrenofosiris.jpg",
-                "name": "Children of Osiris",
-                "prefix": "",
-                "printed_name": "Children of Osiris",
-                "symbols": [],
                 "uid": "100339",
+                "name": "Children of Osiris",
+                "printed_name": "Children of Osiris",
+                "img": "https://static.krcg.org/card/childrenofosiris.jpg",
                 "state": "ORIGINAL",
+                "prefix": "",
+                "symbols": [],
             },
             {
-                "img": "https://static.krcg.org/card/coma.jpg",
-                "name": "Coma",
-                "prefix": "[DEM]",
-                "printed_name": "Coma",
-                "symbols": [
-                    {
-                        "text": "[DEM]",
-                        "symbol": "E",
-                    }
-                ],
                 "uid": "100378",
+                "name": "Coma",
+                "printed_name": "Coma",
+                "img": "https://static.krcg.org/card/coma.jpg",
                 "state": "ORIGINAL",
+                "prefix": "[DEM]",
+                "symbols": [{"text": "[DEM]", "symbol": "E"}],
             },
             {
-                "img": "https://static.krcg.org/card/derange.jpg",
-                "name": "Derange",
-                "prefix": "",
-                "printed_name": "Derange",
-                "symbols": [],
                 "uid": "100527",
+                "name": "Derange",
+                "printed_name": "Derange",
+                "img": "https://static.krcg.org/card/derange.jpg",
                 "state": "ORIGINAL",
+                "prefix": "",
+                "symbols": [],
             },
             {
-                "img": "https://static.krcg.org/card/detection.jpg",
-                "name": "Detection",
-                "prefix": "",
-                "printed_name": "Detection",
-                "symbols": [],
                 "uid": "100533",
+                "name": "Detection",
+                "printed_name": "Detection",
+                "img": "https://static.krcg.org/card/detection.jpg",
                 "state": "ORIGINAL",
+                "prefix": "",
+                "symbols": [],
             },
             {
-                "img": "https://static.krcg.org/card/faeriewards.jpg",
-                "name": "Faerie Wards",
-                "prefix": "[MYT]",
-                "printed_name": "Faerie Wards",
-                "symbols": [
-                    {
-                        "text": "[MYT]",
-                        "symbol": "X",
-                    }
-                ],
                 "uid": "100690",
+                "name": "Faerie Wards",
+                "printed_name": "Faerie Wards",
+                "img": "https://static.krcg.org/card/faeriewards.jpg",
                 "state": "ORIGINAL",
+                "prefix": "[MYT]",
+                "symbols": [{"text": "[MYT]", "symbol": "X"}],
             },
             {
-                "img": "https://static.krcg.org/card/fantasyworld.jpg",
-                "name": "Fantasy World",
-                "prefix": "",
-                "printed_name": "Fantasy World",
-                "symbols": [],
                 "uid": "100701",
+                "name": "Fantasy World",
+                "printed_name": "Fantasy World",
+                "img": "https://static.krcg.org/card/fantasyworld.jpg",
                 "state": "ORIGINAL",
+                "prefix": "",
+                "symbols": [],
             },
             {
-                "img": "https://static.krcg.org/card/flashgrenade.jpg",
-                "name": "Flash Grenade",
-                "prefix": "",
-                "printed_name": "Flash Grenade",
-                "symbols": [],
                 "uid": "100745",
+                "name": "Flash Grenade",
+                "printed_name": "Flash Grenade",
+                "img": "https://static.krcg.org/card/flashgrenade.jpg",
                 "state": "ORIGINAL",
+                "prefix": "",
+                "symbols": [],
             },
             {
-                "img": "https://static.krcg.org/card/lextalionis.jpg",
-                "name": "Lextalionis",
-                "prefix": "",
-                "printed_name": "Lextalionis",
-                "symbols": [],
                 "uid": "101099",
+                "name": "Lextalionis",
+                "printed_name": "Lextalionis",
+                "img": "https://static.krcg.org/card/lextalionis.jpg",
                 "state": "ORIGINAL",
+                "prefix": "",
+                "symbols": [],
             },
             {
-                "img": "https://static.krcg.org/card/libertyclubintrigue.jpg",
-                "name": "Liberty Club Intrigue",
-                "prefix": "",
-                "printed_name": "Liberty Club Intrigue",
-                "symbols": [],
                 "uid": "101101",
+                "name": "Liberty Club Intrigue",
+                "printed_name": "Liberty Club Intrigue",
+                "img": "https://static.krcg.org/card/libertyclubintrigue.jpg",
                 "state": "ORIGINAL",
+                "prefix": "",
+                "symbols": [],
             },
             {
-                "img": "https://static.krcg.org/card/mindnumb.jpg",
-                "name": "Mind Numb",
-                "prefix": "",
-                "printed_name": "Mind Numb",
-                "symbols": [],
                 "uid": "101211",
+                "name": "Mind Numb",
+                "printed_name": "Mind Numb",
+                "img": "https://static.krcg.org/card/mindnumb.jpg",
                 "state": "ORIGINAL",
+                "prefix": "",
+                "symbols": [],
             },
             {
-                "img": "https://static.krcg.org/card/mindrape.jpg",
-                "name": "Mind Rape",
-                "prefix": "",
-                "printed_name": "Mind Rape",
-                "symbols": [],
                 "uid": "101215",
+                "name": "Puppet Master",
+                "printed_name": "Puppet Master",
+                "img": "https://static.krcg.org/card/puppetmaster.jpg",
                 "state": "ORIGINAL",
+                "prefix": "[DOM]",
+                "symbols": [{"text": "[DOM]", "symbol": "D"}],
             },
             {
-                "img": "https://static.krcg.org/card/mummystongue.jpg",
-                "name": "Mummy's Tongue",
-                "prefix": "",
-                "printed_name": "Mummy's Tongue",
-                "symbols": [],
                 "uid": "101252",
+                "name": "Mummy's Tongue",
+                "printed_name": "Mummy's Tongue",
+                "img": "https://static.krcg.org/card/mummystongue.jpg",
                 "state": "ORIGINAL",
+                "prefix": "",
+                "symbols": [],
             },
             {
-                "img": "https://static.krcg.org/card/rotschreck.jpg",
-                "name": "Rötschreck",
-                "prefix": "",
-                "printed_name": "Rötschreck",
-                "symbols": [],
                 "uid": "101654",
+                "name": "Rötschreck",
+                "printed_name": "Rötschreck",
+                "img": "https://static.krcg.org/card/rotschreck.jpg",
                 "state": "ORIGINAL",
+                "prefix": "",
+                "symbols": [],
             },
             {
-                "img": "https://static.krcg.org/card/rowanring.jpg",
-                "name": "Rowan Ring",
-                "prefix": "",
-                "printed_name": "Rowan Ring",
-                "symbols": [],
                 "uid": "101655",
+                "name": "Rowan Ring",
+                "printed_name": "Rowan Ring",
+                "img": "https://static.krcg.org/card/rowanring.jpg",
                 "state": "ORIGINAL",
+                "prefix": "",
+                "symbols": [],
             },
             {
-                "img": "https://static.krcg.org/card/sensorydeprivation.jpg",
-                "name": "Sensory Deprivation",
-                "prefix": "",
-                "printed_name": "Sensory Deprivation",
-                "symbols": [],
                 "uid": "101721",
+                "name": "Sensory Deprivation",
+                "printed_name": "Sensory Deprivation",
+                "img": "https://static.krcg.org/card/sensorydeprivation.jpg",
                 "state": "ORIGINAL",
+                "prefix": "",
+                "symbols": [],
             },
             {
-                "img": "https://static.krcg.org/card/serpentsnumbingkiss.jpg",
-                "name": "Serpent's Numbing Kiss",
-                "prefix": "[PRE][SER]",
-                "printed_name": "Serpent's Numbing Kiss",
-                "symbols": [
-                    {"text": "[PRE]", "symbol": "R"},
-                    {"text": "[SER]", "symbol": "S"},
-                ],
                 "uid": "101727",
+                "name": "Serpent's Numbing Kiss",
+                "printed_name": "Serpent's Numbing Kiss",
+                "img": "https://static.krcg.org/card/serpentsnumbingkiss.jpg",
                 "state": "ORIGINAL",
+                "prefix": "[PRE][SER]",
+                "symbols": [{"text": "[PRE]", "symbol": "R"}, {"text": "[SER]", "symbol": "S"}],
             },
             {
-                "img": "https://static.krcg.org/card/shacklesofenkidu.jpg",
-                "name": "Shackles of Enkidu",
-                "prefix": "",
-                "printed_name": "Shackles of Enkidu",
-                "symbols": [],
                 "uid": "101733",
+                "name": "Shackles of Enkidu",
+                "printed_name": "Shackles of Enkidu",
+                "img": "https://static.krcg.org/card/shacklesofenkidu.jpg",
                 "state": "ORIGINAL",
+                "prefix": "",
+                "symbols": [],
             },
             {
-                "img": "https://static.krcg.org/card/sheepdog.jpg",
-                "name": "Sheepdog",
-                "prefix": "",
-                "printed_name": "Sheepdog",
-                "symbols": [],
                 "uid": "101762",
+                "name": "Sheepdog",
+                "printed_name": "Sheepdog",
+                "img": "https://static.krcg.org/card/sheepdog.jpg",
                 "state": "ORIGINAL",
+                "prefix": "",
+                "symbols": [],
             },
             {
-                "img": "https://static.krcg.org/card/snipehunt.jpg",
-                "name": "Snipe Hunt",
-                "prefix": "",
-                "printed_name": "Snipe Hunt",
-                "symbols": [],
                 "uid": "101815",
+                "name": "Snipe Hunt",
+                "printed_name": "Snipe Hunt",
+                "img": "https://static.krcg.org/card/snipehunt.jpg",
                 "state": "ORIGINAL",
+                "prefix": "",
+                "symbols": [],
             },
             {
-                "img": "https://static.krcg.org/card/spikethrower.jpg",
-                "name": "Spike-Thrower",
-                "prefix": "",
-                "printed_name": "Spike-Thrower",
-                "symbols": [],
                 "uid": "101846",
+                "name": "Spike-Thrower",
+                "printed_name": "Spike-Thrower",
+                "img": "https://static.krcg.org/card/spikethrower.jpg",
                 "state": "ORIGINAL",
+                "prefix": "",
+                "symbols": [],
             },
             {
-                "img": "https://static.krcg.org/card/toreadorgrandball.jpg",
-                "name": "Toreador Grand Ball",
-                "prefix": "",
-                "printed_name": "Toreador Grand Ball",
-                "symbols": [],
                 "uid": "101989",
+                "name": "Toreador Grand Ball",
+                "printed_name": "Toreador Grand Ball",
+                "img": "https://static.krcg.org/card/toreadorgrandball.jpg",
                 "state": "ORIGINAL",
+                "prefix": "",
+                "symbols": [],
             },
             {
-                "img": "https://static.krcg.org/card/visionquest.jpg",
-                "name": "Visionquest",
-                "prefix": "",
-                "printed_name": "Visionquest",
-                "symbols": [],
                 "uid": "102125",
+                "name": "Visionquest",
+                "printed_name": "Visionquest",
+                "img": "https://static.krcg.org/card/visionquest.jpg",
                 "state": "ORIGINAL",
+                "prefix": "",
+                "symbols": [],
             },
             {
-                "img": "https://static.krcg.org/card/woodenstake.jpg",
-                "name": "Wooden Stake",
-                "prefix": "",
-                "printed_name": "Wooden Stake",
-                "symbols": [],
                 "uid": "102192",
+                "name": "Wooden Stake",
+                "printed_name": "Wooden Stake",
+                "img": "https://static.krcg.org/card/woodenstake.jpg",
                 "state": "ORIGINAL",
+                "prefix": "",
+                "symbols": [],
             },
         ],
-        "name": "Prevent normal unlock",
         "rulings": [
             {
                 "uid": "ELPPIZXU",
+                "target": {"uid": "G00005", "name": "Prevent normal unlock"},
+                "text": 'The "does not unlock as normal" effect is redundant with being infernal. If the minion is infernal, his controller can still pay a pool to unlock him. [LSJ 20050114]',
                 "state": "ORIGINAL",
-                "cards": [],
-                "target": {"name": "Prevent normal unlock", "uid": "G00005"},
+                "kind": "RULING",
+                "symbols": [],
                 "references": [
                     {
-                        "text": "[LSJ 20050114]",
                         "uid": "LSJ 20050114",
-                        "state": "ORIGINAL",
+                        "url": "https://groups.google.com/g/rec.games.trading-cards.jyhad/c/JWiZmyC2Y6s/m/q6JHYrE1zKYJ",
                         "source": "LSJ",
                         "date": "2005-01-14",
-                        "url": (
-                            "https://groups.google.com/g/"
-                            "rec.games.trading-cards.jyhad/c/JWiZmyC2Y6s/m/q6JHYrE1zKYJ"
-                        ),
-                    },
+                        "state": "ORIGINAL",
+                        "text": "[LSJ 20050114]",
+                    }
                 ],
-                "symbols": [],
-                "text": (
-                    'The "does not unlock as normal" effect is redundant with being '
-                    "infernal. If the minion is infernal, his controller can still pay "
-                    "a pool to unlock him. [LSJ 20050114]"
-                ),
-            },
+                "cards": [],
+                "overrides": {},
+            }
         ],
-        "uid": "G00005",
-        "state": "ORIGINAL",
     }
 
 
@@ -854,69 +917,71 @@ async def test_add_group(client):
     assert data["cards"] == []
 
 
-@LIVE_DATA_XFAIL
 @pytest.mark.asyncio
 async def test_update_group(client):
     await login_and_proposal(client)
     response = await client.put(
-        "/api/group/G00031",
-        json={
-            "cards": {
-                "100425": "",
-                "101388": "",
-                "101309": "[DOM]",
-            }
-        },
+        "/api/group/G00030",
+        json={"cards": {"100064": "", "101417": "", "101591": "", "101309": "[DOM]"}},
     )
     assert response.status_code == 200
     assert response.json() == {
+        "uid": "G00030",
+        "name": "Vote playable once per game",
+        "state": "MODIFIED",
         "cards": [
             {
-                "img": "https://static.krcg.org/card/corporalreservoir.jpg",
-                "name": "Corporal Reservoir",
-                "prefix": "",
-                "printed_name": "Corporal Reservoir",
+                "uid": "100064",
+                "name": "Ancient Influence",
+                "printed_name": "Ancient Influence",
+                "img": "https://static.krcg.org/card/ancientinfluence.jpg",
                 "state": "ORIGINAL",
+                "prefix": "",
                 "symbols": [],
-                "uid": "100425",
             },
             {
-                "img": "https://static.krcg.org/card/obedience.jpg",
-                "name": "Obedience",
-                "prefix": "[DOM]",
-                "printed_name": "Obedience",
-                "state": "NEW",
-                "symbols": [{"symbol": "D", "text": "[DOM]"}],
                 "uid": "101309",
+                "name": "Obedience",
+                "printed_name": "Obedience",
+                "img": "https://static.krcg.org/card/obedience.jpg",
+                "state": "NEW",
+                "prefix": "[DOM]",
+                "symbols": [{"text": "[DOM]", "symbol": "D"}],
             },
             {
-                "img": "https://static.krcg.org/card/perfectionist.jpg",
-                "name": "Perfectionist",
-                "prefix": "",
-                "printed_name": "Perfectionist",
+                "uid": "101417",
+                "name": "Political Stranglehold",
+                "printed_name": "Political Stranglehold",
+                "img": "https://static.krcg.org/card/politicalstranglehold.jpg",
                 "state": "ORIGINAL",
+                "prefix": "",
                 "symbols": [],
-                "uid": "101388",
+            },
+            {
+                "uid": "101591",
+                "name": "Reins of Power",
+                "printed_name": "Reins of Power",
+                "img": "https://static.krcg.org/card/reinsofpower.jpg",
+                "state": "ORIGINAL",
+                "prefix": "",
+                "symbols": [],
             },
         ],
-        "name": "Master on vampire who can use it",
-        "uid": "G00031",
-        "state": "MODIFIED",
     }
     # The new group also shows on the card
     response = await client.get("/api/card/101309")
     data = response.json()
     assert data["groups"] == [
         {
-            "name": "Master on vampire who can use it",
-            "prefix": "[DOM]",
+            "uid": "G00030",
+            "name": "Vote playable once per game",
             "state": "MODIFIED",
-            "symbols": [{"symbol": "D", "text": "[DOM]"}],
-            "uid": "G00031",
-        },
+            "prefix": "[DOM]",
+            "symbols": [{"text": "[DOM]", "symbol": "D"}],
+        }
     ]
     # As its rulings
-    assert len([r for r in data["rulings"] if r["target"]["uid"] == "G00031"]) > 0
+    assert len([r for r in data["rulings"] if r["target"]["uid"] == "G00030"]) > 0
 
 
 @pytest.mark.asyncio
@@ -933,7 +998,6 @@ async def test_delete_group(client):
         assert r["target"]["uid"] != "G00005"
 
 
-@LIVE_DATA_XFAIL
 @pytest.mark.asyncio
 async def test_complete(client):
     response = await client.get("/api/complete/")
@@ -941,22 +1005,10 @@ async def test_complete(client):
     response = await client.get("/api/complete?query=paris")
     assert response.status_code == 200
     assert response.json() == [
-        {
-            "value": 101352,
-            "label": "Paris Opera House",
-        },
-        {
-            "value": 100468,
-            "label": "Crusade: Paris",
-        },
-        {
-            "value": 101467,
-            "label": "Praxis Seizure: Paris",
-        },
-        {
-            "value": 101127,
-            "label": "The Louvre, Paris",
-        },
+        {"label": "The Louvre, Paris", "value": 101127},
+        {"label": "Paris Opera House", "value": 101352},
+        {"label": "Crusade: Paris", "value": 100468},
+        {"label": "Praxis Seizure: Paris", "value": 101467},
     ]
 
 
