@@ -1,4 +1,5 @@
 import dataclasses
+import logging
 import orjson
 import psycopg
 import urllib.parse
@@ -16,6 +17,7 @@ from . import repository
 from . import scraper
 from . import utils
 
+logger = logging.getLogger()
 router = fastapi.APIRouter()
 
 
@@ -257,10 +259,20 @@ async def approve_proposal(ctx: ProposalCtx = Depends(proposal_update)):
         index,
         f"{ctx.prop.name}\n\n{ctx.prop.description}",
     )
-    await discord.proposal_approved(ctx.prop, diff)
-    state.rulings_index = await repository.load_base(state.rulings_repo, state.cards_map)
+    # Point of no return (pushed): delete + commit now so a later best-effort failure can't orphan
+    # the row. The post-yield update_proposal in proposal_update then no-ops (row gone).
     await db.delete_proposal(ctx.conn, asdict(ctx.prop))
+    await ctx.conn.commit()
     ctx.request.session.pop("proposal", None)
+    # Best-effort follow-ups: an announcement or index-reload failure must not resurrect the proposal.
+    try:
+        await discord.proposal_approved(ctx.prop, diff)
+    except Exception:
+        logger.exception("failed to announce approval on Discord for proposal %s", ctx.prop.uid)
+    try:
+        state.rulings_index = await repository.load_base(state.rulings_repo, state.cards_map)
+    except Exception:
+        logger.exception("failed to reload rulings index after approving proposal %s", ctx.prop.uid)
     return {}
 
 
