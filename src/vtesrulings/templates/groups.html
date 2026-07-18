@@ -38,6 +38,14 @@
             {% endfor %}
         </div>
     </section>
+    {% else %}
+    {# Hold the 2/3 slot at md+ so the list stays pinned right instead of jumping when one is picked;
+       hidden on mobile (flex-col) where it would otherwise sit above the very list it points to. #}
+    <section class="hidden grow md:block md:w-2/3">
+        <div class="flex min-h-48 items-center justify-center rounded-lg border border-dashed border-hairline bg-surface p-8 text-center text-text-muted">
+            Select a group from the list to view its cards and rulings.
+        </div>
+    </section>
     {% endif %}
 
     <nav class="flex flex-col overflow-hidden rounded-lg border border-hairline bg-surface md:sticky md:top-4 md:max-h-[calc(100vh-2rem)] md:w-1/3 md:self-start"
