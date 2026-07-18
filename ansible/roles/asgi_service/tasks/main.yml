@@ -1,0 +1,199 @@
+---
+- name: Assert required inputs
+  ansible.builtin.assert:
+    that:
+      - r.service_name is defined
+      - r.site_root is defined
+      - r.port is defined
+      - r.asgi_app is defined
+      - r.python_version is defined
+      - r.uv_python_install_dir is defined
+      - r.user is defined
+      - r.group is defined
+      - r.wheel_src is defined
+      - r.requirements_src is defined
+      - r.env is defined
+    fail_msg: "asgi_service role missing required r.* inputs"
+
+- name: Set effective paths
+  ansible.builtin.set_fact:
+    _env_dir: "{{ r.env_dir | default('/etc/' ~ r.service_name) }}"
+    _wheels_dir: "{{ r.site_root }}/wheels"
+    _venv_dir: "{{ r.site_root }}/.venv"
+
+- name: Ensure site_root exists
+  ansible.builtin.file:
+    path: "{{ r.site_root }}"
+    state: directory
+    owner: "{{ r.user }}"
+    group: "{{ r.group }}"
+    mode: "0755"
+
+- name: Ensure wheels dir exists
+  ansible.builtin.file:
+    path: "{{ _wheels_dir }}"
+    state: directory
+    owner: "{{ r.user }}"
+    group: "{{ r.group }}"
+    mode: "0755"
+
+- name: Upload app wheel
+  ansible.builtin.copy:
+    src: "{{ r.wheel_src }}"
+    dest: "{{ _wheels_dir }}/"
+    owner: "{{ r.user }}"
+    group: "{{ r.group }}"
+    mode: "0644"
+  notify: Restart asgi service
+
+- name: Upload pinned requirements
+  ansible.builtin.copy:
+    src: "{{ r.requirements_src }}"
+    dest: "{{ r.site_root }}/requirements.txt"
+    owner: "{{ r.user }}"
+    group: "{{ r.group }}"
+    mode: "0644"
+  notify: Restart asgi service
+
+# The uv-managed interpreter must be ensured as root before any venv work: `uv venv`
+# run as the unprivileged service user would otherwise try to download the interpreter
+# into the root-owned install dir and die with EACCES. Idempotent (no-op if present).
+- name: Ensure uv managed-python dir exists
+  ansible.builtin.file:
+    path: "{{ r.uv_python_install_dir }}"
+    state: directory
+    owner: root
+    group: "{{ r.group }}"
+    mode: "0755"
+
+- name: Install uv-managed Python {{ r.python_version }}
+  ansible.builtin.command:
+    argv:
+      - /usr/local/bin/uv
+      - python
+      - install
+      - "{{ r.python_version }}"
+  environment:
+    UV_PYTHON_INSTALL_DIR: "{{ r.uv_python_install_dir }}"
+  register: _uv_python_install
+  changed_when: "'Installed' in _uv_python_install.stderr"
+
+- name: Detect existing venv Python version
+  ansible.builtin.command:
+    argv:
+      - "{{ _venv_dir }}/bin/python"
+      - -c
+      - "import sys; print('{}.{}'.format(*sys.version_info[:2]))"
+  register: _venv_pyver
+  changed_when: false
+  failed_when: false
+
+# The 'creates:' guard makes venv creation a one-time artifact, so a python_version
+# bump would otherwise leave a stale interpreter that requires-python wheels can't
+# resolve against. Drop the mismatched venv here; deps + wheel reinstall below.
+- name: Remove venv when its Python differs from {{ r.python_version }}
+  ansible.builtin.file:
+    path: "{{ _venv_dir }}"
+    state: absent
+  when:
+    - _venv_pyver.rc == 0
+    - _venv_pyver.stdout | trim != r.python_version
+
+- name: Create venv with uv-managed Python {{ r.python_version }}
+  ansible.builtin.command:
+    argv:
+      - /usr/local/bin/uv
+      - venv
+      - --python
+      - "{{ r.python_version }}"
+      - "{{ _venv_dir }}"
+  args:
+    creates: "{{ _venv_dir }}/bin/python"
+  environment:
+    UV_PYTHON_INSTALL_DIR: "{{ r.uv_python_install_dir }}"
+  become: true
+  become_user: "{{ r.user }}"
+
+- name: Install pinned dependencies into venv
+  ansible.builtin.command:
+    argv:
+      - /usr/local/bin/uv
+      - pip
+      - install
+      - --python
+      - "{{ _venv_dir }}/bin/python"
+      - --requirement
+      - "{{ r.site_root }}/requirements.txt"
+  environment:
+    UV_PYTHON_INSTALL_DIR: "{{ r.uv_python_install_dir }}"
+  register: _uv_install_deps
+  changed_when: "'Installed' in _uv_install_deps.stdout or 'Prepared' in _uv_install_deps.stdout"
+  become: true
+  become_user: "{{ r.user }}"
+  notify: Restart asgi service
+
+- name: Install app wheel into venv (force reinstall)
+  ansible.builtin.command:
+    argv:
+      - /usr/local/bin/uv
+      - pip
+      - install
+      - --python
+      - "{{ _venv_dir }}/bin/python"
+      - --reinstall
+      - --no-deps
+      - "{{ _wheels_dir }}/{{ r.wheel_src | basename }}"
+  environment:
+    UV_PYTHON_INSTALL_DIR: "{{ r.uv_python_install_dir }}"
+  register: _uv_install_wheel
+  changed_when: true
+  become: true
+  become_user: "{{ r.user }}"
+  notify: Restart asgi service
+
+- name: Ensure env dir exists
+  ansible.builtin.file:
+    path: "{{ _env_dir }}"
+    state: directory
+    owner: root
+    group: "{{ r.group }}"
+    mode: "0750"
+
+- name: Render environment file
+  ansible.builtin.template:
+    src: env.j2
+    dest: "{{ _env_dir }}/{{ r.service_name }}.env"
+    owner: root
+    group: "{{ r.group }}"
+    mode: "0640"
+  notify: Restart asgi service
+
+# GitHub App private key (PEM) for the approval push. Multi-line, so it can't ride in
+# the systemd EnvironmentFile — delivered as an ansible-vault file (r.github_key_vault)
+# decrypted to the path RULINGS_GITHUB_PRIVATE_KEY points at. fileglob → no-op when the
+# file isn't present, so a deploy without the key configured still succeeds (push then
+# falls back to a plain, unauthenticated push and fails loudly only on approval).
+- name: Deploy GitHub App private key (ansible-vault, optional)
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ _env_dir }}/{{ r.service_name }}_github_app.pem"
+    owner: root
+    group: "{{ r.group }}"
+    mode: "0640"
+  loop: "{{ query('ansible.builtin.fileglob', r.github_key_vault) if r.github_key_vault | default('') else [] }}"
+  notify: Restart asgi service
+
+- name: Render systemd unit
+  ansible.builtin.template:
+    src: service.j2
+    dest: "/etc/systemd/system/{{ r.service_name }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart asgi service
+
+- name: Enable service
+  ansible.builtin.systemd:
+    name: "{{ r.service_name }}"
+    enabled: true
+    daemon_reload: true

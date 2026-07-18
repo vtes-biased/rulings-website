@@ -1,0 +1,15 @@
+---
+# Release-artifact resolution for the deploy playbook. The fetch logic lives in
+# tasks/fetch_release.yml.
+artifact_source: release          # 'release' = download from the GitHub Release; 'local' = use build/
+github_repo: vtes-biased/rulings-website
+release_tag: ""                   # empty = latest (non-prerelease); -e release_tag=vX.Y to pin
+# Optional token to lift the GitHub API rate limit; the repo is public so downloads
+# need no auth.
+github_token: "{{ lookup('ansible.builtin.env', 'GITHUB_TOKEN', default='') }}"
+
+build_dir: "{{ playbook_dir }}/../build"
+app_wheel: >-
+  {{ lookup('ansible.builtin.fileglob', build_dir + '/vtes_rulings-*.whl',
+            wantlist=True) | sort | last }}
+app_requirements: "{{ build_dir }}/requirements.txt"

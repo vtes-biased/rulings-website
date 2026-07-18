@@ -1,0 +1,68 @@
+# rulings-website deploy — run from this dir: `just deploy`, `just dry-deploy`, `just lint`.
+# The deployed wheel is built by GitHub Actions and attached to the Release; the deploy
+# fetches it itself (tasks/fetch_release.yml), so the server never runs npm/uv build.
+# `build` is for local dev / SOURCE=local deploys.
+#
+# Env-var overrides (prefix the command): RELEASE_TAG=vX.Y, SOURCE=local, QUICK=1
+# (artifacts-only via --tags app — skips db/nginx; use a full deploy for any of those).
+#
+# Ansible tooling comes from the repo-root project's dev group (`uv run --project`).
+# The deploy/dry recipes default ANSIBLE_VAULT_PASSWORD_FILE to ./.vault_pass
+# when unset — decrypt secrets/vault-pass.age into it first (see README).
+
+repo_root := parent_directory(justfile_directory())
+build_dir := justfile_directory() / "build"
+vault_pass := justfile_directory() / ".vault_pass"
+
+default:
+    @just --list
+
+# Install Ansible collection dependencies (incl. the git-sourced server-setup foundation,
+# which reinstalls every run so new commits are picked up while the pin stays on a branch)
+galaxy:
+    uv run --project {{ repo_root }} ansible-galaxy collection install -r requirements.yml -p galaxy_collections
+
+# Remove local build artifacts
+clean:
+    rm -rf {{ build_dir }}
+
+# Build the app wheel (bundles the compiled frontend) + export pinned requirements
+build:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p {{ build_dir }}
+    cd {{ repo_root }} && npm ci && npm run build
+    cd {{ repo_root }} && uv build --wheel --out-dir {{ build_dir }}
+    cd {{ repo_root }} && uv export --frozen --no-dev --no-hashes --no-emit-project \
+      -o {{ build_dir }}/requirements.txt
+
+# Deploy to gravelines (RELEASE_TAG=vX.Y / SOURCE=local / QUICK=1)
+deploy:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export ANSIBLE_VAULT_PASSWORD_FILE="${ANSIBLE_VAULT_PASSWORD_FILE:-{{ vault_pass }}}"
+    if [ -z "${QUICK:-}" ]; then just galaxy; fi
+    extra=""
+    if [ -n "${RELEASE_TAG:-}" ]; then extra="-e release_tag=${RELEASE_TAG}"; fi
+    if [ "${SOURCE:-}" = local ]; then just build; extra="$extra -e artifact_source=local"; fi
+    if [ -n "${QUICK:-}" ]; then extra="$extra --tags app"; fi
+    uv run --project {{ repo_root }} ansible-playbook -i inventories/production playbooks/deploy.yml $extra
+
+# Dry-run (check mode) of the deploy; the release fetch runs for real, localhost-only
+dry-deploy: galaxy
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export ANSIBLE_VAULT_PASSWORD_FILE="${ANSIBLE_VAULT_PASSWORD_FILE:-{{ vault_pass }}}"
+    extra=""
+    if [ -n "${RELEASE_TAG:-}" ]; then extra="-e release_tag=${RELEASE_TAG}"; fi
+    if [ "${SOURCE:-}" = local ]; then just build; extra="$extra -e artifact_source=local"; fi
+    uv run --project {{ repo_root }} ansible-playbook -i inventories/production playbooks/deploy.yml --check --diff $extra
+
+# ansible ping — verify deploy-user SSH access + foundation reachability (Step 0)
+ping: galaxy
+    uv run --project {{ repo_root }} ansible rulings -i inventories/production -m ping
+
+# yamllint + ansible-lint on the ansible tree
+lint: galaxy
+    uv run --project {{ repo_root }} yamllint -s .
+    uv run --project {{ repo_root }} ansible-lint

@@ -1,0 +1,7 @@
+# Ansible collections installed by `just galaxy`
+galaxy_collections/
+# Local build artifacts (SOURCE=local / release fetch)
+build/
+# Decrypted vault password — never commit (decrypt secrets/vault-pass.age into
+# this on demand; CI, if ever added, would write its own from a repo secret)
+.vault_pass

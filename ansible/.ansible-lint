@@ -1,0 +1,23 @@
+---
+# ansible-lint config for the rulings-website deploy
+# See https://ansible.readthedocs.io/projects/lint/configuring/
+
+profile: production
+
+# Collections are pre-installed into galaxy_collections/ by `just galaxy` and resolved
+# via ansible.cfg's collections_path — no need for ansible-lint to re-download.
+offline: true
+
+exclude_paths:
+  - build/
+  - .ansible/
+  - .ansible_facts/
+  - .cache/
+  - galaxy_collections/     # third-party collections installed via `just galaxy`
+  - inventories/production/group_vars/all/vault.yml
+
+# We deliberately pass a single `r` dict into parameterised roles (matches the reference
+# deploys) rather than prefixing every variable, so a role can be invoked with different
+# inputs in one playbook.
+skip_list:
+  - var-naming[no-role-prefix]

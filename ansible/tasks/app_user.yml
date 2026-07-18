@@ -1,0 +1,32 @@
+---
+# Create the unprivileged runtime user/group + app dirs. The server-setup foundation
+# doesn't know this app's user, so the deploy owns it. The user name == the DB role so
+# Postgres peer auth over the unix socket works (DATABASE_URL's password is vestigial).
+- name: Ensure runtime group exists
+  ansible.builtin.group:
+    name: "{{ app_group }}"
+    state: present
+    system: true
+
+- name: Ensure runtime user exists
+  ansible.builtin.user:
+    name: "{{ app_user }}"
+    group: "{{ app_group }}"
+    state: present
+    shell: /usr/sbin/nologin
+    system: true
+    home: "{{ site_root }}"
+    create_home: false
+
+- name: Ensure app directories exist
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ app_group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ site_root }}", owner: "{{ app_user }}", mode: "0755" }
+    - { path: "{{ env_dir }}", owner: "root", mode: "0750" }
+  loop_control:
+    label: "{{ item.path }}"

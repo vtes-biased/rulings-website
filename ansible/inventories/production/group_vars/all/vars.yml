@@ -1,0 +1,55 @@
+---
+# ----------------------------------------------------------------------------
+# Production variables (non-secret). Secrets live in the sibling vault.yml and are
+# referenced via {{ vault_* }} below.
+# ----------------------------------------------------------------------------
+
+# --- identity -------------------------------------------------------------
+# service_name flows to the systemd unit, env-file basename, and nginx_site tag.
+# Must be [A-Za-z0-9_]+ (nginx syslog tag constraint).
+service_name: rulings
+# Runtime user == the existing DB role, so PG unix-socket peer auth just works.
+app_user: vtes-rulings
+app_group: vtes-rulings
+
+# --- domain ---------------------------------------------------------------
+domain: rulings.krcg.org
+
+# --- port (localhost only, nginx proxies to it) ---------------------------
+# Confirm free on gravelines during Step-0 recon (the co-located krcg-bot/timer/
+# archon-bot own their own ports; the v1 rulings app owns whatever it binds now —
+# pick a DIFFERENT port so the new unit can come up before v1 is removed).
+backend_port: 8095
+
+# --- filesystem paths -----------------------------------------------------
+site_root: /opt/rulings
+env_dir: /etc/rulings
+
+# --- versions -------------------------------------------------------------
+# Python is uv-managed (python-build-standalone), independent of the distro.
+python_version: "3.13"
+uv_python_install_dir: /opt/uv/python
+
+# --- database -------------------------------------------------------------
+# Reuse the v1 app's existing `vtes-rulings` DB + role (preserves in-flight proposals).
+# postgres_db is idempotent: with the *existing* password it's a near-no-op that only
+# re-asserts the role and applies statement timeouts — so v1 keeps connecting (TCP
+# password) right up until we stop it, while v2 connects via socket peer auth.
+db_name: vtes-rulings
+db_user: vtes-rulings
+db_password: "{{ vault_db_password }}"
+
+# --- app env vars (non-secret; secrets pulled from vault.yml) --------------
+app_env:
+  # Unix-socket peer auth: the runtime user == db role, so the password is vestigial.
+  DATABASE_URL: "postgresql://{{ db_user }}@/{{ db_name }}?host=/var/run/postgresql"
+  SITE_URL_BASE: "https://{{ domain }}"
+  SESSION_SECRET_KEY: "{{ vault_session_secret_key }}"
+  DISCORD_WEBHOOK: "{{ vault_discord_webhook }}"
+  DISCORD_SERVER_ID: "887471681277399091"   # public server id, not a secret
+  # GitHub App push to vtes-biased/vtes-rulings. The App ID or Client ID works as the
+  # JWT issuer; we use the Client ID. The PRIVATE_KEY value is the runtime PEM path —
+  # env_dir-derived so it always matches where the role copies the vault-delivered key.
+  RULINGS_GITHUB_APP_ID: "{{ vault_rulings_github_client_id }}"
+  RULINGS_GITHUB_INSTALLATION_ID: "{{ vault_rulings_github_installation_id }}"
+  RULINGS_GITHUB_PRIVATE_KEY: "{{ env_dir }}/{{ service_name }}_github_app.pem"

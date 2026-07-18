@@ -1,0 +1,74 @@
+---
+# Download the CI-built artifacts straight from the GitHub Release onto the control
+# node (the asgi_service role then copies the wheel to the host). Self-contained: no
+# gh CLI — so the deploy runs identically from a laptop or a CI runner. Skipped for
+# artifact_source=local (deploy a local `uv build`). The built frontend is bundled
+# inside the wheel (Vite outputs into src/vtesrulings/static/dist/), so there's a
+# single wheel asset + pinned requirements — no separate frontend tarball.
+- name: Fetch release artifacts
+  when: artifact_source == 'release'
+  delegate_to: localhost
+  become: false
+  run_once: true
+  # Run for real even under --check: everything here is localhost-only (fills build/),
+  # and skipping it would starve the wheel-glob assert below.
+  check_mode: false
+  block:
+    - name: Reset local artifact dir
+      ansible.builtin.file:
+        path: "{{ build_dir }}"
+        state: "{{ item }}"
+        mode: "0755"
+      loop:
+        - absent
+        - directory
+
+    - name: Resolve release metadata
+      ansible.builtin.uri:
+        url: >-
+          https://api.github.com/repos/{{ github_repo }}/releases/{{
+          'latest' if (release_tag | length == 0) else 'tags/' ~ release_tag }}
+        headers: >-
+          {{ {'Accept': 'application/vnd.github+json'}
+             | combine({'Authorization': 'Bearer ' ~ github_token}
+                       if github_token else {}) }}
+        return_content: true
+      register: _release
+
+    - name: Report resolved release
+      ansible.builtin.debug:
+        msg: >-
+          Deploying release {{ _release.json.tag_name }}
+          ({{ _release.json.assets | length }} assets) from {{ github_repo }}
+
+    - name: Assert the release carries a wheel
+      ansible.builtin.assert:
+        that:
+          - _release.json.assets
+            | selectattr('name', 'match', 'vtes_rulings-.*\\.whl')
+            | list | length > 0
+        fail_msg: >-
+          Release {{ _release.json.tag_name }} has no wheel asset — re-run the
+          release workflow for this tag.
+
+    - name: Download release assets into build/
+      ansible.builtin.get_url:
+        url: "{{ item.browser_download_url }}"
+        dest: "{{ build_dir }}/{{ item.name }}"
+        mode: "0644"
+      loop: "{{ _release.json.assets }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+- name: Assert build artifacts are present
+  ansible.builtin.assert:
+    that:
+      - app_wheel is string and app_wheel | length > 0
+      - app_requirements is string and app_requirements | length > 0
+    fail_msg: >-
+      build/ is missing the wheel or requirements.txt. For artifact_source=release the
+      Release has no attached wheel yet (run the release workflow); for SOURCE=local
+      run `just build` first.
+  delegate_to: localhost
+  become: false
+  run_once: true

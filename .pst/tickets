@@ -1,6 +1,6 @@
 closed	epic,stack	Epic: Tech stack rework — Quart→FastAPI, Jinja SSR read side + Svelte editor island, single-worker in-memory index, bump krcg. See details.
 open  	epic,deploy	Epic: Deploy via server-setup (gravelines) + GitHub App for vtes-rulings writes — systemd ASGI service, nginx_site, managed postgres_db, tag→deploy CI, Alloy. See details.
-open  	epic,ci	Epic: Build & CI — add ty typecheck, real-but-safe test harness (Postgres container + sandbox rulings remote + pinned card snapshot), unify tag/release with deploy.
+closed	epic,ci	Epic: Build & CI — add ty typecheck, real-but-safe test harness (Postgres container + sandbox rulings remote + pinned card snapshot), unify tag/release with deploy.
 closed	epic,bug	Epic: Bug pass — reproduce & catalog via local run (Chrome+Firefox), then fix. Known: Firefox editing broken, proposal description not saving.
 closed	epic,feature	Epic: Features — proposal diff (site + Discord), mobile-first, supersede group-ruling text, RULING/REMINDER two-kind model. See children.
 closed	stack,backend	Scaffold FastAPI app + ASGI lifespan (card load, repo clone, in-memory Index); replace Quart app + blueprint. parent:#1
@@ -9,11 +9,11 @@ closed	stack,backend	Port the /api JSON surface; convert proposal_update/proposa
 closed	stack,frontend	Build Svelte editor island + Vite build: ruling editing, symbol/card/reference insertion, NEW/MODIFIED/DELETED overlay; retire layout.ts + Parcel. parent:#1
 closed	stack	Bump krcg to >=5.6 and reconcile loader/CardMap API changes. parent:#1
 closed	stack,backend	Enforce single-worker in-memory index model: one worker; refresh Index on approval; document the constraint. parent:#1
-open  	deploy,backend	Create GitHub App (contents:write on vtes-rulings); replace repository.py SSH push with HTTPS + installation token; bot commit identity. parent:#2
-open  	deploy	systemd unit + ASGI server (hypercorn/uvicorn) single worker; env + secrets layout on the host. parent:#2
-open  	deploy	nginx_site vhost + certbot TLS for the app on gravelines. parent:#2
-open  	deploy	Use managed postgres_db role: provision DB + backups; drop the localhost DB assumption. parent:#2
-open  	deploy,ci	tag→deploy GitHub Actions workflow: build frontend + artifact; ship; migrate; restart service. parent:#2
+wip   	deploy,backend	Create GitHub App (contents:write on vtes-rulings); replace repository.py SSH push with HTTPS + installation token; bot commit identity. parent:#2
+wip   	deploy	systemd unit + ASGI server (hypercorn/uvicorn) single worker; env + secrets layout on the host. parent:#2
+wip   	deploy	nginx_site vhost + certbot TLS for the app on gravelines. parent:#2
+wip   	deploy	Use managed postgres_db role: provision DB + backups; drop the localhost DB assumption. parent:#2
+wip   	deploy,ci	tag→deploy GitHub Actions workflow: build frontend + artifact; ship; migrate; restart service. parent:#2
 open  	deploy	Alloy observability wiring + approval→krcg-static rebuild dispatch (repository_dispatch). parent:#2
 closed	ci	Add ty typecheck to justfile + CI; fix the initial batch of type errors. parent:#3
 closed	ci	Dev/test harness: Postgres container + seeded sandbox rulings remote + pinned card snapshot; wire just dev and just test. parent:#3
@@ -54,3 +54,4 @@ closed	feature,frontend	Edit mode: single shared Symbol/card-insert toolbar atta
 closed	frontend,a11y	A11y: modals lack role=dialog/aria-modal/focus trap; the autocomplete lacks combobox ARIA; ReferenceModal should autofocus its first input. parent:#5
 closed	frontend	Read-side papercuts: hide state dots outside a proposal (all-gray noise); '_Choose a name_' renders literally for unnamed groups (use a muted placeholder); one-line VEKN hint in the login modal; remember the active-proposals alert dismissal for the session. parent:#5
 closed	ci	Drive ty check to zero (audit the ~51 remaining: real None-guards vs justified ignores for false positives — Jinja globals, aiofiles, psycopg overloads, krcg-untyped casts), then make the CI typecheck blocking (drop continue-on-error, add --error-on-warning). parent:#3 relates:#18
+closed	deploy	Migrate gravelines from the old myserver foundation to server-setup (add deploy user, staged setup.yml: base/uv then observability then ssh+UFW last, dry-run first). Live 6-service box (archon-bot, archon-backup, timer-bot, krcg-bot, v2-krcg-api, v1 rulings) — vet UFW ports + nginx connection_upgrade map conflict + old nginx http2 form before applying. Prereq for the rulings deploy. parent:#2

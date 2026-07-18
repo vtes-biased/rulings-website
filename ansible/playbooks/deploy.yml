@@ -1,0 +1,66 @@
+---
+# Deploy rulings-website onto the server-setup-provisioned gravelines host.
+# server-setup owns the foundation (base packages incl. Postgres + nginx + certbot,
+# ssh/ufw/tuning, PG backups, Grafana Alloy); this play only ships the app: the
+# managed DB (postgres_db), the ASGI service (our asgi_service role), and the TLS
+# vhost (nginx_site). Runs as the `deploy` user. This replaces the v1 app in place.
+- name: Deploy rulings-website (server-setup foundation)
+  hosts: rulings
+  become: true
+  gather_facts: true
+
+  vars_files:
+    - ../vars/release_artifacts.yml
+
+  # Quick lane: `--tags app` (QUICK=1 in the justfile) ships the wheel + unit only;
+  # any db/nginx/TLS change needs the full (default, untagged) deploy.
+  pre_tasks:
+    - name: Fetch release artifacts (shared)
+      ansible.builtin.import_tasks: ../tasks/fetch_release.yml
+      tags: [always]
+
+    - name: Ensure runtime user + app dirs
+      ansible.builtin.import_tasks: ../tasks/app_user.yml
+
+  roles:
+    # 1. Database + owner role (server-setup). Runs as the postgres OS user for peer
+    #    auth over the unix socket; the runtime user (== db_user) connects the same
+    #    way, so the DATABASE_URL password is vestigial.
+    - role: lionel_panhaleux.server_setup.postgres_db
+      become: true
+      become_user: postgres
+      vars:
+        postgres_db_name: "{{ db_name }}"
+        postgres_db_user: "{{ db_user }}"
+        postgres_db_password: "{{ db_password }}"
+
+    # 2. The app: wheel + venv + hardened systemd unit (single-worker hypercorn).
+    - role: asgi_service
+      tags: [app]
+      r:
+        service_name: "{{ service_name }}"
+        site_root: "{{ site_root }}"
+        port: "{{ backend_port }}"
+        asgi_app: "vtesrulings:app"
+        python_version: "{{ python_version }}"
+        uv_python_install_dir: "{{ uv_python_install_dir }}"
+        user: "{{ app_user }}"
+        group: "{{ app_group }}"
+        wheel_src: "{{ app_wheel }}"
+        requirements_src: "{{ app_requirements }}"
+        env_dir: "{{ env_dir }}"
+        github_key_vault: "{{ service_name }}_github_app.pem.vault"
+        env: "{{ app_env }}"
+
+    # 3. TLS vhost (server-setup nginx_site): reverse proxy → the localhost hypercorn,
+    #    certbot webroot + Let's Encrypt, journald tag nginx_<name>. Tagged `nginx` so the
+    #    first cutover can bring the service up (`--skip-tags nginx`), verify it, then swap
+    #    nginx over (`--tags nginx`) once v1's vhost is removed.
+    - role: lionel_panhaleux.server_setup.nginx_site
+      tags: [nginx]
+      vars:
+        nginx_site_name: "{{ service_name }}"
+        nginx_site_domain: "{{ domain }}"
+        nginx_site_type: proxy
+        nginx_site_upstream: "http://127.0.0.1:{{ backend_port }}"
+        nginx_site_client_max_body_size: "2m"

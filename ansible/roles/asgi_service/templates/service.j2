@@ -1,0 +1,39 @@
+[Unit]
+Description={{ r.service_name }} (VTES rulings FastAPI app)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ r.user }}
+Group={{ r.group }}
+WorkingDirectory={{ r.site_root }}
+EnvironmentFile={{ _env_dir }}/{{ r.service_name }}.env
+# Single worker is mandatory: the rulings Index lives in-process and is mutated on approval.
+ExecStart={{ _venv_dir }}/bin/hypercorn --workers 1 --bind 127.0.0.1:{{ r.port }} --graceful-timeout 5 {{ r.asgi_app }}
+Restart=always
+RestartSec=3
+TimeoutStartSec=60
+# Daily restart re-clones the rulings repo loaded at startup, so commits made outside
+# the app arrive without a redeploy; also a low-key memory-leak defense. Relative to
+# start, so the restart hour drifts with deploys — one mechanism over a fixed timer.
+RuntimeMaxSec=1d
+TimeoutStopSec=15
+KillMode=mixed
+
+# hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+# The app clones the rulings repo to a TemporaryDirectory at startup; PrivateTmp gives
+# it a private, writable /tmp for that without a persistent ReadWritePaths entry.
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadWritePaths={{ r.site_root }}
+
+[Install]
+WantedBy=multi-user.target

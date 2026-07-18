@@ -1,0 +1,17 @@
+---
+# Parametrised via the `r` dict (see playbooks/deploy.yml for the call site).
+# r.service_name          required (systemd unit + env file basename, e.g. "rulings")
+# r.site_root             required (install dir, e.g. /opt/rulings)
+# r.port                  required (localhost port hypercorn binds)
+# r.asgi_app              required (ASGI import path, e.g. "vtesrulings:app")
+# r.python_version        required (uv-managed Python, e.g. "3.13")
+# r.uv_python_install_dir required (where uv stores managed Pythons)
+# r.user                  required (runtime unix user, == db role for PG peer auth)
+# r.group                 required (runtime unix group)
+# r.wheel_src             required (local path to the app wheel)
+# r.requirements_src      required (local path to the pinned requirements.txt)
+# r.env                   required (dict of KEY: value env pairs → EnvironmentFile)
+# r.env_dir               optional (default: /etc/<service_name>)
+# r.github_key_vault      optional (ansible-vault PEM filename in files/; the GitHub
+#                          App private key, decrypted to <env_dir>/<service_name>_github_app.pem)
+r: {}

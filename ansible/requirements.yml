@@ -1,0 +1,14 @@
+---
+collections:
+  - name: community.postgresql
+    version: ">=4.0.0,<5.0.0"  # 4.x drops the deprecated ansible.module_utils._text imports (postgres_db role)
+  - name: community.general
+    version: ">=12.0.0,<14.0.0"
+  - name: ansible.posix
+    version: ">=1.6.2,<3.0.0"
+  # Shared server foundation: the lionel_panhaleux.server_setup collection
+  # (nginx_site / postgres_db roles). Installed from git into galaxy_collections/
+  # (git-ignored) by `just galaxy`. Pin to a tag/SHA once server-setup cuts releases.
+  - name: https://github.com/lionel-panhaleux/server-setup.git
+    type: git
+    version: main
