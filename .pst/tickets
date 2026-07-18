@@ -2,7 +2,7 @@ closed	epic,stack	Epic: Tech stack rework — Quart→FastAPI, Jinja SSR read si
 open  	epic,deploy	Epic: Deploy via server-setup (gravelines) + GitHub App for vtes-rulings writes — systemd ASGI service, nginx_site, managed postgres_db, tag→deploy CI, Alloy. See details.
 open  	epic,ci	Epic: Build & CI — add ty typecheck, real-but-safe test harness (Postgres container + sandbox rulings remote + pinned card snapshot), unify tag/release with deploy.
 closed	epic,bug	Epic: Bug pass — reproduce & catalog via local run (Chrome+Firefox), then fix. Known: Firefox editing broken, proposal description not saving.
-open  	epic,feature	Epic: Features — proposal diff (site + Discord), mobile-first, supersede group-ruling text, RULING/REMINDER two-kind model. See children.
+closed	epic,feature	Epic: Features — proposal diff (site + Discord), mobile-first, supersede group-ruling text, RULING/REMINDER two-kind model. See children.
 closed	stack,backend	Scaffold FastAPI app + ASGI lifespan (card load, repo clone, in-memory Index); replace Quart app + blueprint. parent:#1
 closed	stack,backend	Port SSR pages + auth to FastAPI+Jinja: index/groups/admin, error handlers, template filters, VEKN login, current-user. parent:#1
 closed	stack,backend	Port the /api JSON surface; convert proposal_update/proposal_readonly decorators to FastAPI dependencies. parent:#1
@@ -26,7 +26,7 @@ closed	feature,frontend	Proposal diff view on the site: approver landing page (a
 closed	feature,backend	Discord: adaptive diff in the initial proposal message (inline text / bullet list / truncated by size) + post updates to the same thread. parent:#5
 closed	feature	Supersede group-ruling text per card (same ruling identity + shared references; text override only). Design: see detail file. parent:#5
 closed	feature	Two-kind entry model RULING vs REMINDER (reminder reference optional); update check_consistency + YAML marker + editor. Design: see detail file. parent:#5
-wip   	feature,frontend	Mobile-first pass on the read side (Jinja SSR); editor mobile-first is handled in the Svelte island (#9). parent:#5
+closed	feature,frontend	Mobile-first pass on the read side (Jinja SSR); editor mobile-first is handled in the Svelte island (#9). parent:#5
 closed	bug,superseded	Active-proposals alert lists every unsubmitted proposal as an inline link with no cap — floods the page (hundreds of entries). Alert links built in __init__.py index route from get_user_proposals. parent:#4
 closed	bug,superseded	Error toast from a failed fetch never auto-dismisses — stays stuck on screen indefinitely (do_fetch error handler in layout.ts). parent:#4
 open  	ci	Tests share the real local Postgres DB and leave orphaned test-user 'Test' proposals behind; harness must use an isolated DB and clean up per-test. parent:#3 relates:#19
