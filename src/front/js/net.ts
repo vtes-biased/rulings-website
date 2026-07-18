@@ -3,6 +3,18 @@
 
 export interface SelectItem { label: string; value: string }
 
+export const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
+// Focus trap: on Tab, wrap first↔last among the visible focusables inside `node`.
+export function trapTab(e: KeyboardEvent, node: HTMLElement) {
+    if (e.key !== "Tab") return
+    const f = [...node.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => el.offsetParent !== null)
+    if (!f.length) return
+    const [first, last] = [f[0], f[f.length - 1]]
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus() }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
+}
+
 export function ready(fn: () => void) {
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", fn)
     else fn()

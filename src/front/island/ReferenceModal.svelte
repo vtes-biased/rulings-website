@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { debounce } from "../js/net.js"
+    import { debounce, FOCUSABLE, trapTab } from "../js/net.js"
     import type { Reference } from "./types"
 
     // Add-reference modal: search an existing reference by URL or label, pick a rulebook reference,
@@ -99,12 +99,19 @@
             urlError = e.message
         }
     }
+
+    function dialog(node: HTMLElement) {
+        ;(node.querySelector<HTMLElement>("input, textarea, select") ?? node.querySelector<HTMLElement>(FOCUSABLE))?.focus()
+        const onKey = (e: KeyboardEvent) => trapTab(e, node)
+        node.addEventListener("keydown", onKey)
+        return { destroy: () => node.removeEventListener("keydown", onKey) }
+    }
 </script>
 
 <div class="modal" role="presentation" onclick={(e) => { if (e.target === e.currentTarget) onClose() }}>
-    <div class="modal__dialog">
+    <div class="modal__dialog" role="dialog" aria-modal="true" aria-labelledby="refModalTitle" use:dialog>
         <div class="modal__header">
-            <h1 class="modal__title">Add reference</h1>
+            <h1 class="modal__title" id="refModalTitle">Add reference</h1>
             <button type="button" class="modal__close" aria-label="Close" onclick={onClose}>&times;</button>
         </div>
         <div class="modal__body">

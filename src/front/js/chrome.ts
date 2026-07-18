@@ -1,6 +1,6 @@
 // Always-on chrome behaviors (no framework): modals, toast, collapse, autocomplete, nav, theme
 // toggle, login, and the proposal lifecycle. Ruling/group editing is not here — it is the island.
-import { ready, debounce, showToast, displayError, do_fetch } from "./net.js"
+import { ready, debounce, showToast, displayError, do_fetch, FOCUSABLE, trapTab } from "./net.js"
 import type { SelectItem } from "./net.js"
 export { ready, do_fetch, displayError } from "./net.js"
 
@@ -26,11 +26,19 @@ function displayConsistencyErrors(errors: ConsistencyError[]) {
 }
 
 // --- modals ---
+const focusables = (el: HTMLElement) => [...el.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((n) => n.offsetParent !== null)
+let modalReturnFocus: HTMLElement | null = null
+
 function openModal(modal: HTMLElement) {
+    modalReturnFocus = document.activeElement as HTMLElement | null
     modal.hidden = false
-    ;(modal.querySelector("input, textarea") as HTMLElement | null)?.focus()
+    ;(modal.querySelector<HTMLElement>("input, textarea") ?? focusables(modal)[0])?.focus()
 }
-function closeModal(modal: HTMLElement) { modal.hidden = true }
+function closeModal(modal: HTMLElement) {
+    modal.hidden = true
+    modalReturnFocus?.focus()
+    modalReturnFocus = null
+}
 
 function setupModals() {
     for (const modal of document.querySelectorAll<HTMLElement>(".modal")) {
@@ -38,6 +46,7 @@ function setupModals() {
         for (const btn of modal.querySelectorAll("[data-close]")) {
             btn.addEventListener("click", () => closeModal(modal))
         }
+        modal.addEventListener("keydown", (ev) => trapTab(ev, modal))
     }
     document.addEventListener("keydown", (ev) => {
         if (ev.key !== "Escape") return
@@ -210,10 +219,23 @@ function setupAutocomplete(input: HTMLInputElement) {
     const menu = document.createElement("div")
     menu.className = "ac-menu"
     menu.hidden = true
+    menu.id = (input.id || "ac") + "-menu"
+    menu.setAttribute("role", "listbox")
+    input.setAttribute("role", "combobox")
+    input.setAttribute("aria-autocomplete", "list")
+    input.setAttribute("aria-haspopup", "listbox")
+    input.setAttribute("aria-expanded", "false")
+    input.setAttribute("aria-controls", menu.id)
     input.after(menu)
     let sections: { title?: string; items: AcItem[] }[] = []
     let items: AcItem[] = [] // flattened selectable items (headers excluded), for keyboard nav
     let active = -1
+
+    const setMenuHidden = (h: boolean) => {
+        menu.hidden = h
+        input.setAttribute("aria-expanded", String(!h))
+        if (h) input.removeAttribute("aria-activedescendant")
+    }
 
     const withProp = (href: string): string => {
         const prop = new URLSearchParams(window.location.search).get("prop")
@@ -234,9 +256,13 @@ function setupAutocomplete(input: HTMLInputElement) {
             { title: "Rulings", items: (data.rulings || []).map((r: any) => ({ label: r.target, href: r.url, secondary: r.label })) },
         ]
     }
-    const select = (item: AcItem) => { menu.hidden = true; window.location.href = withProp(item.href) }
+    const select = (item: AcItem) => { setMenuHidden(true); window.location.href = withProp(item.href) }
     const highlight = () => {
-        menu.querySelectorAll(".ac-item").forEach((el, i) => el.setAttribute("aria-selected", String(i === active)))
+        const nodes = menu.querySelectorAll<HTMLElement>(".ac-item")
+        nodes.forEach((el, i) => el.setAttribute("aria-selected", String(i === active)))
+        const cur = active >= 0 ? nodes[active] : null
+        if (cur) input.setAttribute("aria-activedescendant", cur.id)
+        else input.removeAttribute("aria-activedescendant")
     }
     const render = () => {
         active = -1
@@ -247,13 +273,17 @@ function setupAutocomplete(input: HTMLInputElement) {
             if (sec.title) {
                 const h = document.createElement("div")
                 h.className = "ac-header"
+                h.setAttribute("role", "presentation")
                 h.textContent = sec.title
                 menu.append(h)
             }
             for (const item of sec.items) {
-                items.push(item)
                 const el = document.createElement("div")
                 el.className = "ac-item"
+                el.id = `${menu.id}-opt-${items.length}`
+                el.setAttribute("role", "option")
+                el.setAttribute("aria-selected", "false")
+                items.push(item)
                 if (item.secondary) {
                     const main = document.createElement("div"); main.className = "truncate"; main.textContent = item.label
                     const sub = document.createElement("div"); sub.className = "truncate text-xs text-text-muted"; sub.textContent = item.secondary
@@ -265,7 +295,7 @@ function setupAutocomplete(input: HTMLInputElement) {
                 menu.append(el)
             }
         }
-        menu.hidden = items.length === 0
+        setMenuHidden(items.length === 0)
     }
     const search = debounce(async () => {
         const query = input.value.trim()
@@ -277,14 +307,14 @@ function setupAutocomplete(input: HTMLInputElement) {
         render()
     })
     input.addEventListener("input", search)
-    input.addEventListener("focus", () => { if (items.length) menu.hidden = false })
-    input.addEventListener("blur", () => setTimeout(() => { menu.hidden = true }, 150))
+    input.addEventListener("focus", () => { if (items.length) setMenuHidden(false) })
+    input.addEventListener("blur", () => setTimeout(() => setMenuHidden(true), 150))
     input.addEventListener("keydown", (ev) => {
         if (menu.hidden || !items.length) return
         if (ev.key === "ArrowDown") { ev.preventDefault(); active = Math.min(active + 1, items.length - 1); highlight() }
         else if (ev.key === "ArrowUp") { ev.preventDefault(); active = Math.max(active - 1, 0); highlight() }
         else if (ev.key === "Enter") { ev.preventDefault(); select(items[active < 0 ? 0 : active]) }
-        else if (ev.key === "Escape") { menu.hidden = true }
+        else if (ev.key === "Escape") { setMenuHidden(true) }
     })
 }
 

@@ -76,9 +76,9 @@
     </header>
 
     <div class="modal" id="loginModal" hidden>
-        <div class="modal__dialog">
+        <div class="modal__dialog" role="dialog" aria-modal="true" aria-labelledby="loginModalTitle">
             <div class="modal__header">
-                <h1 class="modal__title">Login</h1>
+                <h1 class="modal__title" id="loginModalTitle">Login</h1>
                 <button type="button" class="modal__close" data-close aria-label="Close">&times;</button>
             </div>
             <form class="modal__body" id="loginForm" method="post" action="/login">
