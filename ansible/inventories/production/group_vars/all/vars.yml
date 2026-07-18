@@ -8,7 +8,8 @@
 # service_name flows to the systemd unit, env-file basename, and nginx_site tag.
 # Must be [A-Za-z0-9_]+ (nginx syslog tag constraint).
 service_name: rulings
-# Runtime user == the existing DB role, so PG unix-socket peer auth just works.
+# Runtime user named after the DB role for tidiness; auth is by password (see
+# DATABASE_URL), so the OS user needn't match the role.
 app_user: vtes-rulings
 app_group: vtes-rulings
 
@@ -41,8 +42,9 @@ db_password: "{{ vault_db_password }}"
 
 # --- app env vars (non-secret; secrets pulled from vault.yml) --------------
 app_env:
-  # Unix-socket peer auth: the runtime user == db role, so the password is vestigial.
-  DATABASE_URL: "postgresql://{{ db_user }}@/{{ db_name }}?host=/var/run/postgresql"
+  # Socket connection with a password: this cluster's pg_hba requires a password on
+  # local connections (v1 used TCP+password), so peer auth isn't available here.
+  DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@/{{ db_name }}?host=/var/run/postgresql"
   SITE_URL_BASE: "https://{{ domain }}"
   SESSION_SECRET_KEY: "{{ vault_session_secret_key }}"
   DISCORD_WEBHOOK: "{{ vault_discord_webhook }}"
