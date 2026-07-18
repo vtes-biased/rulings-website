@@ -128,6 +128,56 @@ async def complete_card(request: Request):
     return [{"label": card.unique_name, "value": card.id} for card in ret]
 
 
+#: Per-section caps on the grouped search dropdown.
+SEARCH_MIN, SEARCH_CARD_CAP, SEARCH_GROUP_CAP, SEARCH_RULING_CAP = 2, 8, 8, 12
+
+
+@router.get("/search")
+async def search(request: Request, manager: proposal.Manager = Depends(proposal_readonly)):
+    """Grouped full-text search for the main box: card names (prefix), group names and ruling
+    texts (substring). Everything is in-memory, so a plain scan is plenty."""
+    text = request.query_params.get("query", "").strip()
+    if len(text) < SEARCH_MIN:
+        return {"cards": [], "groups": [], "rulings": []}
+    q = text.lower()
+    cards = [
+        {"label": card.unique_name, "url": f"index.html?uid={card.id}"}
+        for card in request.app.state.cards_map.complete(text)[:SEARCH_CARD_CAP]
+    ]
+    groups = []
+    for group in manager.all_groups():
+        if q in (group.name or "").lower():
+            groups.append(
+                {"label": group.name or "Unnamed group", "url": f"groups.html?uid={group.uid}"}
+            )
+            if len(groups) >= SEARCH_GROUP_CAP:
+                break
+    rulings = []
+    for ruling in manager.all_rulings():
+        snippet = utils.plain_text(ruling.text)
+        pos = snippet.lower().find(q)
+        if pos < 0:
+            continue
+        # window the snippet around the match so the query stays visible even in a long ruling
+        start = max(0, pos - 40)
+        label = (
+            ("…" if start else "")
+            + snippet[start : start + 120]
+            + ("…" if start + 120 < len(snippet) else "")
+        )
+        page = "groups.html" if ruling.target.uid.startswith(("G", "P")) else "index.html"
+        rulings.append(
+            {
+                "label": label,
+                "target": ruling.target.name,
+                "url": f"{page}?uid={ruling.target.uid}#r-{ruling.uid}",
+            }
+        )
+        if len(rulings) >= SEARCH_RULING_CAP:
+            break
+    return {"cards": cards, "groups": groups, "rulings": rulings}
+
+
 @router.get("/card/{card_id}")
 async def get_card(card_id: int, manager: proposal.Manager = Depends(proposal_readonly)):
     ret = asdict(manager.get_card(card_id))

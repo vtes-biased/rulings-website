@@ -184,46 +184,82 @@ function setupGroups() {
     })
 }
 
-// --- autocomplete: live search; selecting a result loads ?uid= ---
+// --- autocomplete: live search. Flat mode ({label,value} → ?uid=value on the current page, used
+// by admin user search); grouped mode ({cards,groups,rulings} → per-item url, the main box). ---
+interface AcItem { label: string; href: string; secondary?: string }
+
 function setupAutocomplete(input: HTMLInputElement) {
     const server = input.dataset.server
     if (!server) return
+    const grouped = input.dataset.grouped === "true"
     const threshold = Number(input.dataset.suggestionsThreshold || 1)
     const menu = document.createElement("div")
     menu.className = "ac-menu"
     menu.hidden = true
     input.after(menu)
-    let items: SelectItem[] = []
+    let sections: { title?: string; items: AcItem[] }[] = []
+    let items: AcItem[] = [] // flattened selectable items (headers excluded), for keyboard nav
     let active = -1
-    const select = (item: SelectItem) => {
-        menu.hidden = true
-        const url = new URL(window.location.href)
-        url.searchParams.delete("uid")
-        url.searchParams.append("uid", String(item.value))
-        window.location.href = url.href
+
+    const withProp = (href: string): string => {
+        const prop = new URLSearchParams(window.location.search).get("prop")
+        if (!prop) return href
+        const [path, hash] = href.split("#")
+        return `${path}${path.includes("?") ? "&" : "?"}prop=${prop}${hash ? "#" + hash : ""}`
     }
+    const uidHref = (value: string): string => {
+        const u = new URL(window.location.href)
+        u.searchParams.delete("uid"); u.searchParams.delete("prop"); u.searchParams.set("uid", value)
+        return u.pathname + u.search
+    }
+    const toSections = (data: any): typeof sections => {
+        if (!grouped) return [{ items: (data as SelectItem[]).map((d) => ({ label: d.label, href: uidHref(String(d.value)) })) }]
+        return [
+            { title: "Cards", items: (data.cards || []).map((c: any) => ({ label: c.label, href: c.url })) },
+            { title: "Groups", items: (data.groups || []).map((g: any) => ({ label: g.label, href: g.url })) },
+            { title: "Rulings", items: (data.rulings || []).map((r: any) => ({ label: r.target, href: r.url, secondary: r.label })) },
+        ]
+    }
+    const select = (item: AcItem) => { menu.hidden = true; window.location.href = withProp(item.href) }
     const highlight = () => {
-        [...menu.children].forEach((el, i) => el.setAttribute("aria-selected", String(i === active)))
+        menu.querySelectorAll(".ac-item").forEach((el, i) => el.setAttribute("aria-selected", String(i === active)))
     }
     const render = () => {
         active = -1
+        items = []
         menu.replaceChildren()
-        for (const item of items) {
-            const el = document.createElement("div")
-            el.className = "ac-item"
-            el.textContent = item.label
-            el.addEventListener("mousedown", (ev) => { ev.preventDefault(); select(item) })
-            menu.append(el)
+        for (const sec of sections) {
+            if (!sec.items.length) continue
+            if (sec.title) {
+                const h = document.createElement("div")
+                h.className = "ac-header"
+                h.textContent = sec.title
+                menu.append(h)
+            }
+            for (const item of sec.items) {
+                items.push(item)
+                const el = document.createElement("div")
+                el.className = "ac-item"
+                if (item.secondary) {
+                    const main = document.createElement("div"); main.className = "truncate"; main.textContent = item.label
+                    const sub = document.createElement("div"); sub.className = "truncate text-xs text-text-muted"; sub.textContent = item.secondary
+                    el.append(main, sub)
+                } else {
+                    el.textContent = item.label
+                }
+                el.addEventListener("mousedown", (ev) => { ev.preventDefault(); select(item) })
+                menu.append(el)
+            }
         }
         menu.hidden = items.length === 0
     }
     const search = debounce(async () => {
         const query = input.value.trim()
-        if (query.length < threshold) { items = []; render(); return }
+        if (query.length < threshold) { sections = []; render(); return }
         try {
             const response = await fetch(`${server}?query=${encodeURIComponent(query)}`)
-            items = response.ok ? await response.json() : []
-        } catch { items = [] }
+            sections = response.ok ? toSections(await response.json()) : []
+        } catch { sections = [] }
         render()
     })
     input.addEventListener("input", search)

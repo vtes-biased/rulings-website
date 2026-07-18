@@ -105,6 +105,7 @@
     .ac-menu { @apply absolute z-40 mt-1 max-h-[50vh] w-full overflow-y-auto rounded-md border border-hairline bg-surface shadow-lg; }
     .ac-item { @apply cursor-pointer px-3 py-2 text-sm text-text hover:bg-surface-2; }
     .ac-item[aria-selected="true"] { @apply bg-surface-2; }
+    .ac-header { @apply border-b border-hairline bg-surface-2 px-3 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-text-muted; }
 
     /* the signature record card: a state-spined ruling */
     .ruling { @apply relative my-2 rounded-lg border border-hairline bg-surface p-4; border-left-width: 3px; border-left-color: var(--color-state-original); }

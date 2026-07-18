@@ -218,6 +218,15 @@ def parse_references(
         )
 
 
+def plain_text(text: str) -> str:
+    """Ruling/card text stripped of markup for search and snippets: drop [symbol] and [REF]
+    tokens, unwrap {Card} braces, collapse whitespace."""
+    text = RE_RULING_REFERENCE.sub("", text)
+    text = RE_SYMBOL.sub("", text)
+    text = RE_CARD.sub(lambda m: m.group(0)[1:-1], text)
+    return " ".join(text.split())
+
+
 def stable_hash(s: str) -> str:
     """5 bytes hash gives a 8 chars b32 string
     Unlikely collisions bellow 100k items
