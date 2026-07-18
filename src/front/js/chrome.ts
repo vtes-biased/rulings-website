@@ -148,12 +148,26 @@ async function approveProposal(ev: MouseEvent) {
     window.location.href = url.href
 }
 
-async function deleteProposal() {
-    const response = await do_fetch("/api/proposal", { method: "delete" })
-    if (!response) return
-    const url = new URL(window.location.href)
-    url.searchParams.delete("prop")
-    window.location.replace(url.href)
+// Soft delete: defer the irreversible DELETE behind a 6s undo toast (no confirm modal, matching the
+// live-edit ethos). The whole lifecycle bar is frozen during the grace window so nothing races it.
+function deleteProposal() {
+    const toast = document.getElementById("deleteToast")
+    const actions = document.getElementById("proposalActions")
+    if (!toast || !actions) return
+    const buttons = [...actions.querySelectorAll("button")]
+    buttons.forEach((b) => (b.disabled = true))
+    const restore = () => { toast.hidden = true; buttons.forEach((b) => (b.disabled = false)) }
+    const timer = setTimeout(async () => {
+        toast.hidden = true // the undo affordance goes away as the DELETE commits
+        const response = await do_fetch("/api/proposal", { method: "delete" })
+        if (!response) return restore()
+        const url = new URL(window.location.href)
+        url.searchParams.delete("prop")
+        window.location.replace(url.href)
+    }, 6000)
+    const undo = toast.querySelector("[data-undo]") as HTMLElement
+    undo.onclick = () => { clearTimeout(timer); restore() }
+    toast.hidden = false
 }
 
 // Proposal page (proposal.html): start form, lifecycle buttons, and inline name/description

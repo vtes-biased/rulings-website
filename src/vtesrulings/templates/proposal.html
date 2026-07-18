@@ -24,7 +24,7 @@
         <textarea class="input" id="proposalDescription" name="description" placeholder="Description"
             {{ 'disabled' if not proposal.editable }}>{{ proposal.description }}</textarea>
     </form>
-    <div class="mt-3 flex flex-wrap items-center gap-2">
+    <div class="mt-3 flex flex-wrap items-center gap-2" id="proposalActions">
         {% if proposal.editable %}
         {% if proposal.channel_id %}
         <button type="button" class="btn btn-secondary" id="proposalSubmit">Post update to Discord</button>
@@ -44,6 +44,15 @@
         {% endif %}
     </div>
 </section>
+
+{% if proposal.editable %}
+<div id="deleteToast" class="toast" role="status" hidden>
+    <div class="toast__body flex items-center gap-3">
+        <span class="mr-auto">Proposal will be deleted.</span>
+        <button type="button" class="btn btn-secondary btn-sm" data-undo>Undo</button>
+    </div>
+</div>
+{% endif %}
 
 {% if diff and (diff.references or diff.groups or diff.rulings) %}
 {% if diff.rulings %}
