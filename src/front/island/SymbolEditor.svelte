@@ -161,7 +161,7 @@
         display: flex;
         flex-wrap: wrap;
         gap: 0.125rem;
-        max-width: min(20rem, 90vw);
+        width: min(20rem, 90vw);
         max-height: 40vh;
         overflow-y: auto;
         padding: 0.5rem;
