@@ -18,7 +18,7 @@ open  	deploy	Alloy observability wiring + approval→krcg-static rebuild dispat
 closed	ci	Add ty typecheck to justfile + CI; fix the initial batch of type errors. parent:#3
 closed	ci	Dev/test harness: Postgres container + seeded sandbox rulings remote + pinned card snapshot; wire just dev and just test. parent:#3
 closed	ci	Rework CI: real-but-safe test job (Postgres service, sandbox remote, snapshot) + lint + typecheck + frontend build. parent:#3
-open  	ci	Unify version/tag/release with the deploy trigger; drop the wheel-publish framing (this is an app not a library). parent:#3
+closed	ci	Unify version/tag/release with the deploy trigger; drop the wheel-publish framing (this is an app not a library). parent:#3
 closed	bug	FIRST: boot app locally + browser-drive (Chrome + Firefox); catalog every bug found into new parent:#4 tickets. parent:#4
 closed	bug	Fix: proposal name/description not saving — saveProposal() in src/front/js/layout.ts:635 issues PUT /api/proposal/approve (405, HTML body → JSON parse error) instead of PUT /api/proposal. One-line endpoint fix. parent:#4
 closed	bug,superseded	Firefox dynamic editing broken — verify resolved by the Svelte island rewrite; patch only if still broken. parent:#4 addressed-by:#9

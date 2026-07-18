@@ -39,19 +39,17 @@ stop:
 clean:
     rm -rf dist *.egg-info src/*.egg-info src/vtesrulings/static/dist .pytest_cache .ruff_cache node_modules/.vite
 
-# Bump version, build (vite + python), tag, push, attach wheel to GitHub release.
+# Cut a release: bump version, commit, tag, push. The `v*` tag push is the deploy
+# trigger — CI builds the frontend, ships, and restarts the service (see deploy epic).
+# This is an app, not a published library: no wheel is built or attached here.
 # Default bump is minor (project versioning is major.minor only); pass `just release major` for a major bump.
 release bump="minor":
     #!/usr/bin/env bash
     set -euo pipefail
     git diff --exit-code --quiet
-    rm -rf src/vtesrulings/static/dist dist
-    npm run build
     new=$(uv version --bump {{ bump }} --short)
     git add pyproject.toml uv.lock
     git commit -m "release: v$new"
     git tag "v$new"
-    uv build
     git push origin HEAD
     git push origin "v$new"
-    gh release create "v$new" dist/*.whl --generate-notes
