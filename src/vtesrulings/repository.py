@@ -21,6 +21,7 @@ from . import utils
 
 logger = logging.getLogger()
 COMMIT_LOCK = asyncio.Lock()
+_RECENT_CHANGES: tuple[str, int, list[dict]] | None = None  # (HEAD sha, limit, result) memo
 # Read is anonymous over HTTPS (the repo is public); only the push is authenticated.
 RULINGS_GIT = os.getenv("RULINGS_GIT", "https://github.com/vtes-biased/vtes-rulings.git")
 RULINGS_REPO_WEB = "https://github.com/vtes-biased/vtes-rulings"
@@ -33,6 +34,12 @@ GITHUB_API = "https://api.github.com"
 GITHUB_APP_ID = os.getenv("RULINGS_GITHUB_APP_ID")
 GITHUB_INSTALLATION_ID = os.getenv("RULINGS_GITHUB_INSTALLATION_ID")
 GITHUB_PRIVATE_KEY = os.getenv("RULINGS_GITHUB_PRIVATE_KEY")  # path to the App private-key PEM
+# On approval we tell krcg-static to rebuild so approved rulings reach players immediately
+# (else they wait on its 6h cron). Same App, a different installation (krcg-static lives on a
+# personal account, so the App is public and installed there too). Unset -> no dispatch.
+KRCG_STATIC_REPO = os.getenv("KRCG_STATIC_REPO", "lionel-panhaleux/krcg-static")
+KRCG_STATIC_INSTALLATION_ID = os.getenv("KRCG_STATIC_INSTALLATION_ID")
+KRCG_STATIC_DISPATCH_EVENT = "rulings-updated"
 BOT_ACTOR = git.Actor(
     os.getenv("GIT_AUTHOR_NAME", "rulings-bot[bot]"),
     os.getenv("GIT_AUTHOR_EMAIL", "rulings-bot[bot]@users.noreply.github.com"),
@@ -127,20 +134,23 @@ async def clone(repo_dir: str) -> git.Repo:
     return ret
 
 
-async def _installation_token() -> str | None:
-    """Mint a short-lived GitHub App installation token (contents:write) for the push.
+async def _installation_token(installation_id: str | None = GITHUB_INSTALLATION_ID) -> str | None:
+    """Mint a short-lived GitHub App installation token (contents:write).
 
-    Returns None when the App isn't configured (tests, local file remotes) so the caller
-    falls back to a plain push. GitHub accepts the App ID or Client ID as the JWT issuer.
+    Defaults to the vtes-rulings installation (the approval push); pass the krcg-static
+    installation to dispatch its rebuild. Returns None when the App or the installation isn't
+    configured (tests, local file remotes). GitHub accepts the App ID or Client ID as the issuer.
+    The default early-binds GITHUB_INSTALLATION_ID deliberately: a caller passing an explicit
+    None (krcg-static unconfigured) must no-op here, not fall back to the rulings installation.
     """
-    if not (GITHUB_APP_ID and GITHUB_INSTALLATION_ID and GITHUB_PRIVATE_KEY):
+    if not (GITHUB_APP_ID and installation_id and GITHUB_PRIVATE_KEY):
         return None
     now = int(time.time())
     pem = pathlib.Path(GITHUB_PRIVATE_KEY).expanduser().read_text()
     assertion = jwt.encode({"iat": now - 60, "exp": now + 540, "iss": GITHUB_APP_ID}, pem, "RS256")
     async with aiohttp.ClientSession() as session:
         async with session.post(
-            f"{GITHUB_API}/app/installations/{GITHUB_INSTALLATION_ID}/access_tokens",
+            f"{GITHUB_API}/app/installations/{installation_id}/access_tokens",
             headers={
                 "Authorization": f"Bearer {assertion}",
                 "Accept": "application/vnd.github+json",
@@ -151,19 +161,95 @@ async def _installation_token() -> str | None:
             return (await resp.json())["token"]
 
 
+async def dispatch_krcg_static_rebuild() -> None:
+    """Fire a repository_dispatch telling krcg-static to rebuild its data.
+
+    Best-effort: the YAML push already updated the source of truth, and krcg-static's 6h cron is a
+    safety net, so a dispatch failure is logged, not raised. No-op when the installation is unset.
+    """
+    token = await _installation_token(KRCG_STATIC_INSTALLATION_ID)
+    if not token:
+        return
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            f"{GITHUB_API}/repos/{KRCG_STATIC_REPO}/dispatches",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/vnd.github+json",
+            },
+            json={"event_type": KRCG_STATIC_DISPATCH_EVENT},
+        ) as resp:
+            resp.raise_for_status()
+
+
 async def recent_changes(repo: git.Repo, limit: int = 8) -> list[dict]:
-    """A commit summary is the proposal name recorded at approval (see commit_index)."""
+    """Recently changed cards/groups (newest first, deduped), each linking to its on-site page.
+
+    Diff ruling *bodies* keyed by uid, not the `<uid>|<name>` keys: the name half is re-derived
+    from the card DB on every serialization, so one commit can rewrite dozens of key names
+    (krcg printed_name normalization) without touching a single ruling.
+    """
+    path = os.path.join(RULINGS_FILES_PATH, "rulings.yaml")
 
     def _read():
-        path = os.path.join(RULINGS_FILES_PATH, "rulings.yaml")
-        return [
-            {
-                "title": commit.summary[:100],
-                "date": commit.committed_datetime.date().isoformat(),
-                "url": f"{RULINGS_REPO_WEB}/commit/{commit.hexsha}",
-            }
-            for commit in repo.iter_commits(paths=path, max_count=limit)
-        ]
+        global _RECENT_CHANGES
+        head = repo.head.commit.hexsha  # history is append-only; the result only moves on approval
+        cached = _RECENT_CHANGES
+        if cached and cached[:2] == (head, limit):
+            return cached[2]
+
+        blobs: dict[str, dict[str, tuple[str, str]]] = {}
+
+        def bodies(commit: git.Commit) -> dict[str, tuple[str, str]]:
+            try:
+                blob = commit.tree / path
+            except KeyError:
+                return {}
+            if blob.hexsha not in blobs:
+                # uid -> (name, body). Top-level keys are unindented `<uid>|<name>:` lines;
+                # yamlfix single-quotes any name holding a colon, so unwrap before splitting.
+                ret: dict[str, list] = {}
+                uid = None
+                for line in blob.data_stream.read().decode().splitlines():
+                    if line[:1] not in (" ", "#", "-", "") and line.rstrip().endswith(":"):
+                        key = line.rstrip()[:-1]
+                        if key[:1] in ("'", '"'):
+                            q = key[0]
+                            key = key[1:-1].replace(q + q, q)
+                        uid, _, name = key.partition("|")
+                        ret[uid] = [name, []]
+                    elif uid is not None:
+                        ret[uid][1].append(line)
+                blobs[blob.hexsha] = {u: (n, "\n".join(b)) for u, (n, b) in ret.items()}
+            return blobs[blob.hexsha]
+
+        seen: set[str] = set()
+        changes: list[dict] = []
+        # A bounded window of recent commits; may under-fill only if that many in a row are
+        # rename/reference-only (rare — a normal approval changes some card or group).
+        for commit in repo.iter_commits(paths=path, max_count=limit * 6):
+            if len(changes) >= limit:
+                break
+            old = bodies(commit.parents[0]) if commit.parents else {}
+            if not old:  # root, or the commit that first added the file — nothing to diff against
+                continue
+            for uid, (name, body) in bodies(commit).items():
+                if uid in seen or (uid in old and old[uid][1] == body):
+                    continue
+                seen.add(uid)
+                page = "groups.html" if uid.startswith("G") else "index.html"
+                changes.append(
+                    {
+                        "title": name,
+                        "date": commit.committed_datetime.date().isoformat(),
+                        "url": f"{page}?uid={uid}",
+                    }
+                )
+                if len(changes) >= limit:
+                    break
+
+        _RECENT_CHANGES = (head, limit, changes)
+        return changes
 
     return await asgiref.sync.SyncToAsync(_read)()
 
@@ -346,3 +432,7 @@ async def _commit_index(
         await asgiref.sync.SyncToAsync(repo.git.push)(push_url, "HEAD")
     else:
         await asgiref.sync.SyncToAsync(repo.git.push)()
+    try:
+        await dispatch_krcg_static_rebuild()
+    except Exception:
+        logger.warning("krcg-static rebuild dispatch failed", exc_info=True)

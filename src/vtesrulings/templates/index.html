@@ -2,7 +2,7 @@
 {% from "_macros.html" import ruling_card with context %}
 
 {% block scripts %}
-<script async src="/static/dist/js/index.js" type="module"></script>
+<script async src="/static/dist/js/index.js?v={{ version }}" type="module"></script>
 {% endblock%}
 
 {% block content %}
@@ -43,8 +43,8 @@
     <ul class="mt-2 divide-y divide-hairline overflow-hidden rounded-lg border border-hairline bg-surface">
         {% for change in recent_changes %}
         <li class="flex items-baseline gap-3 px-3 py-2">
-            <a class="grow text-text no-underline hover:underline" href="{{ change.url }}" target="_blank"
-                rel="noopener">{{ change.title }}</a>
+            <a class="grow text-text no-underline hover:underline"
+                href="{{ change.url }}{{ search_params_2 }}">{{ change.title }}</a>
             <span class="shrink-0 font-mono text-xs text-text-muted">{{ change.date }}</span>
         </li>
         {% endfor %}

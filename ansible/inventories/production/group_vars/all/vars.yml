@@ -55,3 +55,5 @@ app_env:
   RULINGS_GITHUB_APP_ID: "{{ vault_rulings_github_client_id }}"
   RULINGS_GITHUB_INSTALLATION_ID: "{{ vault_rulings_github_installation_id }}"
   RULINGS_GITHUB_PRIVATE_KEY: "{{ env_dir }}/{{ service_name }}_github_app.pem"
+  # Same GitHub App used to trigger krcg-static rebuild on rulings change (approvals)
+  KRCG_STATIC_INSTALLATION_ID: "147489994"
