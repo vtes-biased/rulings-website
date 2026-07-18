@@ -1,13 +1,16 @@
 import aiofiles
 import aiofiles.threadpool.text
+import aiohttp
 import asgiref.sync
 import asyncio
 import git
 import io
+import jwt
 import krcg.collections
 import logging
 import os
 import pathlib
+import time
 import typing
 import yaml
 import yamlfix
@@ -18,9 +21,22 @@ from . import utils
 
 logger = logging.getLogger()
 COMMIT_LOCK = asyncio.Lock()
-RULINGS_GIT = os.getenv("RULINGS_GIT", "git@github.com:vtes-biased/vtes-rulings.git")
+# Read is anonymous over HTTPS (the repo is public); only the push is authenticated.
+RULINGS_GIT = os.getenv("RULINGS_GIT", "https://github.com/vtes-biased/vtes-rulings.git")
 RULINGS_REPO_WEB = "https://github.com/vtes-biased/vtes-rulings"
-GIT_SSH_COMMAND = os.getenv("GIT_SSH_COMMAND", "ssh -i ~/.ssh/id_rsa")
+# Only used when RULINGS_GIT is an ssh:// remote (unset for the default HTTPS clone).
+GIT_SSH_COMMAND = os.getenv("GIT_SSH_COMMAND")
+# GitHub App identity for the approval push: the app holds the private key (PEM path),
+# mints a ~10min installation token scoped to contents:write, and pushes over HTTPS —
+# no long-lived key on the host. Unset (tests, local file remotes) -> plain push.
+GITHUB_API = "https://api.github.com"
+GITHUB_APP_ID = os.getenv("RULINGS_GITHUB_APP_ID")
+GITHUB_INSTALLATION_ID = os.getenv("RULINGS_GITHUB_INSTALLATION_ID")
+GITHUB_PRIVATE_KEY = os.getenv("RULINGS_GITHUB_PRIVATE_KEY")  # path to the App private-key PEM
+BOT_ACTOR = git.Actor(
+    os.getenv("GIT_AUTHOR_NAME", "rulings-bot[bot]"),
+    os.getenv("GIT_AUTHOR_EMAIL", "rulings-bot[bot]@users.noreply.github.com"),
+)
 RULINGS_FILES_PATH = "rulings/"
 RULINGS_FILES = ("references.yaml", "groups.yaml", "rulings.yaml")
 
@@ -102,12 +118,37 @@ YAML_PARAMS = {"width": 120, "allow_unicode": True, "indent": 2}
 
 
 async def clone(repo_dir: str) -> git.Repo:
+    env = {"GIT_SSH_COMMAND": GIT_SSH_COMMAND} if GIT_SSH_COMMAND else None
     ret = await asgiref.sync.SyncToAsync(git.Repo.clone_from)(
         RULINGS_GIT,
         repo_dir,
-        env={"GIT_SSH_COMMAND": GIT_SSH_COMMAND},
+        env=env,
     )
     return ret
+
+
+async def _installation_token() -> str | None:
+    """Mint a short-lived GitHub App installation token (contents:write) for the push.
+
+    Returns None when the App isn't configured (tests, local file remotes) so the caller
+    falls back to a plain push. GitHub accepts the App ID or Client ID as the JWT issuer.
+    """
+    if not (GITHUB_APP_ID and GITHUB_INSTALLATION_ID and GITHUB_PRIVATE_KEY):
+        return None
+    now = int(time.time())
+    pem = pathlib.Path(GITHUB_PRIVATE_KEY).expanduser().read_text()
+    assertion = jwt.encode({"iat": now - 60, "exp": now + 540, "iss": GITHUB_APP_ID}, pem, "RS256")
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            f"{GITHUB_API}/app/installations/{GITHUB_INSTALLATION_ID}/access_tokens",
+            headers={
+                "Authorization": f"Bearer {assertion}",
+                "Accept": "application/vnd.github+json",
+            },
+            json={"permissions": {"contents": "write"}},
+        ) as resp:
+            resp.raise_for_status()
+            return (await resp.json())["token"]
 
 
 async def recent_changes(repo: git.Repo, limit: int = 8) -> list[dict]:
@@ -293,6 +334,15 @@ async def _commit_index(
             sequence_style="block_style",
         ),
     )
+    # Mint the token before committing: a mint/network failure then aborts with no local
+    # state change (a dangling unpushed commit would stack an empty commit on the retry).
+    token = await _installation_token()
     repo.index.add([os.path.join(RULINGS_FILES_PATH, f) for f in RULINGS_FILES])
-    repo.index.commit(description)
-    await asgiref.sync.SyncToAsync(repo.git.push)()
+    # Explicit actor: a fresh server clone has no user.name/email git config, and the
+    # bot identity keeps approval commits distinct from human ones.
+    repo.index.commit(description, author=BOT_ACTOR, committer=BOT_ACTOR)
+    if token:
+        push_url = RULINGS_GIT.replace("https://", f"https://x-access-token:{token}@", 1)
+        await asgiref.sync.SyncToAsync(repo.git.push)(push_url, "HEAD")
+    else:
+        await asgiref.sync.SyncToAsync(repo.git.push)()

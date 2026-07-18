@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A web app for curating official rulings for **VTES** (Vampire: The Eternal Struggle). Authenticated players draft **proposals** to add/edit rulings, groups, and references; proposals are discussed on Discord; a rulemonger/admin **approves** them, at which point the change is serialized to YAML and git-pushed to a **separate** repository (`git@github.com:vtes-biased/vtes-rulings.git`), which is the durable source of truth.
 
-The app is a FastAPI server rendering Jinja templates plus a JSON API, with a TypeScript/Bootstrap frontend built by Vite. (This `v2` branch has migrated the backend Quart→FastAPI and the build Parcel→Vite; still pending on the epic: the Svelte editor island replacing `layout.ts`, and dropping Bootstrap for a modern CSS stack — see `.pst/tickets` and `.pst/details/`. `main` is still on Quart.)
+The app is a FastAPI server rendering Jinja templates plus a JSON API, with a Svelte editor island (TypeScript) and Tailwind CSS, built by Vite. (The `v2` branch completed the stack rework — Quart→FastAPI, Parcel→Vite, the Svelte editor island replacing the old `layout.ts`, and Bootstrap→Tailwind; see `.pst/tickets` and `.pst/details/`. It's being merged to `main` and deployed to replace the live Quart app.)
 
 ## Principles (enforced)
 
@@ -37,12 +37,12 @@ Frontend build only: `npm run build` (or `npm run front` to watch).
 
 ## Runtime prerequisites
 
-- **PostgreSQL** running locally: database `vtes-rulings`, user `vtes-rulings` (see `db.py` `CONNINFO`, override the name with `DB_NAME`, creds with `DB_USER`/`DB_PWD`).
-- **SSH access** to push to the rulings git repo (`GIT_SSH_COMMAND`, defaults to `ssh -i ~/.ssh/id_rsa`, remote overridable with `RULINGS_GIT`). Approving a proposal commits and pushes to GitHub.
+- **PostgreSQL** running locally: database `vtes-rulings`, user `vtes-rulings` (see `db.py` `CONNINFO`, override the name with `DB_NAME`, creds with `DB_USER`/`DB_PWD`, or the whole DSN with `DATABASE_URL` — prod passes a unix-socket peer-auth DSN).
+- **Rulings repo push**: the read path (startup clone) is anonymous HTTPS on the public `RULINGS_GIT` repo; the *push* on approval authenticates as a **GitHub App** — `repository.py` mints a short-lived installation token from `RULINGS_GITHUB_APP_ID` (App ID or Client ID) + `RULINGS_GITHUB_INSTALLATION_ID` + `RULINGS_GITHUB_PRIVATE_KEY` (PEM path) and pushes over HTTPS as `rulings-bot[bot]`. Unset → plain `git push` (tests, local file remotes). No `id_rsa` on the host.
 - Network access: on startup the app clones the rulings repo to a temp dir and loads the full VEKN card database via `krcg` (`load_local`).
 - **Tests are hermetic** (no SSH/network): `conftest.py` serves a vendored rulings snapshot (`tests/fixtures/rulings/`, pinned commit in `SOURCE`) as a local bare git remote via `RULINGS_GIT`, and runs against a throwaway `vtes-rulings-test` database it creates/drops per session — so the role needs `CREATEDB` and access to the `postgres` maintenance DB. Card data is pinned by the locked `krcg` version (`load_local` reads krcg-packaged CSVs, no network).
 
-Key env vars (`.env`): `DISCORD_WEBHOOK`, `DISCORD_SERVER_ID`. Also read: `SESSION_SECRET_KEY`, `SITE_URL_BASE`, `GIT_SSH_COMMAND`. Vars are read directly via `os.getenv` — notably `TESTING=1` bypasses real VEKN login validation.
+Key env vars (`.env`): `DISCORD_WEBHOOK`, `DISCORD_SERVER_ID`. Also read: `SESSION_SECRET_KEY`, `SITE_URL_BASE`, `DATABASE_URL`, `RULINGS_GIT`, `RULINGS_GITHUB_{APP_ID,INSTALLATION_ID,PRIVATE_KEY}`, `GIT_AUTHOR_{NAME,EMAIL}` (bot identity), and `GIT_SSH_COMMAND` (only if `RULINGS_GIT` is an ssh remote). Vars are read directly via `os.getenv` — notably `TESTING=1` bypasses real VEKN login validation. Deploy to gravelines lives in `ansible/` (see `ansible/README.md`).
 
 ## Architecture
 

@@ -6,6 +6,9 @@ import shutil
 # recreates this database, so it must never resolve to a developer's real `vtes-rulings`.
 os.environ.setdefault("TESTING", "1")
 os.environ["DB_NAME"] = "vtes-rulings-test"
+# DATABASE_URL (the prod DSN var) would short-circuit DB_NAME in db.CONNINFO and route the
+# pool — incl. the truncating teardown — at a real DB while the -test guard still passes.
+os.environ.pop("DATABASE_URL", None)
 
 import asgi_lifespan
 import git

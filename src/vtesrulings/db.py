@@ -14,7 +14,8 @@ logger = logging.getLogger()
 DB_USER = os.getenv("DB_USER", "vtes-rulings")
 DB_PWD = os.getenv("DB_PWD", "")
 DB_NAME = os.getenv("DB_NAME", "vtes-rulings")
-CONNINFO = f"postgresql://{DB_USER}:{DB_PWD}@localhost/{DB_NAME}"
+# Prod passes a full DSN (unix-socket peer auth); dev/tests keep the DB_* localhost default.
+CONNINFO = os.getenv("DATABASE_URL") or f"postgresql://{DB_USER}:{DB_PWD}@localhost/{DB_NAME}"
 psycopg.types.json.set_json_dumps(orjson.dumps)
 psycopg.types.json.set_json_loads(orjson.loads)
 
