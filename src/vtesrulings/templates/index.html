@@ -39,7 +39,7 @@
     {% if not proposal %}
     <button class="btn btn-primary my-2" id="quickProposalButton">Add/Edit rulings</button>
     {% endif %}
-    <div id="rulingsList" data-source="{{ current.uid }}">
+    <div id="rulingsList" data-source="{{ current.uid }}" data-rulebook='{{ (rbk_references or []) | tojson }}'>
         {% for ruling in current.rulings %}
         {{ ruling_card(ruling, current.uid) }}
         {% else %}

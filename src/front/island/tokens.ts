@@ -8,11 +8,27 @@ import type { Ruling } from "./types"
 
 const SYMBOL_KEYS = Object.keys(ANKHA_SYMBOLS).map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
 const RE_TOKEN = new RegExp(`\\[(?:${SYMBOL_KEYS.join("|")})\\]|\\{[^}]+\\}`, "g")
+const RE_SYMBOL = new RegExp(`\\[(?:${SYMBOL_KEYS.join("|")})\\]`, "g")
 
 type Tok =
     | { t: "text"; v: string }
     | { t: "sym"; marker: string; glyph: string }
     | { t: "card"; marker: string; label: string }
+
+/** Tokenize a group-card prefix: plain text + symbol chips only (no cards, no references). */
+export function symbolTokens(text: string): Tok[] {
+    const toks: Tok[] = []
+    let last = 0
+    for (const m of text.matchAll(RE_SYMBOL)) {
+        const marker = m[0]
+        const start = m.index
+        if (start > last) toks.push({ t: "text", v: text.slice(last, start) })
+        last = start + marker.length
+        toks.push({ t: "sym", marker, glyph: ANKHA_SYMBOLS[marker.slice(1, -1)] })
+    }
+    if (last < text.length) toks.push({ t: "text", v: text.slice(last) })
+    return toks
+}
 
 export function tokenize(ruling: Ruling): Tok[] {
     const cardName = new Map(ruling.cards.map((c) => [c.text, c.printed_name]))
@@ -80,6 +96,13 @@ export function nodesFromTokens(toks: Tok[]): Node[] {
 export function renderBody(node: HTMLElement, ruling: Ruling) {
     const fill = (r: Ruling) => node.replaceChildren(...nodesFromTokens(tokenize(r)))
     fill(ruling)
+    return { update: fill }
+}
+
+/** Svelte action: render a read-only group-card prefix (symbol glyphs + text) into `node`. */
+export function renderPrefix(node: HTMLElement, prefix: string) {
+    const fill = (p: string) => node.replaceChildren(...nodesFromTokens(symbolTokens(p)))
+    fill(prefix)
     return { update: fill }
 }
 

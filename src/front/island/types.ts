@@ -5,9 +5,8 @@ export type State = "ORIGINAL" | "NEW" | "MODIFIED" | "DELETED"
 export interface NID { uid: string; name: string }
 export interface SymbolSub { text: string; symbol: string }
 export interface CardSub { uid: string; name: string; printed_name: string; img: string; text: string }
-export interface RefSub {
-    uid: string; url: string; source: string; date: string | null; state: State; text: string
-}
+export interface Reference { uid: string; url: string; source: string; date: string | null; state: State }
+export interface RefSub extends Reference { text: string }
 export interface Ruling {
     uid: string
     target: NID
@@ -16,6 +15,13 @@ export interface Ruling {
     symbols: SymbolSub[]
     references: RefSub[]
     cards: CardSub[]
+}
+export interface CardInGroup {
+    uid: string; name: string; printed_name: string; img: string
+    state: State; prefix: string; symbols: SymbolSub[]
+}
+export interface Group {
+    uid: string; name: string; state: State; cards: CardInGroup[]
 }
 
 export type { SelectItem } from "../js/net.js"

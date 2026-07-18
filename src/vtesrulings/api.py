@@ -7,7 +7,7 @@ from dataclasses import asdict
 
 import fastapi
 from fastapi import Depends, HTTPException, Request, Response
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse
 
 from . import db
 from . import discord
@@ -285,8 +285,7 @@ async def delete_ruling(
 @router.post("/group")
 async def post_group(ctx: ProposalCtx = Depends(proposal_update)):
     params = await get_params(ctx.request)
-    ret = ctx.manager.insert_group(**params)
-    return RedirectResponse(f"/groups.html?uid={ret.uid}&prop={ctx.prop.uid}", status_code=302)
+    return asdict(ctx.manager.insert_group(**params))
 
 
 @router.put("/group/{group_id}")

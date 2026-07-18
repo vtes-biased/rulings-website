@@ -35,8 +35,9 @@ epic #1.
   hypercorn; `just release` builds via Vite.
 
 ## API surface (from api.py map)
-JSON everywhere the island touches, except two cases to handle:
-- `POST /api/group` returns **302 redirect** → change to return `asdict(Group)` JSON (ticket #40).
+JSON everywhere the island touches, except two cases handled:
+- `POST /api/group` returned a **302 redirect** → now returns `asdict(Group)` JSON (done, #40); the
+  add-group button reads the new uid and navigates.
 - `DELETE /api/ruling/{t}/{r}` returns **empty 200** (no body) when a NEW ruling is fully removed;
   otherwise `asdict(Ruling)`. Handle empty-body.
 Proposal "select" is bound by the `?prop=` query param on page load (`__init__.py:182`), not by any
@@ -71,8 +72,18 @@ to the front.
   re-running chrome init. Verified live (Chrome): mount, read-only inherited rulings, add/type/save,
   `[sym]`/`{card}` insert round-trip, MODIFIED+ref-preserve, restore (cancels pending save), delete.
   Firefox **editing** verified good (#24, the plaintext-only reliance is gone). *(done)*
-- **#39** Reference editing in the island (footer badges + reference modal).
-- **#40** Group editor island (name/cards/prefixes) + `POST /group` → JSON.
+- **#39** ✅ Reference editing in the island: footer badge add/remove + drag-drop between rulings,
+  and a `ReferenceModal` (search existing by URL/label via `/api/reference/search`, pick a rulebook
+  ref, or create new via `POST /api/reference`). Refs live as `[uid]` markers re-appended on save;
+  `SymbolEditor` exposes `editor.body`. Verified live (Chrome): rulebook add, label-search add,
+  create-new, remove, drag-drop — DOM + server both. *(done)*
+- **#40** ✅ Group editor island (`GroupEditor` on `#groupEditor`): name edit, card add
+  (autocomplete)/remove/restore, per-card prefix token editor (`PrefixEditor`), group delete/restore.
+  Extracted `SymbolEditor` (shared contenteditable core) + `CardSearch` (shared `/api/complete`
+  autocomplete). `POST /api/group` → JSON; "+ New group" in chrome.ts. Mutations serialized through a
+  promise chain (no save races); restore flushes pending edits first. Also fixed `update_group` to
+  drop the overlay when a group is edited back to base. Verified live (Chrome): new group, rename,
+  add/remove/restore card, prefix insert, group delete→restore. *(done)*
 - **#41** Final retire — **retire half done**: deleted `layout.ts`/`layout.scss`, dropped
   bootstrap/@popperjs/bootstrap5-autocomplete/sass/bootstrap-icons/@types deps, inlined the icons as
   SVG (`icon()` macro), asserted no Bootstrap class/import remains; verified #30/#31 + mobile-first

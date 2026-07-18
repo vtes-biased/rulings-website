@@ -800,9 +800,13 @@ async def test_add_group(client):
             "name": "Anti-combat cards",
         },
     )
-    assert response.status_code == 302
-    # the new group gets a random UID
-    assert response.headers["location"].startswith("/groups.html?uid=P")
+    assert response.status_code == 200
+    data = response.json()
+    # the new group gets a random pending UID and is empty
+    assert data["uid"].startswith("P")
+    assert data["name"] == "Anti-combat cards"
+    assert data["state"] == "NEW"
+    assert data["cards"] == []
 
 
 @LIVE_DATA_XFAIL

@@ -17,19 +17,21 @@
     {% if current %}
     <section class="krcg-current grow md:w-2/3" id="groupDisplay" data-uid="{{ current.uid }}"
         data-data='{{ current | tojson }}'>
-        <h2 id="groupName" class="text-2xl">{{ current.name or '_Choose a name_' }}</h2>
-        <div class="my-3 rounded-lg border border-hairline bg-surface">
-            {% for card in current.cards %}
-            <div class="row-item" data-uid="{{ card.uid }}" data-name='{{ card.name }}' data-state="{{ card.state }}">
-                {{ icon("circle-fill", "text-xs " ~ state_text[card.state], card.state|capitalize) }}
-                <a href="index.html?uid={{ card.uid }}{{ search_params_2 }}" class="krcg-card mr-auto no-underline"
-                    data-noclick="true" data-uid="{{ card.uid }}">{{ card.name }}</a>
-                <div class="krcg-prefix font-mono text-sm text-text-muted">{{ card.prefix | symbolreplace(card.symbols) | safe }}</div>
+        <div id="groupEditor">
+            <h2 id="groupName" class="text-2xl">{{ current.name or '_Choose a name_' }}</h2>
+            <div class="my-3 rounded-lg border border-hairline bg-surface">
+                {% for card in current.cards %}
+                <div class="row-item" data-uid="{{ card.uid }}" data-name='{{ card.name }}' data-state="{{ card.state }}">
+                    {{ icon("circle-fill", "text-xs " ~ state_text[card.state], card.state|capitalize) }}
+                    <a href="index.html?uid={{ card.uid }}{{ search_params_2 }}" class="krcg-card mr-auto no-underline"
+                        data-noclick="true" data-uid="{{ card.uid }}">{{ card.name }}</a>
+                    <div class="krcg-prefix font-mono text-sm text-text-muted">{{ card.prefix | symbolreplace(card.symbols) | safe }}</div>
+                </div>
+                {% endfor %}
             </div>
-            {% endfor %}
         </div>
         <h3 class="my-2 text-lg">Rulings</h3>
-        <div id="rulingsList" data-source="{{ current.uid }}">
+        <div id="rulingsList" data-source="{{ current.uid }}" data-rulebook='{{ (rbk_references or []) | tojson }}'>
             {% for ruling in current.rulings %}
             {{ ruling_card(ruling, current.uid) }}
             {% endfor %}
@@ -38,6 +40,11 @@
     {% endif %}
 
     <nav class="rounded-lg border border-hairline bg-surface md:w-1/3" id="groupsList">
+        {% if proposal and proposal.editable %}
+        <button type="button" id="addGroupButton" class="nav-row w-full text-left font-medium text-primary">
+            + New group
+        </button>
+        {% endif %}
         {% for group in groups %}
         <a href="groups.html?uid={{ group.uid }}{{ search_params_2 }}"
             class="nav-row{{ ' active' if current and group.uid == current.uid }}" data-uid="{{ group.uid }}">

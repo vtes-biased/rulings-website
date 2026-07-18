@@ -180,6 +180,20 @@ function setupProposal() {
     document.getElementById("proposalLeave")?.addEventListener("click", leaveProposal)
 }
 
+// --- add group: create an empty group, then navigate to its editor page ---
+function setupGroups() {
+    const button = document.getElementById("addGroupButton")
+    if (!button) return
+    button.addEventListener("click", async () => {
+        const response = await do_fetch("/api/group", { method: "post" })
+        if (!response) return
+        const { uid } = await response.json()
+        const url = new URL(window.location.href)
+        url.searchParams.set("uid", uid)
+        window.location.href = url.href
+    })
+}
+
 // --- autocomplete: live search; selecting a result loads ?uid= ---
 function setupAutocomplete(input: HTMLInputElement) {
     const server = input.dataset.server
@@ -256,6 +270,7 @@ export function initChrome() {
     setupThemeToggle()
     loginManagement()
     setupProposal()
+    setupGroups()
     for (const input of document.querySelectorAll<HTMLInputElement>("input.autocomplete")) setupAutocomplete(input)
     bindCardHover()
 }

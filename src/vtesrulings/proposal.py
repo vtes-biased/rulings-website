@@ -469,7 +469,9 @@ class Manager:
                 ),
             )
         if group.state == models.State.ORIGINAL:
+            # edited back to the base group: drop the overlay entirely
             self.prop.groups.pop(uid, None)
+            return group
         self.prop.groups[uid] = group
         return group
 
