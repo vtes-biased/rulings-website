@@ -57,6 +57,12 @@ jobs:
           uv run ruff check
           uv run ruff format --check
 
+      # Advisory while the initial type-error backlog is worked down; drop continue-on-error
+      # (and add --error-on-warning) once `ty check` is clean.
+      - name: Typecheck
+        continue-on-error: true
+        run: uv run ty check --output-format github
+
       - name: Test
         env:
           TESTING: "1"

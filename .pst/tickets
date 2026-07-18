@@ -15,7 +15,7 @@ open  	deploy	nginx_site vhost + certbot TLS for the app on gravelines. parent:#
 open  	deploy	Use managed postgres_db role: provision DB + backups; drop the localhost DB assumption. parent:#2
 open  	deploy,ci	tag→deploy GitHub Actions workflow: build frontend + artifact; ship; migrate; restart service. parent:#2
 open  	deploy	Alloy observability wiring + approval→krcg-static rebuild dispatch (repository_dispatch). parent:#2
-open  	ci	Add ty typecheck to justfile + CI; fix the initial batch of type errors. parent:#3
+closed	ci	Add ty typecheck to justfile + CI; fix the initial batch of type errors. parent:#3
 closed	ci	Dev/test harness: Postgres container + seeded sandbox rulings remote + pinned card snapshot; wire just dev and just test. parent:#3
 closed	ci	Rework CI: real-but-safe test job (Postgres service, sandbox remote, snapshot) + lint + typecheck + frontend build. parent:#3
 open  	ci	Unify version/tag/release with the deploy trigger; drop the wheel-publish framing (this is an app not a library). parent:#3
@@ -53,3 +53,4 @@ closed	feature,frontend	Proposal Delete in the nav is one un-confirmed irreversi
 closed	feature,frontend	Edit mode: single shared Symbol/card-insert toolbar attached to the focused editor, instead of one per ruling and per group-card row (76 toolbars on a 75-card group). parent:#5 relates:#9
 closed	frontend,a11y	A11y: modals lack role=dialog/aria-modal/focus trap; the autocomplete lacks combobox ARIA; ReferenceModal should autofocus its first input. parent:#5
 closed	frontend	Read-side papercuts: hide state dots outside a proposal (all-gray noise); '_Choose a name_' renders literally for unnamed groups (use a muted placeholder); one-line VEKN hint in the login modal; remember the active-proposals alert dismissal for the session. parent:#5
+open  	ci	Drive ty check to zero (audit the ~51 remaining: real None-guards vs justified ignores for false positives — Jinja globals, aiofiles, psycopg overloads, krcg-untyped casts), then make the CI typecheck blocking (drop continue-on-error, add --error-on-warning). parent:#3 relates:#18

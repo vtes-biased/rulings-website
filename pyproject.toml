@@ -59,6 +59,7 @@ dev = [
     "pytest-asyncio",
     "python-dotenv",
     "ruff",
+    "ty>=0.0.61",
 ]
 
 [tool.uv.build-backend]
@@ -69,6 +70,9 @@ source-exclude = ["**/.DS_Store"]
 [tool.ruff]
 line-length = 100
 target-version = "py313"
+
+[tool.ty.environment]
+python-version = "3.13"
 
 [tool.pytest.ini_options]
 addopts = "-vvs --strict-markers -m 'not discord'"

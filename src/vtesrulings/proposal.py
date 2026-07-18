@@ -35,7 +35,7 @@ class Manager:
 
     def all_references(
         self, deleted: bool = False
-    ) -> typing.Generator[None, None, models.Reference]:
+    ) -> typing.Generator[models.Reference, None, None]:
         for reference in self.prop.references.values():
             if deleted or reference.state != models.State.DELETED:
                 yield reference
@@ -74,7 +74,7 @@ class Manager:
             }
             return rev_base[url]
 
-    def all_groups(self, deleted: bool = False) -> typing.Generator[None, None, models.Group]:
+    def all_groups(self, deleted: bool = False) -> typing.Generator[models.Group, None, None]:
         for group in sorted(self.prop.groups.values(), key=lambda g: g.name if g else ""):
             if group.state == models.State.DELETED and not deleted:
                 continue
@@ -125,8 +125,8 @@ class Manager:
             yield ruling
         if uid.startswith(("G", "P")) or not group:
             return
-        for group, card_in_group in self.get_groups_of(uid):
-            for ruling in self.get_rulings(group.uid, True, False):
+        for grp, card_in_group in self.get_groups_of(uid):
+            for ruling in self.get_rulings(grp.uid, True, False):
                 yield self._effective_group_ruling(uid, ruling, card_in_group)
 
     def _card_in_group(self, card_uid: str, group_uid: str) -> models.CardInGroup | None:

@@ -178,7 +178,7 @@ def check_reference(reference: models.Reference) -> None:
             raise ValueError(f"{name} was not Rules Director anymore on {ref_date}")
 
 
-def parse_symbols(text: str) -> typing.Generator[None, None, models.SymbolSubstitution]:
+def parse_symbols(text: str) -> typing.Generator[models.SymbolSubstitution, None, None]:
     """Yield all symbols in the given text. See ANKHA_SYMBOLS."""
     for symbol in RE_SYMBOL.findall(text):
         yield models.SymbolSubstitution(
@@ -189,7 +189,7 @@ def parse_symbols(text: str) -> typing.Generator[None, None, models.SymbolSubsti
 
 def parse_cards(
     card_map: krcg.collections.CardDict, text: str
-) -> typing.Generator[None, None, models.CardSubstitution]:
+) -> typing.Generator[models.CardSubstitution, None, None]:
     """Yield all cards in the given text."""
     for token in RE_CARD.findall(text):
         card = card_map[token[1:-1]]
@@ -204,7 +204,7 @@ def parse_cards(
 
 def parse_references(
     references: dict[str, models.Reference], text: str
-) -> typing.Generator[None, None, models.ReferencesSubstitution]:
+) -> typing.Generator[models.ReferencesSubstitution, None, None]:
     """Yield all ruling references in the given text."""
     for token in RE_RULING_REFERENCE.findall(text):
         reference = references[token[1:-1]]

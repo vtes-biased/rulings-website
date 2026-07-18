@@ -2,7 +2,7 @@ import contextlib
 import importlib.metadata
 import logging
 import os
-import urllib
+import urllib.parse
 import uuid
 from dataclasses import asdict
 

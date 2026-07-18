@@ -16,6 +16,10 @@ fmt:
     uv run ruff check --fix
     uv run ruff format
 
+# Typecheck (advisory: a known backlog is being worked down, see epic on ty adoption)
+typecheck:
+    uv run ty check
+
 # Run tests (testing mode bypasses VEKN login, excludes discord marker)
 test:
     TESTING=1 uv run pytest

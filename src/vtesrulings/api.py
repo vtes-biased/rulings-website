@@ -1,7 +1,7 @@
 import dataclasses
 import orjson
 import psycopg
-import urllib
+import urllib.parse
 import uuid
 from dataclasses import asdict
 
@@ -181,10 +181,10 @@ async def search(request: Request, manager: proposal.Manager = Depends(proposal_
 @router.get("/card/{card_id}")
 async def get_card(card_id: int, manager: proposal.Manager = Depends(proposal_readonly)):
     ret = asdict(manager.get_card(card_id))
-    card_id = str(card_id)
-    ret["rulings"] = [asdict(r) for r in manager.get_rulings(card_id)]
-    ret["groups"] = [asdict(r) for r in manager.get_groups_of_card(card_id)]
-    ret["backrefs"] = [asdict(r) for r in manager.get_backrefs(card_id)]
+    cid = str(card_id)
+    ret["rulings"] = [asdict(r) for r in manager.get_rulings(cid)]
+    ret["groups"] = [asdict(r) for r in manager.get_groups_of_card(cid)]
+    ret["backrefs"] = [asdict(r) for r in manager.get_backrefs(cid)]
     return ret
 
 
