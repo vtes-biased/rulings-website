@@ -1,0 +1,5 @@
+vtes-biased/vtes-rulings @ bf157ab25fd0db55110aabe686ff26ec80e42706
+
+Pinned snapshot of the rulings/ YAML, vendored so the test suite is hermetic
+(no SSH, no live clone). Refresh by re-copying rulings/*.yaml from that repo and
+updating this hash; expect the data-snapshot assertions in test_api.py to move.

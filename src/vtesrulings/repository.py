@@ -17,10 +17,11 @@ from . import utils
 
 logger = logging.getLogger()
 COMMIT_LOCK = asyncio.Lock()
-RULINGS_GIT = "git@github.com:vtes-biased/vtes-rulings.git"
+RULINGS_GIT = os.getenv("RULINGS_GIT", "git@github.com:vtes-biased/vtes-rulings.git")
 RULINGS_REPO_WEB = "https://github.com/vtes-biased/vtes-rulings"
 GIT_SSH_COMMAND = os.getenv("GIT_SSH_COMMAND", "ssh -i ~/.ssh/id_rsa")
 RULINGS_FILES_PATH = "rulings/"
+RULINGS_FILES = ("references.yaml", "groups.yaml", "rulings.yaml")
 
 REFERENCES_COMMENT = """# Rulings always have a reference, they come from somewhere.
 # Each reference should be a valid URL, with a key indicating the source and date.
@@ -283,22 +284,12 @@ async def _commit_index(
                 data[key].append(serialize_ruling(ruling, card_map))
         await async_yaml_dump(f, data)
     await asgiref.sync.SyncToAsync(yamlfix.fix_files)(
-        [
-            str(rulings_dir / "references.yaml"),
-            str(rulings_dir / "groups.yaml"),
-            str(rulings_dir / "rulings.yaml"),
-        ],
+        [str(rulings_dir / f) for f in RULINGS_FILES],
         config=yamlfix.model.YamlfixConfig(
             line_length=120,
             sequence_style="block_style",
         ),
     )
-    repo.index.add(
-        [
-            os.path.join(RULINGS_FILES_PATH, "references.yaml"),
-            os.path.join(RULINGS_FILES_PATH, "groups.yaml"),
-            os.path.join(RULINGS_FILES_PATH, "rulings.yaml"),
-        ]
-    )
+    repo.index.add([os.path.join(RULINGS_FILES_PATH, f) for f in RULINGS_FILES])
     repo.index.commit(description)
     await asgiref.sync.SyncToAsync(repo.git.push)()

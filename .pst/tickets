@@ -16,7 +16,7 @@ open  	deploy	Use managed postgres_db role: provision DB + backups; drop the loc
 open  	deploy,ci	tag→deploy GitHub Actions workflow: build frontend + artifact; ship; migrate; restart service. parent:#2
 open  	deploy	Alloy observability wiring + approval→krcg-static rebuild dispatch (repository_dispatch). parent:#2
 open  	ci	Add ty typecheck to justfile + CI; fix the initial batch of type errors. parent:#3
-open  	ci	Dev/test harness: Postgres container + seeded sandbox rulings remote + pinned card snapshot; wire just dev and just test. parent:#3
+closed	ci	Dev/test harness: Postgres container + seeded sandbox rulings remote + pinned card snapshot; wire just dev and just test. parent:#3
 open  	ci	Rework CI: real-but-safe test job (Postgres service, sandbox remote, snapshot) + lint + typecheck + frontend build. parent:#3
 open  	ci	Unify version/tag/release with the deploy trigger; drop the wheel-publish framing (this is an app not a library). parent:#3
 closed	bug	FIRST: boot app locally + browser-drive (Chrome + Firefox); catalog every bug found into new parent:#4 tickets. parent:#4
@@ -29,7 +29,7 @@ closed	feature	Two-kind entry model RULING vs REMINDER (reminder reference optio
 closed	feature,frontend	Mobile-first pass on the read side (Jinja SSR); editor mobile-first is handled in the Svelte island (#9). parent:#5
 closed	bug,superseded	Active-proposals alert lists every unsubmitted proposal as an inline link with no cap — floods the page (hundreds of entries). Alert links built in __init__.py index route from get_user_proposals. parent:#4
 closed	bug,superseded	Error toast from a failed fetch never auto-dismisses — stays stuck on screen indefinitely (do_fetch error handler in layout.ts). parent:#4
-open  	ci	Tests share the real local Postgres DB and leave orphaned test-user 'Test' proposals behind; harness must use an isolated DB and clean up per-test. parent:#3 relates:#19
+closed	ci	Tests share the real local Postgres DB and leave orphaned test-user 'Test' proposals behind; harness must use an isolated DB and clean up per-test. parent:#3 relates:#19
 open  	data	One-time: next commit_index reformats ~78 rulings.yaml/groups.yaml nid keys (krcg 5.6 printed_name normalization: 'Admonitions, The'->'The Admonitions'; plus renames Mind Rape->Puppet Master, Pentex(TM)->Pentex-TM). Land as one deliberate reformat commit, not inside an unrelated ruling change. Loading unaffected (id-keyed). relates:#10
 open  	ci	Un-xfail the data-snapshot API tests (test_get_card/test_get_group/test_update_group/test_complete) once the pinned card+rulings snapshot lands; they currently assert live data drifted by krcg 5.6 + repo updates. parent:#3 relates:#19
 closed	stack,frontend	Vite+Svelte build replacing Parcel: config with entry points (chrome bundle + editor island + SCSS) → src/vtesrulings/static/dist; wire package.json + justfile serve/release; prove a trivial island mounts. parent:#9
