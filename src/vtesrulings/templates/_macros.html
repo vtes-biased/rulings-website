@@ -23,6 +23,8 @@
 </article>
 {% endmacro %}
 
+{% macro group_name(name) %}{% if name %}{{ name }}{% else %}<span class="font-normal italic text-text-muted">Unnamed group</span>{% endif %}{%- endmacro %}
+
 {# State→text-color class, and a small colored state label (proposal diff page). #}
 {% set _state_text = {"ORIGINAL": "text-state-original", "NEW": "text-state-new", "MODIFIED": "text-state-modified", "DELETED": "text-state-deleted"} %}
 {% macro state_class(state) %}{{ _state_text[state] }}{%- endmacro %}

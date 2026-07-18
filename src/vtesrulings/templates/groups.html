@@ -1,16 +1,9 @@
 {% extends "layout.html" %}
-{% from "_macros.html" import ruling_card, icon with context %}
+{% from "_macros.html" import ruling_card, icon, group_name, state_class with context %}
 
 {% block scripts %}
 <script async src="/static/dist/js/groups.js" type="module"></script>
 {% endblock%}
-
-{% set state_text = {
-"ORIGINAL": "text-state-original",
-"NEW": "text-state-new",
-"MODIFIED": "text-state-modified",
-"DELETED": "text-state-deleted"
-} %}
 
 {% block content %}
 <div class="my-2 flex flex-col gap-4 md:flex-row">
@@ -18,11 +11,11 @@
     <section class="krcg-current grow md:w-2/3" id="groupDisplay" data-uid="{{ current.uid }}"
         data-data='{{ current | tojson }}'>
         <div id="groupEditor">
-            <h2 id="groupName" class="text-2xl">{{ current.name or '_Choose a name_' }}</h2>
+            <h2 id="groupName" class="text-2xl">{{ group_name(current.name) }}</h2>
             <div class="my-3 rounded-lg border border-hairline bg-surface">
                 {% for card in current.cards %}
                 <div class="row-item" data-uid="{{ card.uid }}" data-name='{{ card.name }}' data-state="{{ card.state }}">
-                    {{ icon("circle-fill", "text-xs " ~ state_text[card.state], card.state|capitalize) }}
+                    {% if proposal %}{{ icon("circle-fill", "text-xs " ~ state_class(card.state), card.state|capitalize) }}{% endif %}
                     <a href="index.html?uid={{ card.uid }}{{ search_params_2 }}" class="krcg-card mr-auto no-underline"
                         data-noclick="true" data-uid="{{ card.uid }}">{{ card.name }}</a>
                     <div class="krcg-prefix font-mono text-sm text-text-muted">{{ card.prefix | symbolreplace(card.symbols) | safe }}</div>
@@ -48,8 +41,8 @@
         {% for group in groups %}
         <a href="groups.html?uid={{ group.uid }}{{ search_params_2 }}"
             class="nav-row{{ ' active' if current and group.uid == current.uid }}" data-uid="{{ group.uid }}">
-            <span>{{ group.name or '_Choose a name_' }}</span>
-            <span class="badge {{ state_text[group.state] }}">{{ group.cards | length }}</span>
+            <span>{{ group_name(group.name) }}</span>
+            <span class="badge {{ state_class(group.state) if proposal }}">{{ group.cards | length }}</span>
         </a>
         {% endfor %}
     </nav>

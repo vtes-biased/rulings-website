@@ -160,8 +160,6 @@ async def start_proposal(request: Request, user: db.User = Depends(require_user)
     existing_ids = await db.all_proposal_ids()
     while prop.uid in existing_ids:
         prop.uid = utils.random_uid8()
-    if not prop.name:
-        prop.name = "_Choose a name_"
     await db.insert_proposal(asdict(prop))
     return {"uid": prop.uid}
 

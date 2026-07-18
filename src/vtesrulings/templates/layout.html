@@ -17,6 +17,12 @@
     <script>
         // stamp the saved theme before paint to avoid a flash
         try { var t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t } catch (e) { }
+        // hide session-dismissed alerts before paint (the alert markup is server-rendered visible)
+        try {
+            var keys = [];
+            for (var i = 0; i < sessionStorage.length; i++) { var k = sessionStorage.key(i); if (k && k.indexOf("alert-dismissed:") === 0) keys.push('[data-dismiss-key="' + k.slice(16) + '"]'); }
+            if (keys.length) { var s = document.createElement("style"); s.textContent = keys.join(",") + "{display:none}"; document.head.appendChild(s); }
+        } catch (e) { }
     </script>
     <link rel="stylesheet" href="/static/dist/css/app.css?v={{ version }}">
     <script async src="https://static.krcg.org/web/krcg.js"></script>
@@ -65,6 +71,8 @@
             <form class="modal__body" id="loginForm" method="post" action="/login">
                 <input type="text" class="input" placeholder="VEKN login" name="username">
                 <input type="password" class="input" placeholder="VEKN password" name="password">
+                <p class="text-sm text-text-muted">Use your <a href="https://www.vekn.net" target="_blank"
+                        rel="noopener">VEKN</a> membership credentials — the same account as the VEKN site.</p>
             </form>
             <div class="modal__footer">
                 <button type="button" class="btn btn-secondary" data-close>Cancel</button>
@@ -75,7 +83,8 @@
 
     <main class="mx-auto w-full max-w-5xl px-4 py-4" id="contentContainer">
         {% if alert %}
-        <div class="my-3 rounded-lg border border-state-modified/40 bg-state-modified/10 p-3" role="alert">
+        <div class="my-3 rounded-lg border border-state-modified/40 bg-state-modified/10 p-3" role="alert"
+            {% if alert.dismiss_key %}data-dismiss-key="{{ alert.dismiss_key }}"{% endif %}>
             <div class="flex items-center gap-2">
                 {{ icon("exclamation-triangle-fill", "text-state-modified") }}
                 <div class="grow">{{ alert.text }}</div>
@@ -95,7 +104,7 @@
         <a href="proposal.html{{ search_params }}"
             class="my-3 flex items-center gap-2 rounded-lg border border-state-new/40 bg-state-new/5 p-2 no-underline hover:bg-state-new/10">
             <span class="inline-block h-2 w-2 shrink-0 rounded-full bg-state-new"></span>
-            <span class="grow text-text">Editing proposal: <strong>{{ proposal.name }}</strong></span>
+            <span class="grow text-text">Editing proposal: <strong>{{ proposal.name or 'Untitled proposal' }}</strong></span>
             <span class="text-sm text-text-muted">Review &amp; submit →</span>
         </a>
         {% endif %}

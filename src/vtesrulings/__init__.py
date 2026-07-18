@@ -204,8 +204,10 @@ async def index(request: Request, page: str, user: db.User | None = Depends(api.
         if proposals and "alert" not in context:
             context["alert"] = {
                 "text": "You have active proposals waiting for submission",
+                "dismiss_key": "active-proposals",
                 "links": [
-                    {"url": proposal.get_proposal_url(p), "label": p.name} for p in proposals
+                    {"url": proposal.get_proposal_url(p), "label": p.name or "Untitled proposal"}
+                    for p in proposals
                 ],
             }
     if user:

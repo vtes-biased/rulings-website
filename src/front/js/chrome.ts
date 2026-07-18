@@ -43,8 +43,21 @@ function setupModals() {
         if (ev.key !== "Escape") return
         for (const m of document.querySelectorAll<HTMLElement>(".modal:not([hidden])")) closeModal(m)
     })
+}
+
+// Dismissible alerts/toasts. An alert carrying data-dismiss-key stays dismissed for the session
+// (the active-proposals alert re-renders on every page, and re-nagging after one dismissal is noise).
+// The pre-paint script in layout.html suppresses an already-dismissed alert before it flashes; here
+// we only bind the close buttons and persist the dismissal.
+function setupAlerts() {
     for (const btn of document.querySelectorAll("[data-dismiss]")) {
-        btn.addEventListener("click", () => (btn.closest('[role="alert"]') as HTMLElement)?.setAttribute("hidden", ""))
+        btn.addEventListener("click", () => {
+            const alert = btn.closest('[role="alert"]') as HTMLElement | null
+            if (!alert) return
+            alert.hidden = true
+            const key = alert.dataset.dismissKey
+            if (key) try { sessionStorage.setItem(`alert-dismissed:${key}`, "1") } catch (e) { /* ignore */ }
+        })
     }
 }
 
@@ -255,6 +268,7 @@ function bindCardHover() {
 
 export function initChrome() {
     setupModals()
+    setupAlerts()
     navActivateCurrent()
     setupThemeToggle()
     loginManagement()
