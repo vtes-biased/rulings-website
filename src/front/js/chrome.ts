@@ -147,13 +147,16 @@ async function submitProposal(ev: MouseEvent) {
 async function approveProposal(ev: MouseEvent) {
     const button = ev.currentTarget as HTMLButtonElement
     if (await checkConsistency()) return
+    const label = button.textContent // the commit+push can take a few seconds — show it's in flight
     button.disabled = true
+    button.textContent = "Approving…"
     const response = await do_fetch("/api/proposal/approve", { method: "post" })
-    button.disabled = false
-    if (!response) return
-    const url = new URL(window.location.href)
-    url.searchParams.delete("prop")
-    url.searchParams.delete("uid")
+    if (!response) { button.disabled = false; button.textContent = label; return }
+    // Approved: the proposal is gone from the DB. Land on proposal.html?prop=<uid> — index() renders
+    // the "approved and merged" banner when the prop is missing, plus the user's remaining proposals.
+    const prop = new URLSearchParams(window.location.search).get("prop")
+    const url = new URL("proposal.html", window.location.href)
+    if (prop) url.searchParams.set("prop", prop)
     window.location.href = url.href
 }
 
