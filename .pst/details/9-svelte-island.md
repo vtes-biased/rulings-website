@@ -84,15 +84,24 @@ to the front.
   promise chain (no save races); restore flushes pending edits first. Also fixed `update_group` to
   drop the overlay when a group is edited back to base. Verified live (Chrome): new group, rename,
   add/remove/restore card, prefix insert, group delete→restore. *(done)*
-- **#41** Final retire — **retire half done**: deleted `layout.ts`/`layout.scss`, dropped
-  bootstrap/@popperjs/bootstrap5-autocomplete/sass/bootstrap-icons/@types deps, inlined the icons as
-  SVG (`icon()` macro), asserted no Bootstrap class/import remains; verified #30/#31 + mobile-first
-  **read**. Firefox **editing** (#24) ✅ verified good now the island exists. Still open: mobile-first
-  **edit** + close #9 (after #39/#40). Carry-forward from #38 review: island-rendered
-  `.krcg-card` spans (editor chips + read-only bodies) get no krcg hover/click glue (chrome's
-  `bindCardHover` runs once at `ready`, before the async mount) — re-bind after mount or accept the
-  edit-mode gap; and the card autocomplete in `TokenEditor` duplicates chrome's `setupAutocomplete`
-  fetch/menu core (framework boundary makes full reuse awkward).
+- **#41** ✅ Final retire: `layout.ts`/`layout.scss` deleted, bootstrap/@popperjs/
+  bootstrap5-autocomplete/sass/bootstrap-icons/@types deps dropped, icons inlined as SVG (`icon()`
+  macro). Re-asserted no Bootstrap remains: no JS import, nothing in package.json/node_modules, no
+  `data-bs-*` (the `btn-*`/`row-item`/`nav-row` names are local Tailwind `@apply` components).
+  Carry-forward (a) **resolved**: `bindCardHover()` in `chrome.ts` moved from one-shot per-element
+  binding to **document-level delegation** (`closest(".krcg-card")` on mouseover/mouseout/click), so
+  island-mounted spans (read-only bodies, editor chips, autocomplete-inserted chips) get krcg
+  hover/click with no island coupling — spans are text-only so bubbling can't flicker. The rewrite
+  also fixed a latent bug: the old handler called `outCard.call(this)` with no event, throwing on
+  every SSR-span mouseout (krcg's own binding masked it). Carry-forward (b) **accepted, not deduped**:
+  `CardSearch` vs chrome's `setupAutocomplete` differ across the framework boundary (navigate vs
+  `onPick`, Svelte vs vanilla menu) and already share `debounce`; a shared fetch helper wouldn't earn
+  its keep. Verified live (`TESTING=1` server, Chrome, card Abactor in edit mode): island mounts,
+  bubbling mouseover on an island chip (which krcg never binds) opens the preview → delegation covers
+  island spans; **mobile-first edit** at 454px has zero horizontal overflow, glyph picker + reference
+  modal both fit. Firefox editing (#24) ✅ verified in #38. #30/#31 ✅. The ticket's literal "delete
+  groups.ts/index.ts/admin.ts" is superseded — they stay as thin per-page Vite entries (templates
+  reference them by stable name); the 1156-line `layout.ts` is the file that's gone. *(done — closes #9)*
 
 ## Landed together (43+37+36, then the #41 retire)
 The read side is fully Tailwind and Bootstrap-free (CSS, JS, and the icon font). Edit mode is

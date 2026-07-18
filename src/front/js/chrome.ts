@@ -248,19 +248,32 @@ function setupAutocomplete(input: HTMLInputElement) {
     })
 }
 
-// --- krcg.js hover glue for server-rendered card spans ---
+// --- krcg.js hover/click glue ---
+// krcg.js (external) binds .krcg-card spans on window load, but the Svelte editor island mounts card
+// spans (read-only bodies, editor chips, autocomplete-inserted chips) *after* load and would get no
+// card preview. Delegate on document rather than bind per element, so any span the island adds later
+// is covered with no island coupling. Card spans are text-only, so mouseover/mouseout can't flicker.
 declare function clickCard(this: HTMLElement): void
 declare function overCard(this: HTMLElement): void
-declare function outCard(this: HTMLElement): void
+declare function outCard(this: HTMLElement, e: MouseEvent): void
+
+function cardTarget(e: Event): HTMLElement | null {
+    return e.target instanceof Element ? e.target.closest<HTMLElement>(".krcg-card") : null
+}
 
 function bindCardHover() {
-    for (const el of document.querySelectorAll<HTMLElement>(".krcg-card")) {
-        el.addEventListener("mouseover", function () { if (typeof overCard === "function") overCard.call(this) })
-        el.addEventListener("mouseout", function () { if (typeof outCard === "function") outCard.call(this) })
-        if (el.dataset.noclick !== "true") {
-            el.addEventListener("click", function () { if (typeof clickCard === "function") clickCard.call(this) })
-        }
-    }
+    document.addEventListener("mouseover", (e) => {
+        const el = cardTarget(e)
+        if (el && typeof overCard === "function") overCard.call(el)
+    })
+    document.addEventListener("mouseout", (e) => {
+        const el = cardTarget(e)
+        if (el && typeof outCard === "function") outCard.call(el, e)
+    })
+    document.addEventListener("click", (e) => {
+        const el = cardTarget(e)
+        if (el && el.dataset.noclick !== "true" && typeof clickCard === "function") clickCard.call(el)
+    })
 }
 
 export function initChrome() {
