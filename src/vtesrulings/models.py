@@ -10,6 +10,11 @@ class State(enum.StrEnum):
     DELETED = "DELETED"
 
 
+class RulingKind(enum.StrEnum):
+    RULING = "RULING"  # the default; at least one reference required
+    REMINDER = "REMINDER"  # confirms card text + rules; reference optional
+
+
 @pydantic.dataclasses.dataclass
 class UID:
     uid: str
@@ -102,15 +107,19 @@ class Ruling(UID):
     target: NID
     text: str
     state: State
+    kind: RulingKind = RulingKind.RULING
     symbols: list[SymbolSubstitution] = dataclasses.field(default_factory=list)
     references: list[ReferencesSubstitution] = dataclasses.field(default_factory=list)
     cards: list[CardSubstitution] = dataclasses.field(default_factory=list)
+    # Per-card body-text overrides on a group ruling: card_uid -> adapted text (references shared
+    # from this ruling). Empty for card rulings. See pst #27.
+    overrides: dict[str, str] = dataclasses.field(default_factory=dict)
 
     def __hash__(self):
         return hash((self.target.uid, self.uid))
 
     def __eq__(self, rhs):
-        self.target.uid, self.uid == rhs.target.uid, rhs.uid
+        return (self.target.uid, self.uid) == (rhs.target.uid, rhs.uid)
 
 
 @pydantic.dataclasses.dataclass(kw_only=True)

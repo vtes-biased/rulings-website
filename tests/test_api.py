@@ -1,6 +1,7 @@
 import pytest
 
 import vtesrulings.discord
+from vtesrulings import models, repository
 
 
 # These assert against the live card DB + rulings repo, which drift over time (krcg 5.6
@@ -10,6 +11,33 @@ LIVE_DATA_XFAIL = pytest.mark.xfail(
     reason="asserts live card/rulings snapshot; needs pinned test data — pst #19",
     strict=False,
 )
+
+
+def test_serialize_ruling():
+    """A plain ruling serializes to a bare string; a REMINDER or an overridden ruling to a map."""
+
+    class FakeCard:
+        def __init__(self, cid, name):
+            self.id, self.printed_name = cid, name
+
+    card_map = {100015: FakeCard(100015, "Academic Hunting Ground")}
+    target = models.NID(uid="G00008", name="Permanent not replaced")
+
+    def ruling(**kw):
+        return models.Ruling(uid="x", target=target, state=models.State.ORIGINAL, **kw)
+
+    assert repository.serialize_ruling(ruling(text="Body [RTR 20070707]"), card_map) == (
+        "Body [RTR 20070707]"
+    )
+    assert repository.serialize_ruling(
+        ruling(text="Reminder", kind=models.RulingKind.REMINDER), card_map
+    ) == {"text": "Reminder", "kind": "reminder"}
+    assert repository.serialize_ruling(
+        ruling(text="Body [RTR 20070707]", overrides={"100015": "Adapted"}), card_map
+    ) == {
+        "text": "Body [RTR 20070707]",
+        "overrides": {"100015|Academic Hunting Ground": "Adapted"},
+    }
 
 
 async def login_and_proposal(client):
@@ -501,6 +529,8 @@ async def test_add_card_ruling(client):
             },
         ],
         "symbols": [],
+        "kind": "RULING",
+        "overrides": {},
         "target": {"name": "Academic Hunting Ground", "uid": "100015"},
         "text": "Test ruling [RTR 20070707]",
         "state": "NEW",
@@ -536,6 +566,8 @@ async def test_add_card_ruling(client):
                     },
                 ],
                 "symbols": [],
+                "kind": "RULING",
+                "overrides": {},
                 "target": {"name": "Academic Hunting Ground", "uid": "100015"},
                 "text": "Test ruling [RTR 20070707]",
                 "state": "NEW",
@@ -590,6 +622,8 @@ async def test_add_card_ruling_with_reference(client):
             },
         ],
         "symbols": [],
+        "kind": "RULING",
+        "overrides": {},
         "target": {
             "name": "Academic Hunting Ground",
             "uid": "100015",
@@ -632,6 +666,8 @@ async def test_update_card_ruling(client):
                     },
                 ],
                 "symbols": [],
+                "kind": "RULING",
+                "overrides": {},
                 "target": {"name": "419 Operation", "uid": "100002"},
                 "text": (
                     "You can burn the edge to burn the card if it has no counter. [ANK 20221011-3]"
@@ -676,6 +712,8 @@ async def test_update_card_ruling(client):
             },
         ],
         "symbols": [],
+        "kind": "RULING",
+        "overrides": {},
         "target": {"name": "419 Operation", "uid": "100002"},
         "text": "New wording! [ANK 20221011-3]",
         "state": "MODIFIED",
@@ -737,6 +775,8 @@ async def test_add_group_ruling(client):
             },
         ],
         "symbols": [],
+        "kind": "RULING",
+        "overrides": {},
         "target": {"name": "Permanent not replaced", "uid": "G00008"},
         "text": "Test ruling [RTR 20070707]",
         "state": "NEW",
@@ -761,6 +801,8 @@ async def test_add_group_ruling(client):
                 },
             ],
             "symbols": [],
+            "kind": "RULING",
+            "overrides": {},
             "target": {"name": "Permanent not replaced", "uid": "G00008"},
             "text": "Test ruling [RTR 20070707]",
             "uid": "NBGBNBDU",
@@ -779,6 +821,8 @@ async def test_add_group_ruling(client):
                 },
             ],
             "state": "ORIGINAL",
+            "kind": "RULING",
+            "overrides": {},
             "symbols": [],
             "target": {
                 "name": "Permanent not replaced",
@@ -913,6 +957,71 @@ async def test_complete(client):
             "label": "The Louvre, Paris",
         },
     ]
+
+
+@pytest.mark.asyncio
+async def test_reminder_kind_reference_optional(client):
+    await login_and_proposal(client)
+    # a RULING with no reference is flagged by the consistency check
+    response = await client.post("/api/ruling/100015", json={"text": "Confirms the obvious"})
+    assert response.status_code == 200
+    ruling = response.json()
+    assert ruling["kind"] == "RULING"
+    uid = ruling["uid"]
+    errors = (await client.get("/api/check-consistency")).json()
+    assert any(e["ruling_uid"] == uid and "reference" in e["error"].lower() for e in errors)
+    # switching it to REMINDER lifts the reference requirement
+    response = await client.put(
+        f"/api/ruling/100015/{uid}", json={"text": "Confirms the obvious", "kind": "REMINDER"}
+    )
+    assert response.status_code == 200
+    assert response.json()["kind"] == "REMINDER"
+    errors = (await client.get("/api/check-consistency")).json()
+    assert not any(e["ruling_uid"] == uid for e in errors)
+
+
+@pytest.mark.asyncio
+async def test_group_ruling_override(client):
+    await login_and_proposal(client)
+    # a fresh group holding one card and one ruling (avoids depending on live group membership)
+    group = (await client.post("/api/group", json={"name": "Override test"})).json()
+    gid = group["uid"]
+    await client.put(f"/api/group/{gid}", json={"cards": {"100015": ""}})
+    ruling = (
+        await client.post(f"/api/ruling/{gid}", json={"text": "Group wording [RTR 20070707]"})
+    ).json()
+    rid = ruling["uid"]
+    # the card inherits the group ruling verbatim
+    inherited = [
+        r for r in (await client.get("/api/card/100015")).json()["rulings"]
+        if r["target"]["uid"] == gid
+    ]
+    assert len(inherited) == 1
+    assert inherited[0]["text"] == "Group wording [RTR 20070707]"
+    assert inherited[0]["overrides"] == {}
+    # override the body text for this card; the reference stays shared and identity is preserved
+    response = await client.put(
+        f"/api/ruling/{gid}/{rid}/override/100015", json={"text": "Adapted for this card"}
+    )
+    assert response.status_code == 200
+    eff = response.json()
+    assert eff["text"] == "Adapted for this card"
+    assert eff["uid"] == rid
+    assert [r["uid"] for r in eff["references"]] == ["RTR 20070707"]
+    assert eff["overrides"] == {"100015": "Adapted for this card"}
+    # the card now shows the adapted text
+    inherited = [
+        r for r in (await client.get("/api/card/100015")).json()["rulings"]
+        if r["target"]["uid"] == gid
+    ]
+    assert inherited[0]["text"] == "Adapted for this card"
+    # clearing the override (empty text) reverts to the group wording
+    response = await client.put(f"/api/ruling/{gid}/{rid}/override/100015", json={"text": ""})
+    assert response.json()["text"] == "Group wording [RTR 20070707]"
+    assert response.json()["overrides"] == {}
+    # a card that isn't a member of the group cannot be overridden (would be un-approvable)
+    response = await client.put(f"/api/ruling/{gid}/{rid}/override/100002", json={"text": "x"})
+    assert response.status_code == 400
 
 
 @pytest.mark.asyncio

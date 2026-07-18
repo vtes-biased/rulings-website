@@ -4,6 +4,9 @@
     {% if ruling.state != 'ORIGINAL' %}
     <span class="ruling__chip">{{ ruling.state|lower }}</span>
     {% endif %}
+    {% if ruling.kind == 'REMINDER' %}
+    <span class="ruling__reminder">reminder</span>
+    {% endif %}
     {% if ruling.target.uid != source %}
     <a class="ruling__group" href="groups.html?uid={{ ruling.target.uid }}{{ search_params_2 }}">{{ ruling.target.name }}</a>
     {% endif %}
@@ -14,7 +17,7 @@
         <a class="ref" href="{{ reference.url }}" target="_blank" rel="noopener">{{ reference.uid }}</a>
         {% endfor %}
     </div>
-    {% else %}
+    {% elif ruling.kind != 'REMINDER' %}
     <div class="ruling__empty">A reference is required</div>
     {% endif %}
 </article>

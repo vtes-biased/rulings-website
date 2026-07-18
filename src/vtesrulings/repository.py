@@ -153,21 +153,55 @@ async def load_base(repo: git.Repo, card_map: krcg.collections.CardDict) -> mode
         if not nid.uid.startswith("G"):
             nid = models.NID(uid=nid.uid, name=card_map[int(nid.uid)].unique_name)
         ret.rulings[nid.uid] = {}
-        for line in rulings:
-            uid = utils.stable_hash(line)
+        for entry in rulings:
+            # An entry is a plain string (RULING, no overrides) or a structured map
+            # `{text, kind?, overrides?}` — see pst #27/#28.
+            if isinstance(entry, str):
+                text, kind, overrides = entry, models.RulingKind.RULING, {}
+            else:
+                text = entry["text"]
+                kind = (
+                    models.RulingKind.REMINDER
+                    if str(entry.get("kind") or "").lower() == "reminder"
+                    else models.RulingKind.RULING
+                )
+                overrides = {
+                    utils.build_nid(k).uid: v for k, v in (entry.get("overrides") or {}).items()
+                }
+            uid = utils.stable_hash(text)
             ruling = utils.build_ruling(
                 card_map,
                 ret.references,
-                line,
+                text,
                 target=nid,
                 uid=uid,
                 state=models.State.ORIGINAL,
+                kind=kind,
             )
+            ruling.overrides = overrides
             ret.rulings[nid.uid][uid] = ruling
             for card in ruling.cards:
                 ret.backrefs.setdefault(card.uid, [])
                 ret.backrefs[card.uid].append(models.Backref(nid.uid, ruling.uid))
     return ret
+
+
+def serialize_ruling(
+    ruling: models.Ruling, card_map: krcg.collections.CardDict
+) -> str | dict[str, typing.Any]:
+    """A plain ruling is a bare string (the common case); a REMINDER or an overridden ruling is a
+    structured `{text, kind?, overrides?}` map. See pst #27/#28."""
+    if ruling.kind == models.RulingKind.RULING and not ruling.overrides:
+        return ruling.text
+    entry: dict[str, typing.Any] = {"text": ruling.text}
+    if ruling.kind == models.RulingKind.REMINDER:
+        entry["kind"] = "reminder"
+    if ruling.overrides:
+        entry["overrides"] = {}
+        for cid, text in ruling.overrides.items():
+            krcg_card = card_map[int(cid)]
+            entry["overrides"][f"{krcg_card.id}|{krcg_card.printed_name}"] = text
+    return entry
 
 
 async def async_yaml_dump(f: aiofiles.threadpool.text.AsyncTextIOWrapper, data: typing.Any) -> None:
@@ -223,12 +257,12 @@ async def _commit_index(
                     continue
                 key = f"{card.id}|{card.printed_name}"
                 data.setdefault(key, [])
-                data[key].append(ruling.text)
+                data[key].append(serialize_ruling(ruling, card_map))
         for group in all_groups:
             for ruling in index.rulings.get(group.uid, {}).values():
                 key = f"{goup_ids_map.get(group.uid, group.uid)}|{group.name}"
                 data.setdefault(key, [])
-                data[key].append(ruling.text)
+                data[key].append(serialize_ruling(ruling, card_map))
         await async_yaml_dump(f, data)
     await asgiref.sync.SyncToAsync(yamlfix.fix_files)(
         [

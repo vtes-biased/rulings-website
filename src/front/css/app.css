@@ -116,6 +116,7 @@
     .ruling--modified .ruling__chip { @apply text-state-modified; }
     .ruling--deleted .ruling__chip { @apply text-state-deleted; }
     .ruling__group { @apply mb-1 inline-block rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary no-underline hover:bg-primary/20; }
+    .ruling__reminder { @apply mb-1 mr-1.5 inline-block rounded bg-surface-2 px-1.5 text-xs text-text-muted; }
     .ruling__text { @apply leading-relaxed; }
     .ruling--deleted .ruling__text { @apply text-text-muted line-through; }
     .ruling__refs { @apply mt-3 flex flex-wrap gap-3; }

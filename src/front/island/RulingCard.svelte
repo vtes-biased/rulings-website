@@ -4,7 +4,7 @@
     import { do_fetch, putJSON } from "../js/net.js"
     import { renderBody } from "./tokens"
     import { RESTORABLE, DELETABLE } from "./types"
-    import type { Ruling, RefSub, Reference } from "./types"
+    import type { Ruling, RefSub, Reference, RulingKind } from "./types"
 
     let { source, ruling, rulebook, onReplace, onRemove }: {
         source: string
@@ -14,40 +14,67 @@
         onRemove: () => void
     } = $props()
 
-    // Rulings inherited from a group (target ≠ current source) are edited on the group page, not here.
+    // Rulings inherited from a group (target ≠ current source) are edited on the group page, not here
+    // — but a card may *adapt* one for itself (a per-card text override, pst #27), edited right here.
     const editable = $derived(ruling.target.uid === source)
     const editRefs = $derived(editable && ruling.state !== "DELETED")
+    const overridden = $derived(!!ruling.overrides?.[source])
     // A restore (or delete → DELETED read-only) resets the text from the server, so the uncontrolled
     // editor must be re-created; a text save keeps the user's DOM (and caret) untouched.
     let revision = $state(0)
     let modalOpen = $state(false)
+    // svelte-ignore state_referenced_locally
+    let adapting = $state(overridden)
     // Populated by TokenEditor: cancel a debounced save; read the current editor body (refs excluded).
     const editor: { cancel?: () => void; body?: () => string } = {}
+    const overrideEditor: { cancel?: () => void; body?: () => string } = {}
 
     // Refs live in the body text as [uid] markers, stripped from the editor and re-appended on save.
     // The editor is always mounted while references are editable, so its body is the source of truth.
     const bodyNow = () => editor.body?.() ?? ""
 
-    // One save in flight per card, always targeting the latest uid. A NEW ruling's uid is a hash of
-    // its text, so it changes on every save; queuing the newest text avoids a stale-uid 404.
-    let saving = false
-    let pending: string | null = null
-    async function save(bodyText: string, refs: RefSub[] = ruling.references) {
-        const refText = refs.map((r) => r.text).join(" ")
-        pending = (refText ? `${bodyText} ${refText}` : bodyText).trim()
-        if (saving) return
-        saving = true
-        try {
-            while (pending !== null) {
-                const text = pending
-                pending = null
-                const res = await putJSON(`/api/ruling/${source}/${ruling.uid}`, { text })
-                if (res) onReplace(await res.json())
-                else break
+    // One PUT in flight per endpoint, re-reading the latest uid each round (a NEW ruling's uid is a
+    // hash of its text, so it changes on every save; queuing the newest body avoids a stale-uid 404).
+    function makeSaver(url: () => string) {
+        let running = false
+        let pending: Record<string, unknown> | null = null
+        return async (body: Record<string, unknown>) => {
+            pending = body
+            if (running) return
+            running = true
+            try {
+                while (pending !== null) {
+                    const b = pending
+                    pending = null
+                    const res = await putJSON(url(), b)
+                    if (res) onReplace(await res.json())
+                    else break
+                }
+            } finally {
+                running = false
             }
-        } finally {
-            saving = false
         }
+    }
+    const putRuling = makeSaver(() => `/api/ruling/${source}/${ruling.uid}`)
+    const putOverride = makeSaver(() => `/api/ruling/${ruling.target.uid}/${ruling.uid}/override/${source}`)
+
+    function save(bodyText: string, refs: RefSub[] = ruling.references, kind: RulingKind = ruling.kind) {
+        const refText = refs.map((r) => r.text).join(" ")
+        putRuling({ text: (refText ? `${bodyText} ${refText}` : bodyText).trim(), kind })
+    }
+
+    function setKind(kind: RulingKind) {
+        if (kind === ruling.kind) return
+        save(bodyNow(), ruling.references, kind)
+    }
+
+    // Per-card override save (inherited ruling): body only, refs are shared from the group ruling.
+    const saveOverride = (bodyText: string) => putOverride({ text: bodyText.trim() })
+
+    async function resetOverride() {
+        overrideEditor.cancel?.()
+        const res = await putJSON(`/api/ruling/${ruling.target.uid}/${ruling.uid}/override/${source}`, { text: "" })
+        if (res) { onReplace(await res.json()); adapting = false; revision++ }
     }
 
     function addReference(ref: Reference) {
@@ -94,6 +121,9 @@
     {#if ruling.state !== "ORIGINAL"}
     <span class="ruling__chip">{ruling.state.toLowerCase()}</span>
     {/if}
+    {#if ruling.kind === "REMINDER" && !editable}
+    <span class="ruling__reminder">reminder</span>
+    {/if}
     {#if !editable}
     <a class="ruling__group" href={groupHref(ruling.target.uid)}>{ruling.target.name}</a>
     {/if}
@@ -109,11 +139,32 @@
             🗑 Delete</button>
         {/if}
     </div>
+    {:else if ruling.state !== "DELETED"}
+    <div class="ruling__actions">
+        {#if adapting && overridden}
+        <button type="button" class="btn btn-secondary btn-sm" onclick={resetOverride}>↺ Reset to group text</button>
+        {:else if adapting}
+        <button type="button" class="btn btn-secondary btn-sm" onclick={() => (adapting = false)}>✕ Cancel</button>
+        {:else}
+        <button type="button" class="btn btn-secondary btn-sm" onclick={() => (adapting = true)}>✎ Adapt for this card</button>
+        {/if}
+    </div>
+    {/if}
+
+    {#if editable && ruling.state !== "DELETED"}
+    <div class="ruling__kind" role="group" aria-label="Ruling kind">
+        <button type="button" class:active={ruling.kind !== "REMINDER"} onclick={() => setKind("RULING")}>Ruling</button>
+        <button type="button" class:active={ruling.kind === "REMINDER"} onclick={() => setKind("REMINDER")}>Reminder</button>
+    </div>
     {/if}
 
     {#if editable && ruling.state !== "DELETED"}
     {#key revision}
     <TokenEditor {ruling} {editor} onSave={(t) => save(t)} />
+    {/key}
+    {:else if !editable && adapting && ruling.state !== "DELETED"}
+    {#key revision}
+    <TokenEditor {ruling} editor={overrideEditor} onSave={saveOverride} />
     {/key}
     {:else}
     <div class="ruling__text" use:renderBody={ruling}></div>
@@ -137,7 +188,7 @@
         {/if}
     </div>
     {/if}
-    {#if !ruling.references.length}
+    {#if !ruling.references.length && ruling.kind !== "REMINDER"}
     <div class="ruling__empty">A reference is required</div>
     {/if}
 </article>
@@ -148,6 +199,17 @@
 
 <style>
     .ruling__actions { float: right; display: flex; gap: 0.375rem; margin-left: 0.5rem; }
+    .ruling__kind { display: inline-flex; margin-bottom: 0.5rem; }
+    .ruling__kind button {
+        padding: 0.125rem 0.625rem;
+        font-size: 0.8125rem;
+        border: 1px solid var(--color-hairline);
+        color: var(--color-text-muted);
+        background: var(--color-surface);
+    }
+    .ruling__kind button:first-child { border-radius: 0.375rem 0 0 0.375rem; }
+    .ruling__kind button:last-child { border-radius: 0 0.375rem 0.375rem 0; border-left: 0; }
+    .ruling__kind button.active { color: var(--color-text); background: var(--color-surface-2); font-weight: 500; }
     .ref-tag { display: inline-flex; align-items: center; gap: 0.125rem; }
     .ref-del {
         cursor: pointer;

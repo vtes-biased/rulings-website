@@ -32,3 +32,26 @@ across all the group's rulings). The model must key overrides by ruling identity
   `proposal.Manager.get_rulings` (apply override instead of prefix-prepend when present),
   the Svelte editor (#9) to author overrides, back-compat for existing plain-string rulings.
 - References are untouched by design — they always come from the base group ruling.
+
+## Resolved (implemented with #28)
+- **Candidate A.** Override lives on the group ruling entry in `rulings.yaml`:
+  `{text, overrides: {<card_id>|<printed_name>: "adapted body"}}` (card key uses the same
+  `id|name` NID as groups.yaml, for readability). Stored in the model as `Ruling.overrides:
+  dict[card_uid, text]`. The adapted text is **body-only** — no reference markers; refs are shared
+  from the base ruling (the token editor already strips refs, so a saved override is naturally
+  body-only).
+- Effective card ruling (`Manager._effective_group_ruling`): if the card has an override, text =
+  override, symbols/cards parsed from it, refs = base ruling's; else the existing prefix+base path.
+  An override subsumes the prefix for that one ruling (prefix stays the trivial per-card case).
+- **Edited on the card page** (index.html), not the group page — a card adapts *its* inherited
+  group rulings (few), avoiding a cards×rulings matrix on a 75-card group. The inherited RulingCard
+  gains "Adapt for this card" / "Reset to group text". Override save: `PUT
+  /api/ruling/{group}/{ruling}/override/{card}` `{text}`; empty text clears (revert).
+- `Manager.override_ruling` copies the base group ruling into the overlay carrying the override
+  (state MODIFIED; dropped back to base when it matches again). `update_ruling` carries overrides
+  forward across a text edit and includes them in its revert-to-base check.
+- Effective card rulings carry the base ruling's `overrides` map so the island knows whether *this*
+  card is overridden (shows Reset vs Adapt).
+- Known limitation: a `{Card}` mentioned only inside an override body produces no backref
+  (`get_backrefs` reads the base ruling's `cards`). Low impact; revisit if override-only mentions
+  become common.

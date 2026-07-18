@@ -24,8 +24,8 @@ closed	bug	Fix: proposal name/description not saving — saveProposal() in src/f
 closed	bug,superseded	Firefox dynamic editing broken — verify resolved by the Svelte island rewrite; patch only if still broken. parent:#4 addressed-by:#9
 open  	feature,frontend	Proposal diff view on the site: approver landing page (arriving from Discord) rendering the NEW/MODIFIED/DELETED overlay. parent:#5
 open  	feature,backend	Discord: adaptive diff in the initial proposal message (inline text / bullet list / truncated by size) + post updates to the same thread. parent:#5
-open  	feature	Supersede group-ruling text per card (same ruling identity + shared references; text override only). Design: see detail file. parent:#5
-open  	feature	Two-kind entry model RULING vs REMINDER (reminder reference optional); update check_consistency + YAML marker + editor. Design: see detail file. parent:#5
+closed	feature	Supersede group-ruling text per card (same ruling identity + shared references; text override only). Design: see detail file. parent:#5
+closed	feature	Two-kind entry model RULING vs REMINDER (reminder reference optional); update check_consistency + YAML marker + editor. Design: see detail file. parent:#5
 open  	feature,frontend	Mobile-first pass on the read side (Jinja SSR); editor mobile-first is handled in the Svelte island (#9). parent:#5
 closed	bug,superseded	Active-proposals alert lists every unsubmitted proposal as an inline link with no cap — floods the page (hundreds of entries). Alert links built in __init__.py index route from get_user_proposals. parent:#4
 closed	bug,superseded	Error toast from a failed fetch never auto-dismisses — stays stuck on screen indefinitely (do_fetch error handler in layout.ts). parent:#4

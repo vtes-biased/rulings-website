@@ -237,13 +237,14 @@ def build_ruling(
     target: models.NID,
     uid: str = "",
     state: models.State = models.State.ORIGINAL,
+    kind: models.RulingKind = models.RulingKind.RULING,
 ) -> models.Ruling:
     """Build a Ruling object from text.
     If uid is not provided, it's computed from the text using stable_hash()
     If text is empty, a random 8-char uid is provided
     """
     uid = uid or (stable_hash(text) if text else random_uid8())
-    ruling = models.Ruling(target=target, uid=uid, text=text, state=state)
+    ruling = models.Ruling(target=target, uid=uid, text=text, state=state, kind=kind)
     ruling.symbols.extend(parse_symbols(text))
     ruling.cards.extend(parse_cards(card_map, text))
     ruling.references.extend(parse_references(references, text))

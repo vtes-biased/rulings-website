@@ -132,17 +132,43 @@ class Manager:
             return
         for group, card_in_group in self.get_groups_of(uid):
             for ruling in self.get_rulings(group.uid, True, False):
-                yield models.Ruling(
-                    uid=ruling.uid,
-                    target=ruling.target,
-                    text=(
-                        card_in_group.prefix + (" " if card_in_group.prefix else "") + ruling.text
-                    ),
-                    state=ruling.state,
-                    symbols=ruling.symbols + card_in_group.symbols,
-                    references=ruling.references,
-                    cards=ruling.cards,
-                )
+                yield self._effective_group_ruling(uid, ruling, card_in_group)
+
+    def _card_in_group(self, card_uid: str, group_uid: str) -> models.CardInGroup | None:
+        for group, card_in_group in self.get_groups_of(card_uid):
+            if group.uid == group_uid:
+                return card_in_group
+        return None
+
+    def _effective_group_ruling(
+        self, card_uid: str, ruling: models.Ruling, card_in_group: models.CardInGroup | None = None
+    ) -> models.Ruling:
+        """The ruling a card effectively sees for one of its groups' rulings: the per-card text
+        override when present (references still shared from the base ruling), else prefix + base
+        text. An override subsumes the prefix for that one ruling. See pst #27."""
+        override = ruling.overrides.get(card_uid)
+        if override is not None:
+            text = override
+            symbols = list(utils.parse_symbols(override))
+            cards = list(utils.parse_cards(self.card_map, override))
+        else:
+            if card_in_group is None:
+                card_in_group = self._card_in_group(card_uid, ruling.target.uid)
+            prefix = card_in_group.prefix if card_in_group else ""
+            text = prefix + (" " if prefix else "") + ruling.text
+            symbols = ruling.symbols + (card_in_group.symbols if card_in_group else [])
+            cards = ruling.cards
+        return models.Ruling(
+            uid=ruling.uid,
+            target=ruling.target,
+            text=text,
+            state=ruling.state,
+            kind=ruling.kind,
+            symbols=symbols,
+            references=ruling.references,
+            cards=cards,
+            overrides=ruling.overrides,
+        )
 
     def get_ruling(self, target_uid: str, ruling_uid: str, deleted: bool = False) -> models.Ruling:
         """Retrieve a ruling by its target (card or group) and its uid.
@@ -328,18 +354,26 @@ class Manager:
             )
         return ret
 
-    def build_ruling(self, text: str, target: models.NID) -> models.Ruling:
+    def build_ruling(
+        self,
+        text: str,
+        target: models.NID,
+        kind: models.RulingKind = models.RulingKind.RULING,
+    ) -> models.Ruling:
         return utils.build_ruling(
             self.card_map,
             ModifiedDict(self.base.references, self.prop.references),
             text,
             target=target,
+            kind=kind,
         )
 
-    def insert_ruling(self, target_uid: str, text: str) -> models.Ruling:
+    def insert_ruling(
+        self, target_uid: str, text: str, kind: models.RulingKind = models.RulingKind.RULING
+    ) -> models.Ruling:
         """Can be empty."""
         target = self.build_nid(target_uid)
-        ruling = self.build_ruling(text, target=target)
+        ruling = self.build_ruling(text, target=target, kind=models.RulingKind(kind))
         if ruling.uid in self.base.rulings.get(target_uid, {}):
             raise ValueError("An identical ruling exists already")
         ruling.state = models.State.NEW
@@ -349,30 +383,78 @@ class Manager:
         self.prop.rulings[target_uid][ruling.uid] = ruling
         return ruling
 
-    def update_ruling(self, target_uid: str, uid: str, text: str) -> models.Ruling:
+    @staticmethod
+    def _matches_base(ruling: models.Ruling, base_ruling: models.Ruling) -> bool:
+        """Whether an overlay ruling is identical to its base — the signal to drop the overlay."""
+        return (
+            ruling.uid == base_ruling.uid
+            and ruling.text == base_ruling.text
+            and ruling.kind == base_ruling.kind
+            and ruling.overrides == base_ruling.overrides
+        )
+
+    def update_ruling(
+        self,
+        target_uid: str,
+        uid: str,
+        text: str,
+        kind: models.RulingKind = models.RulingKind.RULING,
+    ) -> models.Ruling:
         """Note in this case the ruling uid matches the old text, not the new text.
-        If the text is switched back to the old text, drop the update from proposal.
+        If the text (and kind, and overrides) are switched back to the base, drop the update.
         """
         target = self.build_nid(target_uid)
         if not uid:
             raise ValueError("Cannot update a ruling without its UID")
-        ruling = self.build_ruling(text, target=target)
+        ruling = self.build_ruling(text, target=target, kind=models.RulingKind(kind))
         old_ruling = self.get_ruling(target_uid, uid)
+        ruling.overrides = dict(old_ruling.overrides)  # a text edit keeps any per-card overrides
         self.prop.rulings.setdefault(target_uid, {})
         if old_ruling.state == models.State.NEW:
             ruling.state = models.State.NEW
             self.prop.rulings[target_uid].pop(uid, None)
             self.prop.rulings[target_uid][ruling.uid] = ruling
             return ruling
-        if ruling.uid == uid:
+        base_ruling = self.base.rulings[target_uid][uid]
+        if self._matches_base(ruling, base_ruling):
             self.prop.rulings[target_uid].pop(uid, None)
             if not self.prop.rulings[target_uid]:
                 del self.prop.rulings[target_uid]
-            return self.base.rulings[target_uid][uid]
+            return base_ruling
         ruling.uid = uid
         ruling.state = models.State.MODIFIED
         self.prop.rulings[target_uid][ruling.uid] = ruling
         return ruling
+
+    def override_ruling(self, target_uid: str, uid: str, card_uid: str, text: str) -> models.Ruling:
+        """Set (or clear, when text is empty) a per-card body-text override on a group ruling.
+        Returns the effective ruling that card now sees. See pst #27."""
+        if not target_uid.startswith(("G", "P")):
+            raise ValueError("Overrides only apply to group rulings")
+        text = (text or "").strip()
+        if text and not self._card_in_group(card_uid, target_uid):
+            raise ValueError(f"Card {card_uid} is not a member of group {target_uid}")
+        prop = self.prop.rulings.setdefault(target_uid, {})
+        if uid in prop:
+            ruling = prop[uid]
+            if ruling.state == models.State.DELETED:
+                raise KeyError(f"Deleted ruling {target_uid}:{uid}")
+        else:
+            ruling = copy.deepcopy(self.get_ruling(target_uid, uid))
+            prop[uid] = ruling
+        if text:
+            ruling.overrides[card_uid] = text
+        else:
+            ruling.overrides.pop(card_uid, None)
+        base_ruling = self.base.rulings.get(target_uid, {}).get(uid)
+        if ruling.state != models.State.NEW and base_ruling:
+            if self._matches_base(ruling, base_ruling):
+                prop.pop(uid, None)
+                if not prop:
+                    del self.prop.rulings[target_uid]
+                return self._effective_group_ruling(card_uid, base_ruling)
+            ruling.state = models.State.MODIFIED
+        return self._effective_group_ruling(card_uid, ruling)
 
     def restore_ruling(self, target_uid: str, uid: str) -> models.Ruling:
         """Restore the given ruling"""
@@ -398,9 +480,11 @@ class Manager:
             target=base_ruling.target,
             text=base_ruling.text,
             state=models.State.DELETED,
+            kind=base_ruling.kind,
             symbols=base_ruling.symbols,
             references=base_ruling.references,
             cards=base_ruling.cards,
+            overrides=dict(base_ruling.overrides),
         )
         self.prop.rulings.setdefault(target_uid, {})
         self.prop.rulings[target_uid][uid] = ret
@@ -587,7 +671,7 @@ class Manager:
         for ruling in self.all_rulings():
             ruling_refs = set(r.uid for r in ruling.references)
             ruling_refs &= listed_refs
-            if not ruling_refs:
+            if not ruling_refs and ruling.kind != models.RulingKind.REMINDER:
                 errors.append(
                     models.ConsistencyError(
                         ruling.target, ruling.uid, "At least one reference is required"

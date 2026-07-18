@@ -282,6 +282,15 @@ async def delete_ruling(
     return asdict(ret)
 
 
+@router.put("/ruling/{target_id}/{ruling_id}/override/{card_id}")
+async def put_override(
+    target_id: str, ruling_id: str, card_id: str, ctx: ProposalCtx = Depends(proposal_update)
+):
+    """Set (empty text clears) a per-card text override on a group ruling. See pst #27."""
+    params = await get_params(ctx.request)
+    return asdict(ctx.manager.override_ruling(target_id, ruling_id, card_id, params.get("text", "")))
+
+
 @router.post("/group")
 async def post_group(ctx: ProposalCtx = Depends(proposal_update)):
     params = await get_params(ctx.request)

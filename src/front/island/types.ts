@@ -1,6 +1,7 @@
 // Domain types mirroring models.py, plus the ankha symbol map (utils.py ANKHA_SYMBOLS).
 
 export type State = "ORIGINAL" | "NEW" | "MODIFIED" | "DELETED"
+export type RulingKind = "RULING" | "REMINDER"
 
 export interface NID { uid: string; name: string }
 export interface SymbolSub { text: string; symbol: string }
@@ -12,9 +13,11 @@ export interface Ruling {
     target: NID
     text: string
     state: State
+    kind: RulingKind
     symbols: SymbolSub[]
     references: RefSub[]
     cards: CardSub[]
+    overrides: Record<string, string>
 }
 export interface CardInGroup {
     uid: string; name: string; printed_name: string; img: string

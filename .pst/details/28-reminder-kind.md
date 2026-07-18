@@ -32,3 +32,15 @@ bare string. Design that entry schema once:
   the text still yields the uid.
 - `proposal.Manager.check_consistency`: reference-required rule applies to RULING only.
 - Svelte editor (#9): kind toggle; when REMINDER, reference field is optional.
+
+## Resolved (implemented with #27)
+- **Schema move (shared with #27): candidate A.** A `rulings.yaml` entry is a plain string
+  (⇒ RULING, back-compat) OR a map `{text, kind?, overrides?}`. `kind: reminder` marks a REMINDER;
+  absent ⇒ RULING. `overrides` is #27. The map is emitted only when kind≠RULING or overrides exist,
+  so existing files are untouched.
+- `models.RulingKind` StrEnum (RULING/REMINDER), field on `Ruling` default RULING.
+  `utils.build_ruling(..., kind=)` carries it; `stable_hash(text)` unchanged (kind not in the uid).
+- `check_consistency`: "≥1 reference" errors for RULING only; a REMINDER's refs (if any) still count
+  as used so they're not pruned.
+- Editor: kind toggle on an own ruling (target==source); when REMINDER the "reference required"
+  empty-state is suppressed (SSR macro + island). Read side shows a muted `reminder` tag.
