@@ -302,10 +302,12 @@ async def load_base(repo: git.Repo, card_map: krcg.collections.CardDict) -> mode
             nid = models.NID(uid=nid.uid, name=card_map[int(nid.uid)].unique_name)
         ret.rulings[nid.uid] = {}
         for entry in rulings:
-            # An entry is a plain string (RULING, no overrides) or a structured map
-            # `{text, kind?, overrides?}` — see pst #27/#28.
+            # An entry is a plain string (RULING, or a REMINDER with a trailing [REMINDER] tag) or
+            # a structured map `{text, kind?, overrides?}` for the overridden case — see pst #27/#28.
             if isinstance(entry, str):
-                text, kind, overrides = entry, models.RulingKind.RULING, {}
+                overrides = {}
+                text = utils.RE_REMINDER.sub("", entry)
+                kind = models.RulingKind.REMINDER if text != entry else models.RulingKind.RULING
             else:
                 text = entry["text"]
                 kind = (
@@ -337,18 +339,20 @@ async def load_base(repo: git.Repo, card_map: krcg.collections.CardDict) -> mode
 def serialize_ruling(
     ruling: models.Ruling, card_map: krcg.collections.CardDict
 ) -> str | dict[str, typing.Any]:
-    """A plain ruling is a bare string (the common case); a REMINDER or an overridden ruling is a
-    structured `{text, kind?, overrides?}` map. See pst #27/#28."""
-    if ruling.kind == models.RulingKind.RULING and not ruling.overrides:
+    """A ruling with no overrides is a bare string — a REMINDER carries a trailing [REMINDER] tag
+    (its inline reference, if any, is already in the text). Overrides force a structured
+    `{text, kind?, overrides?}` map. See pst #27/#28."""
+    if not ruling.overrides:
+        if ruling.kind == models.RulingKind.REMINDER:
+            return f"{ruling.text} [REMINDER]"
         return ruling.text
     entry: dict[str, typing.Any] = {"text": ruling.text}
     if ruling.kind == models.RulingKind.REMINDER:
         entry["kind"] = "reminder"
-    if ruling.overrides:
-        entry["overrides"] = {}
-        for cid, text in ruling.overrides.items():
-            krcg_card = card_map[int(cid)]
-            entry["overrides"][f"{krcg_card.id}|{krcg_card.printed_name}"] = text
+    entry["overrides"] = {}
+    for cid, text in ruling.overrides.items():
+        krcg_card = card_map[int(cid)]
+        entry["overrides"][f"{krcg_card.id}|{krcg_card.printed_name}"] = text
     return entry
 
 

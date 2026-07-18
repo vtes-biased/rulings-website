@@ -7,7 +7,8 @@ from vtesrulings import models, repository
 
 
 def test_serialize_ruling():
-    """A plain ruling serializes to a bare string; a REMINDER or an overridden ruling to a map."""
+    """A ruling with no overrides is a bare string — a REMINDER gets a trailing [REMINDER] tag;
+    overrides force a structured map."""
 
     class FakeCard:
         def __init__(self, cid, name):
@@ -24,13 +25,32 @@ def test_serialize_ruling():
     assert repository.serialize_ruling(ruling(text="Body [RTR 20070707]"), card_map) == (
         "Body [RTR 20070707]"
     )
-    assert repository.serialize_ruling(
-        ruling(text="Reminder", kind=models.RulingKind.REMINDER), card_map
-    ) == {"text": "Reminder", "kind": "reminder"}
+    assert (
+        repository.serialize_ruling(
+            ruling(text="Reminder", kind=models.RulingKind.REMINDER), card_map
+        )
+        == "Reminder [REMINDER]"
+    )
+    # a reminder may still carry an inline reference — it stays embedded in the text
+    assert (
+        repository.serialize_ruling(
+            ruling(text="Reminder [RTR 20070707]", kind=models.RulingKind.REMINDER), card_map
+        )
+        == "Reminder [RTR 20070707] [REMINDER]"
+    )
     assert repository.serialize_ruling(
         ruling(text="Body [RTR 20070707]", overrides={"100015": "Adapted"}), card_map
     ) == {
         "text": "Body [RTR 20070707]",
+        "overrides": {"100015|Academic Hunting Ground": "Adapted"},
+    }
+    # overrides + reminder still forces a map, keeping the kind key
+    assert repository.serialize_ruling(
+        ruling(text="Body", kind=models.RulingKind.REMINDER, overrides={"100015": "Adapted"}),
+        card_map,
+    ) == {
+        "text": "Body",
+        "kind": "reminder",
         "overrides": {"100015|Academic Hunting Ground": "Adapted"},
     }
 

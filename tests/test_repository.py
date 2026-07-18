@@ -1,6 +1,7 @@
 import git
 
-from vtesrulings import repository
+import vtesrulings
+from vtesrulings import models, repository
 
 
 def _commit(repo, work, body, date):
@@ -53,3 +54,29 @@ async def test_recent_changes_surfaces_edits_not_renames(tmp_path):
     ]
     # the rename-only card never surfaces as a change
     assert all("100001" not in c["url"] for c in changes)
+
+
+async def test_load_base_reminder_tag_round_trips(app, tmp_path):
+    """A bare-string ruling with a trailing [REMINDER] tag loads as kind REMINDER with the tag
+    stripped; an inline reference before the tag survives and still parses. Inverse of
+    serialize_ruling. Depends on `app` only to guarantee the card DB is loaded onto app.state."""
+    ref_dir = tmp_path / "repo" / repository.RULINGS_FILES_PATH
+    ref_dir.mkdir(parents=True)
+    (ref_dir / "references.yaml").write_text("RTR 20070707: https://www.vekn.net/forum/x\n")
+    (ref_dir / "groups.yaml").write_text("{}\n")
+    (ref_dir / "rulings.yaml").write_text(
+        "100015|Academic Hunting Ground:\n"
+        "  - Plain ruling. [RTR 20070707]\n"
+        "  - Confirms the obvious. [REMINDER]\n"
+        "  - Reminder with a citation. [RTR 20070707] [REMINDER]\n"
+    )
+    repo = git.Repo.init(tmp_path / "repo")
+
+    index = await repository.load_base(repo, vtesrulings.app.state.cards_map)
+    by_text = {r.text: r for r in index.rulings["100015"].values()}
+
+    assert by_text["Plain ruling. [RTR 20070707]"].kind == models.RulingKind.RULING
+    assert by_text["Confirms the obvious."].kind == models.RulingKind.REMINDER
+    cited = by_text["Reminder with a citation. [RTR 20070707]"]
+    assert cited.kind == models.RulingKind.REMINDER
+    assert [ref.uid for ref in cited.references] == ["RTR 20070707"]

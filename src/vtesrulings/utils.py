@@ -135,6 +135,10 @@ RULING_AUTHORS = {
 RE_RULING_REFERENCE = re.compile(r"\[(?:" + r"|".join(RULING_AUTHORS) + r")\s[\w0-9-]+\]")
 RE_SYMBOL = re.compile(r"\[(?:" + r"|".join(ANKHA_SYMBOLS) + r")\]")
 RE_CARD = re.compile(r"{[^}]+}")
+# A REMINDER ruling with no overrides serializes as a bare string with this trailing tag, keeping
+# the YAML simple; the tag is stripped on load and re-appended on serialize (kind is a flag on the
+# in-memory Ruling, orthogonal to any inline reference). See serialize_ruling.
+RE_REMINDER = re.compile(r"\s*\[REMINDER\]\s*$", re.IGNORECASE)
 
 
 def build_nid(label: str) -> models.NID:
