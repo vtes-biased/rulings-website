@@ -19,9 +19,17 @@
     } = $props()
 
     let host: HTMLDivElement
+    let wrap: HTMLDivElement
     let pickerEl: HTMLDivElement
     let savedRange: Range | null = null
     let pickerOpen = $state(false)
+    // Tools render only while focus is inside `wrap`. The buttons use mousedown+preventDefault so they
+    // never steal focus; the card-search input does, but it lives inside `wrap` so focusout to it keeps
+    // the tools open (moving it outside `wrap` would collapse them mid-interaction).
+    let focused = $state(false)
+    function onFocusOut(e: FocusEvent) {
+        if (!wrap.contains(e.relatedTarget as Node | null)) { focused = false; pickerOpen = false }
+    }
 
     $effect(() => {
         if (!pickerOpen) return
@@ -110,27 +118,31 @@
     })
 </script>
 
-<div class="editor" class:compact bind:this={host} contenteditable="true" role="textbox" tabindex="0"
-    aria-label={placeholder} data-placeholder={placeholder}
-    oninput={onInput} onpaste={onPaste} onbeforeinput={onBeforeInput}></div>
+<div class="editor-wrap" bind:this={wrap} onfocusin={() => (focused = true)} onfocusout={onFocusOut}>
+    <div class="editor" class:compact bind:this={host} contenteditable="true" role="textbox" tabindex="0"
+        aria-label={placeholder} data-placeholder={placeholder}
+        oninput={onInput} onpaste={onPaste} onbeforeinput={onBeforeInput}></div>
 
-<div class="editor-tools">
-    <div class="editor-picker" bind:this={pickerEl}>
-        <button type="button" class="btn btn-secondary btn-sm" aria-expanded={pickerOpen}
-            onmousedown={(e) => e.preventDefault()} onclick={() => (pickerOpen = !pickerOpen)}>
-            <span class="krcg-icon text-base leading-none">p</span> Symbol
-        </button>
-        {#if pickerOpen}
-        <div class="editor-glyphs">
-            {#each SYMBOL_ENTRIES as [key, glyph] (key)}
-            <button type="button" class="editor-glyph krcg-icon" title={key}
-                onmousedown={(e) => e.preventDefault()} onclick={() => insertSymbol(`[${key}]`, glyph)}
-            >{glyph}</button>
-            {/each}
+    {#if focused}
+    <div class="editor-tools">
+        <div class="editor-picker" bind:this={pickerEl}>
+            <button type="button" class="btn btn-secondary btn-sm" aria-expanded={pickerOpen}
+                onmousedown={(e) => e.preventDefault()} onclick={() => (pickerOpen = !pickerOpen)}>
+                <span class="krcg-icon text-base leading-none">p</span> Symbol
+            </button>
+            {#if pickerOpen}
+            <div class="editor-glyphs">
+                {#each SYMBOL_ENTRIES as [key, glyph] (key)}
+                <button type="button" class="editor-glyph krcg-icon" title={key}
+                    onmousedown={(e) => e.preventDefault()} onclick={() => insertSymbol(`[${key}]`, glyph)}
+                >{glyph}</button>
+                {/each}
+            </div>
+            {/if}
         </div>
-        {/if}
+        {#if tools}{@render tools({ insert: insertAtCaret })}{/if}
     </div>
-    {#if tools}{@render tools({ insert: insertAtCaret })}{/if}
+    {/if}
 </div>
 
 <style>
