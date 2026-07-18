@@ -36,7 +36,7 @@
 
 <section class="my-4" id="rulingsDiv">
     <h4 class="text-lg">Rulings</h4>
-    {% if not proposal %}
+    {% if user and not proposal %}
     <button class="btn btn-primary my-2" id="quickProposalButton">Add/Edit rulings</button>
     {% endif %}
     <div id="rulingsList" data-source="{{ current.uid }}" data-rulebook='{{ (rbk_references or []) | tojson }}'>

@@ -37,7 +37,12 @@ export function displayError(msg: string) {
 export async function do_fetch(url: string, options: object) {
     try {
         const response = await fetch(url, options)
-        if (!response.ok) throw new Error((await response.json())[0])
+        if (!response.ok) {
+            // data errors serialize as [msg] (ValueError/KeyError handler); HTTPException as {detail}
+            const body = await response.json().catch(() => null)
+            const msg = Array.isArray(body) ? body[0] : body?.detail
+            throw new Error(msg || response.statusText || `Error ${response.status}`)
+        }
         return response
     } catch (error: any) {
         console.log(`Error fetching ${url}`, error.message)
