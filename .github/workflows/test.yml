@@ -27,14 +27,14 @@ jobs:
           --health-retries 5
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       # psycopg uses the pure-Python impl, which dlopens the system libpq at runtime.
       - name: Install libpq
         run: sudo apt-get update && sudo apt-get install -y libpq-dev
 
       - name: Set up Node
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v7
         with:
           node-version: "lts/*"
 
@@ -45,7 +45,7 @@ jobs:
         run: npm run build
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v8
         with:
           python-version: "3.13"
 
