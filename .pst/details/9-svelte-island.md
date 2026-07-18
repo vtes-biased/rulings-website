@@ -99,7 +99,8 @@ to the front.
   its keep. Verified live (`TESTING=1` server, Chrome, card Abactor in edit mode): island mounts,
   bubbling mouseover on an island chip (which krcg never binds) opens the preview → delegation covers
   island spans; **mobile-first edit** at 454px has zero horizontal overflow, glyph picker + reference
-  modal both fit. Firefox editing (#24) ✅ verified in #38. #30/#31 ✅. The ticket's literal "delete
+  modal both fit. Firefox editing (#24) ✅ — verified in #38 and re-confirmed by a manual Firefox pass
+of the token editor. #30/#31 ✅. The ticket's literal "delete
   groups.ts/index.ts/admin.ts" is superseded — they stay as thin per-page Vite entries (templates
   reference them by stable name); the 1156-line `layout.ts` is the file that's gone. *(done — closes #9)*
 
