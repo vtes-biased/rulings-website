@@ -14,6 +14,45 @@
     </form>
 </search>
 
+{% if not current %}
+<section class="my-6 max-w-2xl">
+    <h1 class="text-3xl">Official V:TES Rulings</h1>
+    <p class="mt-3 leading-relaxed text-text-muted">
+        A community-curated reference of official rulings for <strong class="text-text">Vampire: The
+            Eternal Struggle</strong> — the definitive answers to how cards and rules interact, gathered
+        from the successive rules directors and the ruling team.
+    </p>
+    <p class="mt-2 leading-relaxed text-text-muted">
+        Registered players draft <strong class="text-text">proposals</strong> to add or edit rulings;
+        each is discussed on the VTES Discord and, once approved, committed to the permanent
+        <a href="{{ rulings_repo_url }}" target="_blank" rel="noopener">vtes-rulings</a> repository — the
+        durable source of truth. Search above, or start from an example:
+    </p>
+    <div class="mt-3 flex flex-wrap gap-2">
+        <a class="badge no-underline hover:bg-hairline" href="index.html?uid=100845{{ search_params_2 }}">Govern the Unaligned</a>
+        <a class="badge no-underline hover:bg-hairline" href="index.html?uid=102121{{ search_params_2 }}">Villein</a>
+        <a class="badge no-underline hover:bg-hairline" href="index.html?uid=100518{{ search_params_2 }}">Deflection</a>
+        <a class="badge no-underline hover:bg-hairline" href="index.html?uid=100074{{ search_params_2 }}">Anthelios, The Red Star</a>
+        <a class="badge no-underline hover:bg-hairline" href="groups.html?uid=G00012{{ search_params_2 }}">Black Hand (group)</a>
+    </div>
+</section>
+
+{% if recent_changes %}
+<section class="my-6 max-w-2xl">
+    <h2 class="text-lg">Recently changed</h2>
+    <ul class="mt-2 divide-y divide-hairline overflow-hidden rounded-lg border border-hairline bg-surface">
+        {% for change in recent_changes %}
+        <li class="flex items-baseline gap-3 px-3 py-2">
+            <a class="grow text-text no-underline hover:underline" href="{{ change.url }}" target="_blank"
+                rel="noopener">{{ change.title }}</a>
+            <span class="shrink-0 font-mono text-xs text-text-muted">{{ change.date }}</span>
+        </li>
+        {% endfor %}
+    </ul>
+</section>
+{% endif %}
+{% endif %}
+
 {% if current %}
 <section id="cardDisplay" class="krcg-current my-4 flex flex-col gap-4 md:flex-row" data-data='{{ current | tojson }}'>
     <div class="shrink-0">

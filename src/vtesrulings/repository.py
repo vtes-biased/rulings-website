@@ -18,6 +18,7 @@ from . import utils
 logger = logging.getLogger()
 COMMIT_LOCK = asyncio.Lock()
 RULINGS_GIT = "git@github.com:vtes-biased/vtes-rulings.git"
+RULINGS_REPO_WEB = "https://github.com/vtes-biased/vtes-rulings"
 GIT_SSH_COMMAND = os.getenv("GIT_SSH_COMMAND", "ssh -i ~/.ssh/id_rsa")
 RULINGS_FILES_PATH = "rulings/"
 
@@ -105,6 +106,23 @@ async def clone(repo_dir: str) -> git.Repo:
         env={"GIT_SSH_COMMAND": GIT_SSH_COMMAND},
     )
     return ret
+
+
+async def recent_changes(repo: git.Repo, limit: int = 8) -> list[dict]:
+    """A commit summary is the proposal name recorded at approval (see commit_index)."""
+
+    def _read():
+        path = os.path.join(RULINGS_FILES_PATH, "rulings.yaml")
+        return [
+            {
+                "title": commit.summary[:100],
+                "date": commit.committed_datetime.date().isoformat(),
+                "url": f"{RULINGS_REPO_WEB}/commit/{commit.hexsha}",
+            }
+            for commit in repo.iter_commits(paths=path, max_count=limit)
+        ]
+
+    return await asgiref.sync.SyncToAsync(_read)()
 
 
 async def async_yaml_load(f: aiofiles.threadpool.text.AsyncTextIOWrapper) -> typing.Any:

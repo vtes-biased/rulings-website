@@ -104,6 +104,7 @@ def ruling_body(ruling: dict):
 
 templates.env.globals["version"] = version
 templates.env.globals["external_link"] = external_link
+templates.env.globals["rulings_repo_url"] = repository.RULINGS_REPO_WEB
 templates.env.filters["symbolreplace"] = symbol_replace
 templates.env.filters["cardreplace"] = card_replace
 templates.env.filters["newlines"] = newlines
@@ -286,6 +287,10 @@ async def index(request: Request, page: str, user: db.User | None = Depends(api.
                 }
             except KeyError:
                 raise HTTPException(404)
+        else:
+            context["recent_changes"] = await repository.recent_changes(
+                request.app.state.rulings_repo
+            )
     elif page == "proposal.html":
         if user:
             mine = [
