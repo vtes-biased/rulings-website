@@ -19,12 +19,7 @@ class Proposal(models.BaseIndex):
 
 
 def get_proposal_url(prop: Proposal):
-    if not prop.rulings:
-        return f"/index.html?prop={prop.uid}"
-    for target in prop.rulings.keys():
-        if target.startswith(("G", "P")):
-            return f"/groups.html?uid={target}&prop={prop.uid}"
-        return f"/index.html?uid={target}&prop={prop.uid}"
+    return f"/proposal.html?prop={prop.uid}"
 
 
 class Manager:
@@ -718,6 +713,97 @@ class Manager:
                     continue
                 self.delete_reference(ref)
         return errors
+
+    def diff(self) -> models.ProposalDiff:
+        """A structured view of everything the overlay changes, grouped by kind then target.
+        Consumed by the on-site proposal page and the Discord message (see pst #25/#26)."""
+        ret = models.ProposalDiff()
+        for uid, ref in sorted(self.prop.references.items()):
+            base = self.base.references.get(uid)
+            ret.references.append(
+                models.ReferenceDiff(
+                    uid=ref.uid,
+                    url=ref.url,
+                    source=ref.source,
+                    state=ref.state,
+                    old_url=base.url if base and ref.state == models.State.MODIFIED else "",
+                )
+            )
+        for group in sorted(self.prop.groups.values(), key=lambda g: g.name or ""):
+            base = self.base.groups.get(group.uid)
+            gd = models.GroupDiff(
+                uid=group.uid,
+                name=group.name,
+                state=group.state,
+                old_name=base.name if base and base.name != group.name else "",
+            )
+            if group.state != models.State.DELETED:
+                base_cards = {c.uid: c for c in base.cards} if base else {}
+                for card in group.cards:
+                    if card.state == models.State.ORIGINAL:
+                        continue
+                    gd.cards.append(
+                        models.GroupCardChange(
+                            uid=card.uid,
+                            name=card.name,
+                            state=card.state,
+                            prefix=card.prefix,
+                            old_prefix=base_cards[card.uid].prefix
+                            if card.state == models.State.MODIFIED and card.uid in base_cards
+                            else "",
+                        )
+                    )
+            ret.groups.append(gd)
+        for target_uid, rulings in self.prop.rulings.items():
+            base_rulings = self.base.rulings.get(target_uid, {})
+            changed = []
+            for ruling_uid, ruling in rulings.items():
+                state = ruling.state
+                if state == models.State.MODIFIED and ruling_uid not in base_rulings:
+                    state = models.State.NEW  # base ruling vanished under us (see get_ruling)
+                if state == models.State.ORIGINAL:
+                    continue
+                base_ruling = base_rulings.get(ruling_uid)
+                ruling.state = state
+                # only show an old→new body when the text actually changed: a MODIFIED flag can
+                # come purely from a per-card override or a RULING↔REMINDER kind switch (same text)
+                text_changed = base_ruling is not None and base_ruling.text != ruling.text
+                changed.append(
+                    models.RulingDiff(
+                        ruling=ruling,
+                        previous=base_ruling
+                        if state == models.State.MODIFIED and text_changed
+                        else None,
+                        overrides=self._override_changes(ruling, base_ruling)
+                        if state != models.State.DELETED
+                        else [],
+                    )
+                )
+            if not changed:
+                continue
+            is_group = target_uid.startswith(("G", "P"))
+            target = changed[0].ruling.target
+            ret.rulings.append(models.TargetDiff(target=target, is_group=is_group, rulings=changed))
+        ret.rulings.sort(key=lambda t: (not t.is_group, t.target.name))
+        return ret
+
+    def _override_changes(
+        self, ruling: models.Ruling, base_ruling: models.Ruling | None
+    ) -> list[models.OverrideChange]:
+        old = base_ruling.overrides if base_ruling else {}
+        new = ruling.overrides
+        changes = []
+        for cid in sorted(set(old) | set(new)):
+            if old.get(cid, "") == new.get(cid, ""):
+                continue
+            try:
+                card = self.build_nid(cid)
+            except KeyError:
+                card = models.NID(uid=cid, name=cid)
+            changes.append(
+                models.OverrideChange(card=card, old=old.get(cid, ""), new=new.get(cid, ""))
+            )
+        return changes
 
     def merge(self) -> models.Index:
         """Create a new Index from the base Index, merged with the proposal."""

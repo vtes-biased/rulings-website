@@ -22,8 +22,8 @@ open  	ci	Unify version/tag/release with the deploy trigger; drop the wheel-publ
 closed	bug	FIRST: boot app locally + browser-drive (Chrome + Firefox); catalog every bug found into new parent:#4 tickets. parent:#4
 closed	bug	Fix: proposal name/description not saving — saveProposal() in src/front/js/layout.ts:635 issues PUT /api/proposal/approve (405, HTML body → JSON parse error) instead of PUT /api/proposal. One-line endpoint fix. parent:#4
 closed	bug,superseded	Firefox dynamic editing broken — verify resolved by the Svelte island rewrite; patch only if still broken. parent:#4 addressed-by:#9
-open  	feature,frontend	Proposal diff view on the site: approver landing page (arriving from Discord) rendering the NEW/MODIFIED/DELETED overlay. parent:#5
-open  	feature,backend	Discord: adaptive diff in the initial proposal message (inline text / bullet list / truncated by size) + post updates to the same thread. parent:#5
+closed	feature,frontend	Proposal diff view on the site: approver landing page (arriving from Discord) rendering the NEW/MODIFIED/DELETED overlay. parent:#5
+closed	feature,backend	Discord: adaptive diff in the initial proposal message (inline text / bullet list / truncated by size) + post updates to the same thread. parent:#5
 closed	feature	Supersede group-ruling text per card (same ruling identity + shared references; text override only). Design: see detail file. parent:#5
 closed	feature	Two-kind entry model RULING vs REMINDER (reminder reference optional); update check_consistency + YAML marker + editor. Design: see detail file. parent:#5
 open  	feature,frontend	Mobile-first pass on the read side (Jinja SSR); editor mobile-first is handled in the Svelte island (#9). parent:#5

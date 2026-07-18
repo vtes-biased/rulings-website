@@ -195,7 +195,7 @@ async def index(request: Request, page: str, user: db.User | None = Depends(api.
         else:
             context["alert"] = {"text": "This proposal has been approved and merged"}
             request.session.pop("proposal", None)
-    if user:
+    if user and page != "proposal.html":  # the proposal page lists them itself
         proposals = [
             proposal.Proposal(**p)
             for p in await db.get_user_proposals(user.uid, ACTIVE_PROPOSALS_CAP)
@@ -269,6 +269,33 @@ async def index(request: Request, page: str, user: db.User | None = Depends(api.
                 context["current"] = current
             except KeyError:
                 raise HTTPException(404)
+    elif page == "proposal.html":
+        if user:
+            mine = [
+                proposal.Proposal(**p)
+                for p in await db.get_user_proposals(user.uid, ACTIVE_PROPOSALS_CAP)
+            ]
+            context["my_proposals"] = [
+                {
+                    "uid": p.uid,
+                    "name": p.name,
+                    "submitted": bool(p.channel_id),
+                    "current": p.uid == prop_uid,
+                }
+                for p in mine
+            ]
+            if user.category != db.UserCategory.BASIC:
+                others = [
+                    proposal.Proposal(**p)
+                    for p in await db.get_submitted_proposals(ACTIVE_PROPOSALS_CAP)
+                ]
+                context["submitted_proposals"] = [
+                    {"uid": p.uid, "name": p.name, "current": p.uid == prop_uid}
+                    for p in others
+                    if p.usr != str(user.uid)
+                ]
+        if current_prop is not None:
+            context["diff"] = asdict(manager.diff())
     elif page == "admin.html":
         if not user or user.category != db.UserCategory.ADMIN:
             raise HTTPException(401)

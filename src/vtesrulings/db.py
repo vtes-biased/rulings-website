@@ -196,6 +196,18 @@ async def get_user_proposals(user_id: uuid.UUID, limit: int = 100):
         return []
 
 
+async def get_submitted_proposals(limit: int = 100):
+    """Proposals already sent to Discord (channel_id set) — the approver's queue."""
+    async with POOL.connection() as connection:
+        async with connection.cursor() as cursor:
+            ret = await (
+                await cursor.execute(
+                    "SELECT data FROM proposals WHERE data->>'channel_id' <> '' LIMIT %s", [limit]
+                )
+            ).fetchall()
+        return [r[0] for r in ret] if ret else []
+
+
 async def get_proposal_for_update(connection: psycopg.AsyncConnection, proposal_uid: str):
     async with connection.cursor() as cursor:
         ret = await (

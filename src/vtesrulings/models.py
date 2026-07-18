@@ -172,3 +172,60 @@ class ConsistencyError:
     target: NID
     ruling_uid: str
     error: str
+
+
+# --- Proposal diff: a render-agnostic view of the overlay, shared by the site page and Discord.
+
+
+@pydantic.dataclasses.dataclass
+class ReferenceDiff(UID):
+    url: str
+    source: str
+    state: State
+    old_url: str = ""  # base URL when MODIFIED
+
+
+@pydantic.dataclasses.dataclass
+class GroupCardChange(NID):
+    state: State  # NEW / DELETED / MODIFIED (prefix change)
+    prefix: str = ""
+    old_prefix: str = ""
+
+
+@pydantic.dataclasses.dataclass
+class GroupDiff(UID):
+    name: str
+    state: State
+    old_name: str = ""
+    cards: list[GroupCardChange] = dataclasses.field(default_factory=list)
+
+
+@pydantic.dataclasses.dataclass
+class OverrideChange:
+    card: NID
+    old: str = ""
+    new: str = ""
+
+
+@pydantic.dataclasses.dataclass
+class RulingDiff:
+    ruling: Ruling  # the new/effective ruling (for DELETED, the removed one)
+    previous: Ruling | None = None  # base ruling when MODIFIED
+    overrides: list[OverrideChange] = dataclasses.field(default_factory=list)
+
+
+@pydantic.dataclasses.dataclass
+class TargetDiff:
+    target: NID
+    is_group: bool
+    rulings: list[RulingDiff] = dataclasses.field(default_factory=list)
+
+
+@pydantic.dataclasses.dataclass
+class ProposalDiff:
+    references: list[ReferenceDiff] = dataclasses.field(default_factory=list)
+    groups: list[GroupDiff] = dataclasses.field(default_factory=list)
+    rulings: list[TargetDiff] = dataclasses.field(default_factory=list)
+
+    def is_empty(self) -> bool:
+        return not (self.references or self.groups or self.rulings)

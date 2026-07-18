@@ -17,6 +17,7 @@ export default defineConfig({
                 index: "src/front/js/index.ts",
                 groups: "src/front/js/groups.ts",
                 admin: "src/front/js/admin.ts",
+                proposal: "src/front/js/proposal.ts",
                 app: "src/front/css/app.css",
                 island: "src/front/island/main.ts",
             },

@@ -51,6 +51,7 @@ async def login_and_proposal(client):
     prop_uid = data["uid"]
     response = await client.get(f"/index.html?prop={prop_uid}")
     assert response.status_code == 200
+    return prop_uid
 
 
 @LIVE_DATA_XFAIL
@@ -993,7 +994,8 @@ async def test_group_ruling_override(client):
     rid = ruling["uid"]
     # the card inherits the group ruling verbatim
     inherited = [
-        r for r in (await client.get("/api/card/100015")).json()["rulings"]
+        r
+        for r in (await client.get("/api/card/100015")).json()["rulings"]
         if r["target"]["uid"] == gid
     ]
     assert len(inherited) == 1
@@ -1011,7 +1013,8 @@ async def test_group_ruling_override(client):
     assert eff["overrides"] == {"100015": "Adapted for this card"}
     # the card now shows the adapted text
     inherited = [
-        r for r in (await client.get("/api/card/100015")).json()["rulings"]
+        r
+        for r in (await client.get("/api/card/100015")).json()["rulings"]
         if r["target"]["uid"] == gid
     ]
     assert inherited[0]["text"] == "Adapted for this card"
@@ -1045,3 +1048,141 @@ async def test_proposal_workflow(client):
     # submit sends
     response = await client.post("/api/proposal/submit")
     assert response.status_code == 200
+
+
+def test_format_diff():
+    """The Discord diff text renders each change kind and truncates by size (pst #26)."""
+    target = models.NID(uid="100015", name="Academic Hunting Ground")
+
+    def ruling(uid, text, state, **kw):
+        return models.Ruling(uid=uid, target=target, text=text, state=state, **kw)
+
+    diff = models.ProposalDiff(
+        references=[
+            models.ReferenceDiff(
+                uid="LSJ 20080805", url="http://x", source="LSJ", state=models.State.NEW
+            )
+        ],
+        groups=[
+            models.GroupDiff(
+                uid="G1",
+                name="Grp",
+                state=models.State.MODIFIED,
+                cards=[
+                    models.GroupCardChange(uid="1", name="A", state=models.State.NEW),
+                    models.GroupCardChange(uid="2", name="B", state=models.State.DELETED),
+                ],
+            )
+        ],
+        rulings=[
+            models.TargetDiff(
+                target=target,
+                is_group=False,
+                rulings=[
+                    models.RulingDiff(
+                        ruling=ruling(
+                            "a",
+                            "Body {Foo} here",
+                            models.State.NEW,
+                            cards=[
+                                models.CardSubstitution(
+                                    uid="9", name="Foo", printed_name="Foo", img="", text="{Foo}"
+                                )
+                            ],
+                        )
+                    ),
+                    models.RulingDiff(
+                        ruling=ruling("b", "New text", models.State.MODIFIED),
+                        previous=ruling("b", "Old text", models.State.MODIFIED),
+                    ),
+                ],
+            )
+        ],
+    )
+    out = vtesrulings.discord.format_diff(diff)
+    assert "**Rulings**" in out
+    assert "Academic Hunting Ground" in out
+    assert "Body Foo here" in out  # {Foo} braces stripped for readability
+    assert "~~Old text~~" in out and "→ New text" in out
+    assert "**Groups**" in out and "+1" in out and "cards)" in out
+    assert "**References**" in out and "LSJ 20080805" in out
+
+    # a diff too large for one Discord message is truncated with a tail marker
+    big = models.ProposalDiff(
+        rulings=[
+            models.TargetDiff(
+                target=target,
+                is_group=False,
+                rulings=[
+                    models.RulingDiff(ruling=ruling(str(i), "x" * 300, models.State.NEW))
+                    for i in range(60)
+                ],
+            )
+        ]
+    )
+    out = vtesrulings.discord.format_diff(big)
+    assert len(out) <= vtesrulings.discord.DIFF_LIMIT + 40
+    assert "more)" in out
+
+
+def test_diff_override_only_modified():
+    """A MODIFIED flag from a per-card override (or kind) alone must not fabricate a struck old
+    body (reviewer #1); overrides on any non-deleted ruling are surfaced (reviewer #3)."""
+    from vtesrulings import proposal as proposal_mod
+
+    class FakeCard:
+        def __init__(self, cid, name):
+            self.id, self.unique_name = cid, name
+
+    card_map = {100015: FakeCard(100015, "Academic Hunting Ground")}
+    tgt = models.NID(uid="G1", name="Grp")
+
+    def gruling(state, overrides, text="Body [RTR 20070707]"):
+        return models.Ruling(uid="h", target=tgt, text=text, state=state, overrides=overrides)
+
+    base = models.Index(rulings={"G1": {"h": gruling(models.State.ORIGINAL, {})}})
+    # MODIFIED by an override only: same text -> no struck old body, but the override shows
+    prop = proposal_mod.Proposal(
+        rulings={"G1": {"h": gruling(models.State.MODIFIED, {"100015": "Adapted"})}}
+    )
+    change = proposal_mod.Manager(card_map, base, prop).diff().rulings[0].rulings[0]
+    assert change.previous is None
+    assert [(o.card.uid, o.new) for o in change.overrides] == [("100015", "Adapted")]
+    # a genuine text edit DOES carry the old body
+    prop2 = proposal_mod.Proposal(
+        rulings={"G1": {"h": gruling(models.State.MODIFIED, {}, text="New body [RTR 20070707]")}}
+    )
+    change2 = proposal_mod.Manager(card_map, base, prop2).diff().rulings[0].rulings[0]
+    assert change2.previous.text == "Body [RTR 20070707]"
+
+
+async def test_proposal_diff_page(client):
+    """The proposal page SSR-renders the overlay diff: NEW/MODIFIED rulings, refs (pst #25)."""
+    prop_uid = await login_and_proposal(client)
+    response = await client.post("/api/ruling/100015", json={"text": "Fresh ruling [RTR 20070707]"})
+    assert response.status_code == 200
+    # modify an existing base group ruling -> MODIFIED with an old->new body. Discover it at
+    # runtime (the ruling id is a hash of its text, which drifts) rather than hard-coding it.
+    group = (await client.get("/api/group/G00008")).json()
+    base = next(r for r in group["rulings"] if r["state"] == "ORIGINAL")
+    response = await client.put(
+        f"/api/ruling/G00008/{base['uid']}", json={"text": "Reworded: " + base["text"]}
+    )
+    assert response.status_code == 200
+    response = await client.post(
+        "/api/reference",
+        json={
+            "uid": "LSJ 20001225",
+            "url": "https://groups.google.com/g/rec.games.trading-cards.jyhad/diff-test",
+        },
+    )
+    assert response.status_code == 200
+    page = await client.get(f"/proposal.html?prop={prop_uid}")
+    assert page.status_code == 200
+    html = page.text
+    assert "Fresh ruling" in html  # NEW card ruling body
+    assert "Academic Hunting Ground" in html  # card target heading
+    assert "Reworded:" in html  # MODIFIED group ruling new body
+    assert base["target"]["name"] in html  # group target heading
+    assert "line-through" in html  # the struck "was" (previous) body
+    assert "LSJ 20001225" in html  # NEW reference

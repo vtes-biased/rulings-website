@@ -48,19 +48,6 @@ function setupModals() {
     }
 }
 
-// --- collapse ---
-function setupCollapse() {
-    for (const toggle of document.querySelectorAll<HTMLElement>("[data-collapse-toggle]")) {
-        toggle.addEventListener("click", () => {
-            const target = document.getElementById(toggle.getAttribute("aria-controls") || "")
-            if (!target) return
-            const open = target.hidden
-            target.hidden = !open
-            toggle.setAttribute("aria-expanded", String(open))
-        })
-    }
-}
-
 // --- nav active state + theme toggle ---
 function navActivateCurrent() {
     const here = window.location.href.split("?")[0]
@@ -118,12 +105,6 @@ async function startProposal(ev: MouseEvent) {
     await createProposal(new FormData(form))
 }
 
-async function saveProposal(ev: MouseEvent) {
-    const form = (ev.currentTarget as HTMLButtonElement).form as HTMLFormElement
-    const response = await do_fetch("/api/proposal", { method: "put", body: new FormData(form) })
-    if (response) window.location.reload()
-}
-
 async function checkConsistency(): Promise<boolean> {
     const response = await do_fetch("/api/check-consistency", { method: "get" })
     if (!response) return true
@@ -162,22 +143,18 @@ async function deleteProposal() {
     window.location.replace(url.href)
 }
 
-function leaveProposal() {
-    const url = new URL(window.location.href)
-    url.searchParams.delete("prop")
-    window.location.href = url.href
-}
-
+// Proposal page (proposal.html): start form, lifecycle buttons, and inline name/description
+// auto-save (live edit — no save button, matching the ruling/group editors).
 function setupProposal() {
-    const proposalModal = document.getElementById("proposalModal") as HTMLElement | null
-    const proposalButton = document.getElementById("proposalButton")
-    if (proposalModal && proposalButton) proposalButton.addEventListener("click", () => openModal(proposalModal))
     document.getElementById("proposalStart")?.addEventListener("click", startProposal)
-    document.getElementById("proposalSave")?.addEventListener("click", saveProposal)
     document.getElementById("proposalSubmit")?.addEventListener("click", submitProposal)
     document.getElementById("proposalApprove")?.addEventListener("click", approveProposal)
     document.getElementById("proposalDelete")?.addEventListener("click", deleteProposal)
-    document.getElementById("proposalLeave")?.addEventListener("click", leaveProposal)
+    const editForm = document.getElementById("proposalEditForm") as HTMLFormElement | null
+    if (editForm) {
+        const save = debounce(() => do_fetch("/api/proposal", { method: "put", body: new FormData(editForm) }))
+        editForm.addEventListener("input", save)
+    }
 }
 
 // --- add group: create an empty group, then navigate to its editor page ---
@@ -278,7 +255,6 @@ function bindCardHover() {
 
 export function initChrome() {
     setupModals()
-    setupCollapse()
     navActivateCurrent()
     setupThemeToggle()
     loginManagement()

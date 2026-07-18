@@ -181,10 +181,15 @@ async def delete_proposal(ctx: ProposalCtx = Depends(proposal_update)):
 
 @router.post("/proposal/submit")
 async def submit_proposal(ctx: ProposalCtx = Depends(proposal_update)):
+    """First call creates the Discord thread; later calls post an update to the same thread."""
     update_proposal_from_params(ctx.prop, await get_params(ctx.request))
     if not ctx.prop.name:
         raise ValueError("Proposal needs a name for submission")
-    await discord.submit_proposal(ctx.prop)
+    diff = ctx.manager.diff()
+    if ctx.prop.channel_id:
+        await discord.post_proposal_update(ctx.prop, diff)
+    else:
+        await discord.submit_proposal(ctx.prop, diff)
     return {}
 
 
@@ -196,6 +201,7 @@ async def approve_proposal(ctx: ProposalCtx = Depends(proposal_update)):
     if not ctx.prop.channel_id:
         raise ValueError("Proposal must be submitted first")
     state = ctx.request.app.state
+    diff = ctx.manager.diff()
     index = ctx.manager.merge()
     await repository.commit_index(
         state.rulings_repo,
@@ -203,7 +209,7 @@ async def approve_proposal(ctx: ProposalCtx = Depends(proposal_update)):
         index,
         f"{ctx.prop.name}\n\n{ctx.prop.description}",
     )
-    await discord.proposal_approved(ctx.prop)
+    await discord.proposal_approved(ctx.prop, diff)
     state.rulings_index = await repository.load_base(state.rulings_repo, state.cards_map)
     await db.delete_proposal(ctx.conn, asdict(ctx.prop))
     ctx.request.session.pop("proposal", None)
@@ -288,7 +294,9 @@ async def put_override(
 ):
     """Set (empty text clears) a per-card text override on a group ruling. See pst #27."""
     params = await get_params(ctx.request)
-    return asdict(ctx.manager.override_ruling(target_id, ruling_id, card_id, params.get("text", "")))
+    return asdict(
+        ctx.manager.override_ruling(target_id, ruling_id, card_id, params.get("text", ""))
+    )
 
 
 @router.post("/group")
