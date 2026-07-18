@@ -241,22 +241,25 @@ class Manager:
                 # ruling changed by proposal, take the proposal backrefs
                 continue
             backrefs.append(backref)
+        seen: set[str] = set()  # a card reachable via two groups (or a group + direct ruling) once
         for uid in sorted(set(b.target_uid for b in backrefs)):
             if uid.startswith(("G", "P")):
                 try:
-                    group = self.get_group(uid)
-                    for card in group.cards:
-                        yield models.BaseCard(
-                            uid=card.uid,
-                            name=card.name,
-                            printed_name=card.printed_name,
-                            img=card.img,
-                        )
+                    members = self.get_group(uid).cards
                 except KeyError:
-                    # group does not exist (removed by proposal)
-                    continue
+                    continue  # group does not exist (removed by proposal)
             else:
-                yield utils.build_base_card(self.card_map, int(uid))
+                members = [utils.build_base_card(self.card_map, int(uid))]
+            for card in members:
+                if card.uid in seen:
+                    continue
+                seen.add(card.uid)
+                yield models.BaseCard(
+                    uid=card.uid,
+                    name=card.name,
+                    printed_name=card.printed_name,
+                    img=card.img,
+                )
 
     def build_nid(self, card_or_group_id: str) -> models.NID:
         """Get the NID matching a card or group. Raise KeyError if not found."""

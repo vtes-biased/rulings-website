@@ -96,8 +96,9 @@
     .modal__footer { @apply flex justify-end gap-2 border-t border-hairline px-4 py-3; }
     .modal__close { @apply cursor-pointer rounded p-1 text-xl leading-none text-text-muted hover:text-text; }
 
-    /* toast — bottom-right, vanilla-driven auto-dismiss or manual close */
-    .toast { @apply fixed bottom-4 right-4 z-50 max-w-sm overflow-hidden rounded-lg border border-hairline bg-surface shadow-2xl; }
+    /* toast — bottom-right, vanilla-driven auto-dismiss or manual close. Cap to the viewport on
+       phones so a long message never overflows past the screen edge. */
+    .toast { @apply fixed bottom-4 right-4 z-50 max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg border border-hairline bg-surface shadow-2xl sm:max-w-sm; }
     .toast__header { @apply flex items-center gap-2 border-b border-hairline px-3 py-2 text-sm font-semibold text-state-deleted; }
     .toast__body { @apply px-3 py-2 text-sm text-text; }
 

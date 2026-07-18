@@ -26,7 +26,7 @@ closed	feature,frontend	Proposal diff view on the site: approver landing page (a
 closed	feature,backend	Discord: adaptive diff in the initial proposal message (inline text / bullet list / truncated by size) + post updates to the same thread. parent:#5
 closed	feature	Supersede group-ruling text per card (same ruling identity + shared references; text override only). Design: see detail file. parent:#5
 closed	feature	Two-kind entry model RULING vs REMINDER (reminder reference optional); update check_consistency + YAML marker + editor. Design: see detail file. parent:#5
-open  	feature,frontend	Mobile-first pass on the read side (Jinja SSR); editor mobile-first is handled in the Svelte island (#9). parent:#5
+wip   	feature,frontend	Mobile-first pass on the read side (Jinja SSR); editor mobile-first is handled in the Svelte island (#9). parent:#5
 closed	bug,superseded	Active-proposals alert lists every unsubmitted proposal as an inline link with no cap — floods the page (hundreds of entries). Alert links built in __init__.py index route from get_user_proposals. parent:#4
 closed	bug,superseded	Error toast from a failed fetch never auto-dismisses — stays stuck on screen indefinitely (do_fetch error handler in layout.ts). parent:#4
 open  	ci	Tests share the real local Postgres DB and leave orphaned test-user 'Test' proposals behind; harness must use an isolated DB and clean up per-test. parent:#3 relates:#19
@@ -50,6 +50,6 @@ closed	feature,frontend	Full-text search over ruling texts and group names from 
 closed	feature,frontend	Landing page content: intro (what the site is, official rulings, proposal workflow) + example links + a recently-changed-rulings feed (rulings repo git history); today index.html without uid is a bare search box. parent:#5
 closed	feature,frontend	Shareability: per-card/group <title> (static today in layout.html), Open Graph meta so Discord unfurls show card name+image, per-ruling anchors + copy-link (rulings have uids). parent:#5
 closed	feature,frontend	Proposal Delete in the nav is one un-confirmed irreversible click next to Submit; soft-delete with an undo toast (or move delete into the proposal modal) — keeps the no-confirm ethos without the cliff. parent:#5
-wip   	feature,frontend	Edit mode: single shared Symbol/card-insert toolbar attached to the focused editor, instead of one per ruling and per group-card row (76 toolbars on a 75-card group). parent:#5 relates:#9
+closed	feature,frontend	Edit mode: single shared Symbol/card-insert toolbar attached to the focused editor, instead of one per ruling and per group-card row (76 toolbars on a 75-card group). parent:#5 relates:#9
 closed	frontend,a11y	A11y: modals lack role=dialog/aria-modal/focus trap; the autocomplete lacks combobox ARIA; ReferenceModal should autofocus its first input. parent:#5
 closed	frontend	Read-side papercuts: hide state dots outside a proposal (all-gray noise); '_Choose a name_' renders literally for unnamed groups (use a muted placeholder); one-line VEKN hint in the login modal; remember the active-proposals alert dismissal for the session. parent:#5

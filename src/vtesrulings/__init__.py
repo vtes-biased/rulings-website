@@ -276,6 +276,7 @@ async def index(request: Request, page: str, user: db.User | None = Depends(api.
             try:
                 current = asdict(manager.get_card(int(uid)))
                 current["rulings"] = [asdict(r) for r in manager.get_rulings(uid, deleted=True)]
+                current["backrefs"] = [asdict(b) for b in manager.get_backrefs(uid)]
                 context["current"] = current
                 name = current["printed_name"]
                 context["page_title"] = f"{name} — V:TES Rulings"

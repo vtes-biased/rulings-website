@@ -16,7 +16,7 @@
 
 {% if not current %}
 <section class="my-6 max-w-2xl">
-    <h1 class="text-3xl">Official V:TES Rulings</h1>
+    <h1 class="text-2xl sm:text-3xl">Official V:TES Rulings</h1>
     <p class="mt-3 leading-relaxed text-text-muted">
         A community-curated reference of official rulings for <strong class="text-text">Vampire: The
             Eternal Struggle</strong> — the definitive answers to how cards and rules interact, gathered
@@ -92,7 +92,7 @@
     <h4 class="text-lg">Referenced by</h4>
     <div class="mt-2 flex flex-wrap gap-3">
         {% for backref in current.backrefs %}
-        <a class="block w-48 overflow-hidden rounded-lg border border-hairline bg-surface no-underline hover:border-primary"
+        <a class="block w-[calc(50%-0.375rem)] overflow-hidden rounded-lg border border-hairline bg-surface no-underline hover:border-primary sm:w-48"
             href="index.html?uid={{ backref.uid }}{{ search_params_2 }}">
             <img class="h-40 w-full object-cover object-left-top" src="{{ backref.img }}" alt="{{ backref.name }}">
             <p class="p-2 text-sm text-text">{{ backref.name }}</p>
