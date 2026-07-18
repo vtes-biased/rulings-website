@@ -53,7 +53,7 @@ jobs:
         run: npm run build
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v8
+        uses: astral-sh/setup-uv@v8.3.2
         with:
           python-version: "3.13"
 
@@ -98,7 +98,7 @@ jobs:
           npm run build
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v8
+        uses: astral-sh/setup-uv@v8.3.2
         with:
           python-version: "3.13"
 
