@@ -94,7 +94,7 @@ jobs:
       # static/dist), so build it before uv build.
       - name: Build frontend
         run: |
-          npm ci
+          npm install --include=dev
           npm run build
 
       - name: Set up uv
