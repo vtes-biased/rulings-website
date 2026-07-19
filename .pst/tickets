@@ -1,5 +1,5 @@
 closed	epic,stack	Epic: Tech stack rework — Quart→FastAPI, Jinja SSR read side + Svelte editor island, single-worker in-memory index, bump krcg. See details.
-open  	epic,deploy	Epic: Deploy via server-setup (gravelines) + GitHub App for vtes-rulings writes — systemd ASGI service, nginx_site, managed postgres_db, tag→deploy CI, Alloy. See details.
+closed	epic,deploy	Epic: Deploy via server-setup (gravelines) + GitHub App for vtes-rulings writes — systemd ASGI service, nginx_site, managed postgres_db, tag→deploy CI, Alloy. See details.
 closed	epic,ci	Epic: Build & CI — add ty typecheck, real-but-safe test harness (Postgres container + sandbox rulings remote + pinned card snapshot), unify tag/release with deploy.
 closed	epic,bug	Epic: Bug pass — reproduce & catalog via local run (Chrome+Firefox), then fix. Known: Firefox editing broken, proposal description not saving.
 closed	epic,feature	Epic: Features — proposal diff (site + Discord), mobile-first, supersede group-ruling text, RULING/REMINDER two-kind model. See children.
@@ -14,7 +14,7 @@ closed	deploy	systemd unit + ASGI server (hypercorn/uvicorn) single worker; env 
 closed	deploy	nginx_site vhost + certbot TLS for the app on gravelines. parent:#2
 closed	deploy	Use managed postgres_db role: provision DB + backups; drop the localhost DB assumption. parent:#2
 closed	deploy,ci	tag→deploy GitHub Actions workflow: build frontend + artifact; ship; migrate; restart service. parent:#2
-wip   	deploy	Alloy observability wiring + approval→krcg-static rebuild dispatch (repository_dispatch). parent:#2
+closed	deploy	Alloy observability wiring + approval→krcg-static rebuild dispatch (repository_dispatch). parent:#2
 closed	ci	Add ty typecheck to justfile + CI; fix the initial batch of type errors. parent:#3
 closed	ci	Dev/test harness: Postgres container + seeded sandbox rulings remote + pinned card snapshot; wire just dev and just test. parent:#3
 closed	ci	Rework CI: real-but-safe test job (Postgres service, sandbox remote, snapshot) + lint + typecheck + frontend build. parent:#3
