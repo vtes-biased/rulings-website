@@ -1,15 +1,17 @@
 <script lang="ts">
     import TokenEditor from "./TokenEditor.svelte"
     import ReferenceModal from "./ReferenceModal.svelte"
-    import { do_fetch, putJSON } from "../js/net.js"
+    import Adaptations from "./Adaptations.svelte"
+    import { do_fetch, putJSON, queuedSaver } from "../js/net.js"
     import { renderBody } from "./tokens"
     import { RESTORABLE, DELETABLE } from "./types"
-    import type { Ruling, RefSub, Reference, RulingKind } from "./types"
+    import type { Ruling, RefSub, Reference, RulingKind, CardInGroup } from "./types"
 
-    let { source, ruling, rulebook, onReplace, onRemove }: {
+    let { source, ruling, rulebook, members = [], onReplace, onRemove }: {
         source: string
         ruling: Ruling
         rulebook: Reference[]
+        members?: CardInGroup[]
         onReplace: (r: Ruling) => void
         onRemove: () => void
     } = $props()
@@ -35,28 +37,10 @@
 
     // One PUT in flight per endpoint, re-reading the latest uid each round (a NEW ruling's uid is a
     // hash of its text, so it changes on every save; queuing the newest body avoids a stale-uid 404).
-    function makeSaver(url: () => string) {
-        let running = false
-        let pending: Record<string, unknown> | null = null
-        return async (body: Record<string, unknown>) => {
-            pending = body
-            if (running) return
-            running = true
-            try {
-                while (pending !== null) {
-                    const b = pending
-                    pending = null
-                    const res = await putJSON(url(), b)
-                    if (res) onReplace(await res.json())
-                    else break
-                }
-            } finally {
-                running = false
-            }
-        }
-    }
-    const putRuling = makeSaver(() => `/api/ruling/${source}/${ruling.uid}`)
-    const putOverride = makeSaver(() => `/api/ruling/${ruling.target.uid}/${ruling.uid}/override/${source}`)
+    const putRuling = queuedSaver<Ruling>(() => `/api/ruling/${source}/${ruling.uid}`, onReplace)
+    const putOverride = queuedSaver<Ruling>(
+        () => `/api/ruling/${ruling.target.uid}/${ruling.uid}/override/${source}`, onReplace,
+    )
 
     function save(bodyText: string, refs: RefSub[] = ruling.references, kind: RulingKind = ruling.kind) {
         const refText = refs.map((r) => r.text).join(" ")
@@ -190,6 +174,10 @@
     {/if}
     {#if !ruling.references.length && ruling.kind !== "REMINDER"}
     <div class="ruling__empty">A reference is required</div>
+    {/if}
+
+    {#if editable && members.length && ruling.state !== "DELETED"}
+    <Adaptations {ruling} {members} {onReplace} />
     {/if}
 </article>
 

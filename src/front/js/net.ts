@@ -69,3 +69,29 @@ const jsonBody = (method: string, obj: object) => ({
 })
 export const postJSON = (url: string, obj: object) => do_fetch(url, jsonBody("post", obj))
 export const putJSON = (url: string, obj: object) => do_fetch(url, jsonBody("put", obj))
+
+// Single-flight PUT saver: one request in flight, newest body wins (intermediate ones are dropped).
+// `url` is re-read each round — a NEW ruling's uid is a hash of its text, so it changes between saves
+// — and `apply` gets the parsed JSON. Shared by the ruling editor and the per-card override editors.
+export function queuedSaver<T>(url: () => string, apply: (json: T) => void): (body: object) => void {
+    let running = false
+    let pending: object | null = null
+    return (body: object) => {
+        pending = body
+        if (running) return
+        running = true
+        ;(async () => {
+            try {
+                while (pending !== null) {
+                    const b = pending
+                    pending = null
+                    const res = await putJSON(url(), b)
+                    if (!res) break
+                    apply(await res.json())
+                }
+            } finally {
+                running = false
+            }
+        })()
+    }
+}
