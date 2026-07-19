@@ -8,7 +8,7 @@ from vtesrulings import models, repository
 
 def test_serialize_ruling():
     """A ruling with no overrides is a bare string — a REMINDER gets a trailing [REMINDER] tag;
-    overrides force a structured map."""
+    per-card overrides force a {text, overrides} map, the tag (if any) staying at the end of text."""
 
     class FakeCard:
         def __init__(self, cid, name):
@@ -38,19 +38,19 @@ def test_serialize_ruling():
         )
         == "Reminder [RTR 20070707] [REMINDER]"
     )
+    # per-card overrides force a map, keyed by <id>|<printed_name>; no kind key is ever written
     assert repository.serialize_ruling(
         ruling(text="Body [RTR 20070707]", overrides={"100015": "Adapted"}), card_map
     ) == {
         "text": "Body [RTR 20070707]",
         "overrides": {"100015|Academic Hunting Ground": "Adapted"},
     }
-    # overrides + reminder still forces a map, keeping the kind key
+    # a reminder may also have overrides — the [REMINDER] tag just stays at the end of `text`
     assert repository.serialize_ruling(
         ruling(text="Body", kind=models.RulingKind.REMINDER, overrides={"100015": "Adapted"}),
         card_map,
     ) == {
-        "text": "Body",
-        "kind": "reminder",
+        "text": "Body [REMINDER]",
         "overrides": {"100015|Academic Hunting Ground": "Adapted"},
     }
 
@@ -1101,6 +1101,30 @@ async def test_group_ruling_override(client):
     # a card that isn't a member of the group cannot be overridden (would be un-approvable)
     response = await client.put(f"/api/ruling/{gid}/{rid}/override/100002", json={"text": "x"})
     assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_reminder_can_have_overrides(client):
+    """The [REMINDER] tag is just a text marker, orthogonal to overrides: a reminder group ruling
+    can still be adapted per card, and the reminder kind is preserved."""
+    await login_and_proposal(client)
+    group = (await client.post("/api/group", json={"name": "Reminder overrides"})).json()
+    gid = group["uid"]
+    await client.put(f"/api/group/{gid}", json={"cards": {"100015": ""}})
+    text = "Group wording [RTR 20070707]"
+    rid = (await client.post(f"/api/ruling/{gid}", json={"text": text})).json()["uid"]
+    reminder = (
+        await client.put(f"/api/ruling/{gid}/{rid}", json={"text": text, "kind": "REMINDER"})
+    ).json()
+    assert reminder["kind"] == "REMINDER"
+    # overriding a card still works, keeping the reminder kind
+    eff = (
+        await client.put(
+            f"/api/ruling/{gid}/{reminder['uid']}/override/100015", json={"text": "Adapted"}
+        )
+    ).json()
+    assert eff["kind"] == "REMINDER"
+    assert eff["overrides"] == {"100015": "Adapted"}
 
 
 @pytest.mark.asyncio

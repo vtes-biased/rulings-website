@@ -69,6 +69,10 @@ async def test_load_base_reminder_tag_round_trips(app, tmp_path):
         "  - Plain ruling. [RTR 20070707]\n"
         "  - Confirms the obvious. [REMINDER]\n"
         "  - Reminder with a citation. [RTR 20070707] [REMINDER]\n"
+        "G00008|Permanent not replaced:\n"
+        "  - text: Adapted reminder. [REMINDER]\n"
+        "    overrides:\n"
+        "      100015|Academic Hunting Ground: Per-card wording. [RTR 20070707]\n"
     )
     repo = git.Repo.init(tmp_path / "repo")
 
@@ -80,3 +84,8 @@ async def test_load_base_reminder_tag_round_trips(app, tmp_path):
     cited = by_text["Reminder with a citation. [RTR 20070707]"]
     assert cited.kind == models.RulingKind.REMINDER
     assert [ref.uid for ref in cited.references] == ["RTR 20070707"]
+    # a map entry whose `text` carries the tag loads as a REMINDER with its overrides intact
+    (adapted,) = index.rulings["G00008"].values()
+    assert adapted.text == "Adapted reminder."
+    assert adapted.kind == models.RulingKind.REMINDER
+    assert adapted.overrides == {"100015": "Per-card wording. [RTR 20070707]"}

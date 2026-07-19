@@ -302,22 +302,17 @@ async def load_base(repo: git.Repo, card_map: krcg.collections.CardDict) -> mode
             nid = models.NID(uid=nid.uid, name=card_map[int(nid.uid)].unique_name)
         ret.rulings[nid.uid] = {}
         for entry in rulings:
-            # An entry is a plain string (RULING, or a REMINDER with a trailing [REMINDER] tag) or
-            # a structured map `{text, kind?, overrides?}` for the overridden case — see pst #27/#28.
+            # An entry is a plain string or a `{text, overrides}` map; in either form a REMINDER
+            # ends its text with a trailing [REMINDER] tag, stripped here.
             if isinstance(entry, str):
-                overrides = {}
-                text = utils.RE_REMINDER.sub("", entry)
-                kind = models.RulingKind.REMINDER if text != entry else models.RulingKind.RULING
+                raw, overrides = entry, {}
             else:
-                text = entry["text"]
-                kind = (
-                    models.RulingKind.REMINDER
-                    if str(entry.get("kind") or "").lower() == "reminder"
-                    else models.RulingKind.RULING
-                )
+                raw = entry["text"]
                 overrides = {
                     utils.build_nid(k).uid: v for k, v in (entry.get("overrides") or {}).items()
                 }
+            text = utils.RE_REMINDER.sub("", raw)
+            kind = models.RulingKind.REMINDER if text != raw else models.RulingKind.RULING
             uid = utils.stable_hash(text)
             ruling = utils.build_ruling(
                 card_map,
@@ -339,20 +334,17 @@ async def load_base(repo: git.Repo, card_map: krcg.collections.CardDict) -> mode
 def serialize_ruling(
     ruling: models.Ruling, card_map: krcg.collections.CardDict
 ) -> str | dict[str, typing.Any]:
-    """A ruling with no overrides is a bare string — a REMINDER carries a trailing [REMINDER] tag
-    (its inline reference, if any, is already in the text). Overrides force a structured
-    `{text, kind?, overrides?}` map. See pst #27/#28."""
+    """A REMINDER ends its text with a trailing [REMINDER] tag (a text marker, orthogonal to
+    everything else; its inline reference, if any, is already in the text). A ruling with no
+    per-card overrides is that bare text; overrides make it a `{text, overrides}` map instead, the
+    [REMINDER] tag (if any) staying at the end of `text`."""
+    text = f"{ruling.text} [REMINDER]" if ruling.kind == models.RulingKind.REMINDER else ruling.text
     if not ruling.overrides:
-        if ruling.kind == models.RulingKind.REMINDER:
-            return f"{ruling.text} [REMINDER]"
-        return ruling.text
-    entry: dict[str, typing.Any] = {"text": ruling.text}
-    if ruling.kind == models.RulingKind.REMINDER:
-        entry["kind"] = "reminder"
-    entry["overrides"] = {}
-    for cid, text in ruling.overrides.items():
+        return text
+    entry: dict[str, typing.Any] = {"text": text, "overrides": {}}
+    for cid, override_text in ruling.overrides.items():
         krcg_card = card_map[int(cid)]
-        entry["overrides"][f"{krcg_card.id}|{krcg_card.printed_name}"] = text
+        entry["overrides"][f"{krcg_card.id}|{krcg_card.printed_name}"] = override_text
     return entry
 
 
