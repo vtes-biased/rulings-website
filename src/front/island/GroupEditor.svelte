@@ -139,7 +139,10 @@
     {@const cardEditable = editable && card.state !== "DELETED"}
     <div class="row-item">
         <span class="text-xs" style="color: var(--color-state-{card.state.toLowerCase()})" title={card.state.toLowerCase()}>●</span>
-        <a href={cardHref(card.uid)} class="krcg-card mr-auto no-underline" data-noclick="true">{card.name}</a>
+        <div class="mr-auto flex items-center gap-2">
+            <a href={cardHref(card.uid)} class="krcg-card no-underline" data-noclick="true">{card.name}</a>
+            {#if groupStore.adaptedUids.has(card.uid)}<span class="badge" title="Has a per-card ruling override">adapted</span>{/if}
+        </div>
         <div class="w-2/5 min-w-40">
             {#if cardEditable}
             {#key revision}

@@ -1,6 +1,7 @@
 <script lang="ts">
     import RulingCard from "./RulingCard.svelte"
     import { postJSON } from "../js/net.js"
+    import { groupStore } from "./groupStore.svelte"
     import type { Ruling, Reference } from "./types"
 
     let { source, initial, rulebook }: {
@@ -13,6 +14,10 @@
     const keyed = (ruling: Ruling) => ({ key: nextKey++, ruling })
     // svelte-ignore state_referenced_locally
     let items = $state(initial.map(keyed))
+
+    // A fresh Set each recompute (Svelte tracks the reassignment, not Set mutation); see groupStore.
+    const adapted = $derived(new Set(items.flatMap((it) => Object.keys(it.ruling.overrides ?? {}))))
+    $effect(() => { groupStore.adaptedUids = adapted })
 
     async function addRuling() {
         const res = await postJSON(`/api/ruling/${source}`, { text: "" })
