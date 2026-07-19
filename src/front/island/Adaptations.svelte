@@ -1,23 +1,24 @@
 <script lang="ts">
     import TokenEditor from "./TokenEditor.svelte"
     import { putJSON, queuedSaver } from "../js/net.js"
+    import { groupStore } from "./groupStore.svelte"
     import { renderPrefix } from "./tokens"
-    import type { Ruling, CardInGroup } from "./types"
+    import type { Ruling } from "./types"
 
     // Per-card body-text overrides of one group ruling, authored from the group page (pst #27/#64).
     // The list is sparse: only cards that are (or are being) adapted get an editor. `ruling.overrides`
     // is the group ruling's full {card_uid → text} map; the PUT returns the *effective* ruling for one
     // card, so we merge back only its overrides map + the group ruling's state.
     //
-    // `members` is an SSR snapshot (main.ts), not shared reactive state with the live GroupEditor mount:
-    // a card added to the group this session won't appear in the picker, and one removed this session
-    // lingers in it — adapting the latter 400s per keystroke (backend membership check) until reload.
-    let { ruling, members, onReplace }: {
+    // `members` is the live group's cards from groupStore (shared with the GroupEditor mount), so a
+    // card added/removed this session flows straight into the picker; DELETED entries stay in byUid
+    // to keep resolving the name of a card still referenced by an override.
+    let { ruling, onReplace }: {
         ruling: Ruling
-        members: CardInGroup[]
         onReplace: (r: Ruling) => void
     } = $props()
 
+    const members = $derived(groupStore.group?.cards ?? [])
     const byUid = $derived(new Map(members.map((c) => [c.uid, c])))
     // Cards whose editor is shown: those already overridden + drafts added via the picker (kept even
     // before their first save so a row doesn't vanish/remount mid-edit).

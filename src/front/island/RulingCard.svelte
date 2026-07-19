@@ -3,18 +3,21 @@
     import ReferenceModal from "./ReferenceModal.svelte"
     import Adaptations from "./Adaptations.svelte"
     import { do_fetch, putJSON, queuedSaver } from "../js/net.js"
+    import { groupStore } from "./groupStore.svelte"
     import { renderBody } from "./tokens"
     import { RESTORABLE, DELETABLE } from "./types"
-    import type { Ruling, RefSub, Reference, RulingKind, CardInGroup } from "./types"
+    import type { Ruling, RefSub, Reference, RulingKind } from "./types"
 
-    let { source, ruling, rulebook, members = [], onReplace, onRemove }: {
+    let { source, ruling, rulebook, onReplace, onRemove }: {
         source: string
         ruling: Ruling
         rulebook: Reference[]
-        members?: CardInGroup[]
         onReplace: (r: Ruling) => void
         onRemove: () => void
     } = $props()
+
+    // Group cards drive the per-card override editors (Adaptations); present only on a group page.
+    const groupCards = $derived(groupStore.group?.cards ?? [])
 
     // Rulings inherited from a group (target ≠ current source) are edited on the group page, not here
     // — but a card may *adapt* one for itself (a per-card text override, pst #27), edited right here.
@@ -176,8 +179,8 @@
     <div class="ruling__empty">A reference is required</div>
     {/if}
 
-    {#if editable && members.length && ruling.state !== "DELETED"}
-    <Adaptations {ruling} {members} {onReplace} />
+    {#if editable && groupCards.length && ruling.state !== "DELETED"}
+    <Adaptations {ruling} {onReplace} />
     {/if}
 </article>
 

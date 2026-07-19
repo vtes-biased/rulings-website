@@ -2,19 +2,20 @@
     import PrefixEditor from "./PrefixEditor.svelte"
     import CardSearch from "./CardSearch.svelte"
     import { do_fetch, putJSON, debounce } from "../js/net.js"
+    import { groupStore } from "./groupStore.svelte"
     import { renderPrefix } from "./tokens"
     import { RESTORABLE, DELETABLE } from "./types"
-    import type { Group, SelectItem } from "./types"
+    import type { SelectItem } from "./types"
 
-    let { initial }: { initial: Group } = $props()
-
-    // Seed editor state once from the SSR payload; the server response drives it thereafter.
+    // The group is the shared source of truth (groupStore, seeded by main.ts); every save writes it
+    // back so the rulings-list mount's override picker tracks membership live. Only mounted with a
+    // group present, so the assertion holds.
+    const group = $derived(groupStore.group!)
     // svelte-ignore state_referenced_locally
-    const uid = initial.uid
+    const uid = group.uid
+    // Local mirror of the name so the input debounces without echoing the server on every keystroke.
     // svelte-ignore state_referenced_locally
-    let group = $state(initial)
-    // svelte-ignore state_referenced_locally
-    let name = $state(initial.name)
+    let name = $state(group.name)
     // A card add/remove/restore or a group restore resets card prefixes from the server, so the
     // uncontrolled prefix editors must be re-created; a plain name/prefix save keeps their DOM.
     let revision = $state(0)
@@ -53,7 +54,7 @@
     async function put(cards: Record<string, string>): Promise<boolean> {
         const res = await putJSON(`/api/group/${uid}`, { name: name.trim(), cards })
         if (!res) return false
-        group = await res.json()
+        groupStore.group = await res.json()
         return true
     }
 
@@ -89,7 +90,7 @@
             await put(cardsBody()) // persist pending edits on other cards before the bodyless restore
             const res = await do_fetch(`/api/group/${uid}/restore/${cid}`, { method: "post" })
             if (!res) return false
-            group = await res.json()
+            groupStore.group = await res.json()
             return true
         })
         if (ok) revision++
@@ -111,7 +112,7 @@
         const ok = await enqueue(async () => {
             const res = await do_fetch(`/api/group/${uid}/restore`, { method: "post" })
             if (!res) return false
-            group = await res.json()
+            groupStore.group = await res.json()
             name = group.name
             return true
         })
