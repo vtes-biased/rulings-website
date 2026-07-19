@@ -12,35 +12,40 @@ the recipes call `uv run --project ..`. Run everything from this `ansible/` dir.
 
 ## One-time prerequisites
 
-1. **DNS**: `rulings.krcg.org` → `152.228.170.51` (A record). Likely already set for the
-   v1 app; certbot issuance in the deploy needs it resolving first.
+1. **DNS**: `rulings.krcg.org` → `152.228.170.51` (A record).
 2. **Vault password** (see below) — decrypt it before the first deploy.
 3. **Secrets** — fill `vault.yml` and drop in the GitHub App key (see below).
 
 ## Vault password
 
 The production ansible-vault password is stored **in the repo, age-encrypted**,
-decryptable only by the admins whose public keys are in `secrets/age-recipients.txt`
-(same list as the rest of the org). Create it once, then everyone with a listed key
-can decrypt it:
-
-```bash
-# Create the password (first time only), age-encrypt it to the recipients, commit the .age:
-head -c 32 /dev/urandom | base64 > .vault_pass          # a fresh random password
-age -R secrets/age-recipients.txt -o secrets/vault-pass.age < .vault_pass
-git add secrets/vault-pass.age                          # ciphertext — safe to commit
-```
-
-Day-to-day, decrypt it into the git-ignored `.vault_pass` (the deploy
-recipes default `ANSIBLE_VAULT_PASSWORD_FILE` to it):
+decryptable only by the admins whose public keys are in `secrets/age-recipients.txt`.
+Install [`age`](https://github.com/FiloSottile/age) first.
+Once your key is added to recipients, you can decrypt the vault password into the git-ignored `.vault_pass`.
 
 ```bash
 age -d -i ~/.ssh/id_rsa -o .vault_pass secrets/vault-pass.age
 # ... run just deploy ...
-rm -f .vault_pass    # git-ignored, but remove when done
 ```
 
-Install [`age`](https://github.com/FiloSottile/age) first (`brew install age`).
+### Adding a recipient
+
+Recipients are the public keys in `secrets/age-recipients.txt` — one per line, either an
+`ssh-ed25519`/`ssh-rsa` key (e.g. a line from `https://github.com/<user>.keys`) or an `age1…` key
+from `age-keygen`. Editing the list doesn't re-key `vault-pass.age` on its own; **you must re-encrypt it**, 
+so an existing recipient has to run this:
+
+```bash
+age -d -i ~/.ssh/id_rsa -o .vault_pass secrets/vault-pass.age   # 1. decrypt (existing recipient)
+# 2. add the newcomer's PUBLIC key
+echo 'ssh-ed25519 AAAA… alice' >> secrets/age-recipients.txt
+age -R secrets/age-recipients.txt -o secrets/vault-pass.age < .vault_pass   # 3. re-encrypt to the new list
+```
+
+The password value is unchanged — you're only widening who can decrypt it; the newcomer can decrypt
+once the re-encrypted `.age` is committed. **Removing** a recipient is the same flow with their line
+deleted, but re-encrypting only stops *future* decrypts — anyone who already decrypted still holds
+the password, so if you're revoking for cause, rotate the vault password itself.
 
 ## Secrets — where the GitHub App creds go
 
@@ -48,15 +53,8 @@ The app pushes approved rulings to `vtes-biased/vtes-rulings` as a **GitHub App*
 Two kinds of secret:
 
 **1. The private key (PEM)** — multi-line, delivered as an ansible-vault file that the
-`asgi_service` role decrypts to `/etc/rulings/rulings_github_app.pem` on the host:
-
-```bash
-# with .vault_pass present (see above):
-export ANSIBLE_VAULT_PASSWORD_FILE=$PWD/.vault_pass
-ansible-vault encrypt --output roles/asgi_service/files/rulings_github_app.pem.vault \
-    ~/Downloads/rulings-bot.<...>.private-key.pem
-git add roles/asgi_service/files/rulings_github_app.pem.vault   # encrypted — safe to commit
-```
+`asgi_service` role decrypts to `/etc/rulings/rulings_github_app.pem` on the host.
+It stays vault-encrypted at `ansible/roles/asgi_service/files/rulings_github_app.pem.vault`.
 
 **2. The Client ID + Installation ID** — short scalars, they live in `vault.yml`
 alongside the other secrets. Create/edit it with:
@@ -68,7 +66,7 @@ ansible-vault edit inventories/production/group_vars/all/vault.yml
 and set these keys (see `vars.yml` for how they're wired into the app env):
 
 ```yaml
-vault_db_password: "<any strong string; peer auth makes it vestigial>"
+vault_db_password: "<actual db password for vtes-rulings db>"
 vault_session_secret_key: "<openssl rand -hex 32>"
 vault_discord_webhook: "https://discord.com/api/webhooks/..."
 vault_discord_server_id: "<discord server id>"
@@ -89,22 +87,7 @@ gh api /repos/vtes-biased/vtes-rulings/installation --jq .id
 just ping                              # ansible ping as the deploy user
 ```
 
-If it fails on auth, the `deploy` user/key isn't authorized on gravelines yet — fix in
-`server-setup` (`add-admin.yml --limit gravelines`) before continuing. Once in, confirm
-the foundation is current and note the v1 app's names/port so we replace it cleanly:
-
-```bash
-ssh deploy@152.228.170.51 '
-  which uv; nginx -v; psql --version; systemctl status alloy --no-pager | head -3
-  ls /etc/nginx/sites-enabled/                 # find the v1 rulings vhost
-  systemctl list-units --type=service --state=running | grep -iE "rulings|krcg|timer|archon"
-  sudo -u postgres psql -tAc "SELECT datname FROM pg_database WHERE datistemplate=false;"
-  ss -tlnH | awk "{print \$4}" | sort -u       # confirm backend_port (8095) is free
-'
-```
-
-If the v1 DB has in-flight proposals worth keeping, set `db_name`/`db_user` in
-`vars.yml` to the existing DB name (the `postgres_db` role won't clobber an existing DB).
+If it fails on auth, the `deploy` user/key isn't authorized on gravelines yet.
 
 ## Deploy
 
@@ -115,15 +98,3 @@ RELEASE_TAG=v0.9 just deploy    # pin a specific release
 SOURCE=local just deploy        # build + deploy a local wheel (dev)
 QUICK=1 just deploy             # artifacts-only (--tags app): wheel + unit, skip db/nginx
 ```
-
-After deploy: `curl -I https://rulings.krcg.org`, `systemctl status rulings`,
-`journalctl -u rulings -f`. Remove the leftover v1 unit/vhost once the new one is
-serving (its systemd unit + `/etc/nginx/sites-enabled/<v1>`), then reload nginx.
-
-## Files
-
-- `playbooks/deploy.yml` — the deploy play (postgres_db → asgi_service → nginx_site).
-- `roles/asgi_service/` — app-specific role: wheel → uv venv → env + PEM → systemd unit.
-- `tasks/` — shared `fetch_release.yml` (download the Release wheel) + `app_user.yml`.
-- `vars/release_artifacts.yml` — which repo/tag to fetch, wheel glob.
-- `inventories/production/` — host + `group_vars/all/{vars,vault}.yml`.
