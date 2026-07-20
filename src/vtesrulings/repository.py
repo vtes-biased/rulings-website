@@ -309,22 +309,23 @@ async def load_base(repo: git.Repo, card_map: krcg.collections.CardDict) -> mode
             else:
                 raw = entry["text"]
                 overrides = {
-                    utils.build_nid(k).uid: v for k, v in (entry.get("overrides") or {}).items()
+                    utils.build_nid(k).uid: utils.normalize_cards(card_map, v)
+                    for k, v in (entry.get("overrides") or {}).items()
                 }
             text = utils.RE_REMINDER.sub("", raw)
             kind = models.RulingKind.REMINDER if text != raw else models.RulingKind.RULING
-            uid = utils.stable_hash(text)
+            # no explicit uid: build_ruling hashes the card-normalized text, so a non-canonical
+            # token in the YAML rehashes here and the next commit writes the canonical form back
             ruling = utils.build_ruling(
                 card_map,
                 ret.references,
                 text,
                 target=nid,
-                uid=uid,
                 state=models.State.ORIGINAL,
                 kind=kind,
             )
             ruling.overrides = overrides
-            ret.rulings[nid.uid][uid] = ruling
+            ret.rulings[nid.uid][ruling.uid] = ruling
             for card in ruling.cards:
                 ret.backrefs.setdefault(card.uid, [])
                 ret.backrefs[card.uid].append(models.Backref(nid.uid, ruling.uid))

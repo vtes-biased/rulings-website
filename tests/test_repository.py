@@ -1,7 +1,7 @@
 import git
 
 import vtesrulings
-from vtesrulings import models, repository
+from vtesrulings import models, repository, utils
 
 
 def _commit(repo, work, body, date):
@@ -89,3 +89,22 @@ async def test_load_base_reminder_tag_round_trips(app, tmp_path):
     assert adapted.text == "Adapted reminder."
     assert adapted.kind == models.RulingKind.REMINDER
     assert adapted.overrides == {"100015": "Per-card wording. [RTR 20070707]"}
+
+
+async def test_load_base_normalizes_card_tokens(app, tmp_path):
+    ref_dir = tmp_path / "repo" / repository.RULINGS_FILES_PATH
+    ref_dir.mkdir(parents=True)
+    (ref_dir / "references.yaml").write_text("RTR 20070707: https://www.vekn.net/forum/x\n")
+    (ref_dir / "groups.yaml").write_text("{}\n")
+    (ref_dir / "rulings.yaml").write_text(
+        "100015|Academic Hunting Ground:\n"
+        # a fuzzy near-miss on a duplicated vampire, and a suffix on a card that has no variants
+        "  - Merge with {Theo Bell (ADV)} or {Louhi (G4)}. [RTR 20070707]\n"
+    )
+    repo = git.Repo.init(tmp_path / "repo")
+
+    index = await repository.load_base(repo, vtesrulings.app.state.cards_map)
+    (ruling,) = index.rulings["100015"].values()
+    assert ruling.text == "Merge with {Theo Bell (G2 ADV)} or {Louhi}. [RTR 20070707]"
+    assert ruling.uid == utils.stable_hash(ruling.text)
+    assert [c.uid for c in ruling.cards] == ["201363", "200860"]

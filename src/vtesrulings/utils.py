@@ -208,6 +208,13 @@ def parse_cards(
         )
 
 
+def normalize_cards(card_map: krcg.collections.CardDict, text: str) -> str:
+    """Tokens are hand-typed and only resolve through krcg's fuzzy matching, so a near-miss like
+    {Theo Bell (ADV)} — which scores close against two different Theo Bells — could silently switch
+    printing on a card-data update. unique_name is always an exact key, so this is idempotent."""
+    return RE_CARD.sub(lambda m: "{" + card_map[m.group(0)[1:-1]].unique_name + "}", text)
+
+
 def parse_references(
     references: typing.Mapping[str, models.Reference], text: str
 ) -> typing.Generator[models.ReferencesSubstitution, None, None]:
@@ -250,15 +257,14 @@ def build_ruling(
     references: typing.Mapping[str, models.Reference],
     text: str,
     target: models.NID,
-    uid: str = "",
     state: models.State = models.State.ORIGINAL,
     kind: models.RulingKind = models.RulingKind.RULING,
 ) -> models.Ruling:
     """Build a Ruling object from text.
-    If uid is not provided, it's computed from the text using stable_hash()
-    If text is empty, a random 8-char uid is provided
+    The uid is the stable_hash() of the text, or random if the text is empty.
     """
-    uid = uid or (stable_hash(text) if text else random_uid8())
+    text = normalize_cards(card_map, text)
+    uid = stable_hash(text) if text else random_uid8()
     ruling = models.Ruling(target=target, uid=uid, text=text, state=state, kind=kind)
     ruling.symbols.extend(parse_symbols(text))
     ruling.cards.extend(parse_cards(card_map, text))
