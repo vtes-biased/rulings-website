@@ -1,17 +1,17 @@
 <script lang="ts">
     import { debounce } from "../js/net.js"
-    import type { SelectItem } from "./types"
+    import type { CardItem } from "./types"
 
     // Live card-name search (/api/complete). Renders an input + result menu; the parent must be
     // position: relative so the absolute .ac-menu anchors to it. Shared by the ruling text editor
     // (insert a card chip) and the group editor (add a card to the group).
     let { onPick, placeholder = "Card name" }: {
-        onPick: (item: SelectItem) => void
+        onPick: (item: CardItem) => void
         placeholder?: string
     } = $props()
 
     let query = $state("")
-    let items = $state<SelectItem[]>([])
+    let items = $state<CardItem[]>([])
 
     const runSearch = debounce(async () => {
         const q = query.trim()
@@ -22,7 +22,7 @@
         } catch { items = [] }
     }, 250)
 
-    function pick(item: SelectItem) {
+    function pick(item: CardItem) {
         onPick(item)
         query = ""
         items = []

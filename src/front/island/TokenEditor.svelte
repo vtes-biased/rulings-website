@@ -2,7 +2,7 @@
     import SymbolEditor from "./SymbolEditor.svelte"
     import CardSearch from "./CardSearch.svelte"
     import { nodesFromTokens, tokenize, cardChip } from "./tokens"
-    import type { Ruling, SelectItem } from "./types"
+    import type { Ruling } from "./types"
 
     let { ruling, editor, onSave }: {
         ruling: Ruling
@@ -15,7 +15,7 @@
     {#snippet tools({ insert })}
     <div class="editor-card">
         <CardSearch placeholder="Insert card…"
-            onPick={(item: SelectItem) => insert(cardChip(`{${item.label}}`, item.label))} />
+            onPick={(item) => insert(cardChip(`{${item.label}}`, item.printed_name, item.label))} />
     </div>
     {/snippet}
 </SymbolEditor>

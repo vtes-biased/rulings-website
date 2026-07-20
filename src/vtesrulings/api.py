@@ -127,7 +127,10 @@ async def complete_card(request: Request):
         raise HTTPException(404)
     text = urllib.parse.unquote(text)
     ret = request.app.state.cards_map.complete(text)
-    return [{"label": card.unique_name, "value": card.id} for card in ret]
+    return [
+        {"label": card.unique_name, "value": card.id, "printed_name": card.printed_name}
+        for card in ret
+    ]
 
 
 #: Per-section caps on the grouped search dropdown.

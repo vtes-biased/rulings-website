@@ -27,7 +27,7 @@ export interface Group {
     uid: string; name: string; state: State; cards: CardInGroup[]
 }
 
-export type { SelectItem } from "../js/net.js"
+export type { SelectItem, CardItem } from "../js/net.js"
 
 export const RESTORABLE: State[] = ["DELETED", "MODIFIED"]
 export const DELETABLE: State[] = ["ORIGINAL", "NEW", "MODIFIED"]

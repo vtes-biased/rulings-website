@@ -2,6 +2,7 @@ import krcg.collections
 import pytest
 import typing
 
+import vtesrulings
 import vtesrulings.discord
 from vtesrulings import models, repository
 
@@ -1029,10 +1030,21 @@ async def test_complete(client):
     response = await client.get("/api/complete?query=paris")
     assert response.status_code == 200
     assert response.json() == [
-        {"label": "The Louvre, Paris", "value": 101127},
-        {"label": "Paris Opera House", "value": 101352},
-        {"label": "Crusade: Paris", "value": 100468},
-        {"label": "Praxis Seizure: Paris", "value": 101467},
+        {"label": "The Louvre, Paris", "value": 101127, "printed_name": "The Louvre, Paris"},
+        {"label": "Paris Opera House", "value": 101352, "printed_name": "Paris Opera House"},
+        {"label": "Crusade: Paris", "value": 100468, "printed_name": "Crusade: Paris"},
+        {
+            "label": "Praxis Seizure: Paris",
+            "value": 101467,
+            "printed_name": "Praxis Seizure: Paris",
+        },
+    ]
+    response = await client.get("/api/complete?query=theo bell")
+    assert response.status_code == 200
+    assert response.json() == [
+        {"label": "Theo Bell (G2)", "value": 201362, "printed_name": "Theo Bell"},
+        {"label": "Theo Bell (G2 ADV)", "value": 201363, "printed_name": "Theo Bell"},
+        {"label": "Theo Bell (G6)", "value": 201613, "printed_name": "Theo Bell"},
     ]
 
 
@@ -1289,3 +1301,43 @@ async def test_proposal_diff_page(client):
     assert base["target"]["name"] in html  # group target heading
     assert "line-through" in html  # the struck "was" (previous) body
     assert "LSJ 20001225" in html  # NEW reference
+
+
+def test_ruling_body_card_variant():
+    ruling = {
+        "text": "Merge with {Theo Bell (ADV)} [ANK 20220805]",
+        "symbols": [],
+        "cards": [
+            {
+                "text": "{Theo Bell (ADV)}",
+                "name": "Theo Bell (G2 ADV)",
+                "printed_name": "Theo Bell",
+            }
+        ],
+        "references": [{"text": "[ANK 20220805]"}],
+    }
+    assert vtesrulings.ruling_body(ruling) == (
+        'Merge with <span class="krcg-card" data-name="Theo Bell (G2 ADV)">Theo Bell</span>'
+    )
+
+
+def test_ruling_body_escapes():
+    """Proposal-authored text can't inject markup, and markers whose card name escapes (33 have a
+    double quote) are still matched and stripped."""
+    ruling = {
+        "text": '<script>x</script> {Anna "Dictatrix11" Suljic}',
+        "symbols": [],
+        "cards": [
+            {
+                "text": '{Anna "Dictatrix11" Suljic}',
+                "name": 'Anna "Dictatrix11" Suljic',
+                "printed_name": 'Anna "Dictatrix11" Suljic',
+            }
+        ],
+        "references": [],
+    }
+    assert vtesrulings.ruling_body(ruling) == (
+        "&lt;script&gt;x&lt;/script&gt; "
+        '<span class="krcg-card" data-name="Anna &#34;Dictatrix11&#34; Suljic">'
+        "Anna &#34;Dictatrix11&#34; Suljic</span>"
+    )

@@ -13,7 +13,7 @@ const RE_SYMBOL = new RegExp(`\\[(?:${SYMBOL_KEYS.join("|")})\\]`, "g")
 type Tok =
     | { t: "text"; v: string }
     | { t: "sym"; marker: string; glyph: string }
-    | { t: "card"; marker: string; label: string }
+    | { t: "card"; marker: string; label: string; name: string }
 
 /** Tokenize a group-card prefix: plain text + symbol chips only (no cards, no references). */
 export function symbolTokens(text: string): Tok[] {
@@ -31,7 +31,7 @@ export function symbolTokens(text: string): Tok[] {
 }
 
 export function tokenize(ruling: Ruling): Tok[] {
-    const cardName = new Map(ruling.cards.map((c) => [c.text, c.printed_name]))
+    const byMarker = new Map(ruling.cards.map((c) => [c.text, c]))
     // strip reference markers first, keyed off the ruling's own resolved references (mirrors the
     // `ruling_body` filter) — no separate source list to drift from utils.RULING_AUTHORS
     let text = ruling.text
@@ -44,7 +44,8 @@ export function tokenize(ruling: Ruling): Tok[] {
         if (start > last) toks.push({ t: "text", v: text.slice(last, start) })
         last = start + marker.length
         if (marker[0] === "{") {
-            toks.push({ t: "card", marker, label: cardName.get(marker) ?? marker.slice(1, -1) })
+            const c = byMarker.get(marker), fb = marker.slice(1, -1)
+            toks.push({ t: "card", marker, label: c?.printed_name ?? fb, name: c?.name ?? fb })
         } else {
             toks.push({ t: "sym", marker, glyph: ANKHA_SYMBOLS[marker.slice(1, -1)] })
         }
@@ -62,11 +63,14 @@ export function symbolChip(marker: string, glyph: string): HTMLElement {
     return el
 }
 
-export function cardChip(marker: string, label: string): HTMLElement {
+// krcg.js slugs data-name into the card image URL, so it must be the *unique* name (group/advanced
+// suffix included) — the bare printed name of a duplicated vampire slugs to its first print.
+export function cardChip(marker: string, label: string, name: string): HTMLElement {
     const el = document.createElement("span")
     el.className = "krcg-card"
     el.contentEditable = "false"
     el.dataset.marker = marker
+    el.dataset.name = name
     el.textContent = label
     return el
 }
@@ -86,7 +90,7 @@ export function nodesFromTokens(toks: Tok[]): Node[] {
     for (const tok of toks) {
         if (tok.t === "text") nodes.push(...textNodes(tok.v))
         else if (tok.t === "sym") nodes.push(symbolChip(tok.marker, tok.glyph))
-        else nodes.push(cardChip(tok.marker, tok.label))
+        else nodes.push(cardChip(tok.marker, tok.label, tok.name))
     }
     return nodes
 }

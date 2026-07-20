@@ -2,6 +2,8 @@
 // Kept side-effect-free (no auto-run) so importing it from a second entry point is safe.
 
 export interface SelectItem { label: string; value: string }
+// /api/complete: label is the unique name (group/advanced suffix), printed_name the display one.
+export interface CardItem extends SelectItem { printed_name: string }
 
 export const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
 

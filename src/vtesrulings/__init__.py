@@ -81,24 +81,26 @@ def symbol_replace(s: str, d: list):
     return s
 
 
-def card_replace(s: str, d: list):
-    for card in d:
-        s = s.replace(card["text"], f'<span class="krcg-card">{card["name"]}</span>')
-    return s
-
-
 def newlines(s: str):
     return s.replace("\n", "<br>")
 
 
 def ruling_body(ruling: dict):
-    """Resolve a ruling's text for read-mode SSR: glyphs, card spans, references stripped out."""
-    s = ruling["text"]
+    """Resolve a ruling's text for read-mode SSR: glyphs, card spans, references stripped out.
+    Text is proposal-authored, so escape it before injecting any markup — which means matching
+    the markers in their escaped form too."""
+    esc = markupsafe.escape
+    s = str(esc(ruling["text"]))
     s = symbol_replace(s, ruling["symbols"])
     for card in ruling["cards"]:
-        s = s.replace(card["text"], f'<span class="krcg-card">{card["printed_name"]}</span>')
+        # data-name is the unique name, see cardChip in island/tokens.ts
+        s = s.replace(
+            str(esc(card["text"])),
+            f'<span class="krcg-card" data-name="{esc(card["name"])}">'
+            f"{esc(card['printed_name'])}</span>",
+        )
     for reference in ruling["references"]:
-        s = s.replace(reference["text"], "")
+        s = s.replace(str(esc(reference["text"])), "")
     return markupsafe.Markup(newlines(s.strip()))
 
 
@@ -106,7 +108,6 @@ templates.env.globals["version"] = version  # ty: ignore[invalid-assignment]  # 
 templates.env.globals["external_link"] = external_link  # ty: ignore[invalid-assignment]
 templates.env.globals["rulings_repo_url"] = repository.RULINGS_REPO_WEB  # ty: ignore[invalid-assignment]
 templates.env.filters["symbolreplace"] = symbol_replace
-templates.env.filters["cardreplace"] = card_replace
 templates.env.filters["newlines"] = newlines
 templates.env.filters["rulingbody"] = ruling_body
 
