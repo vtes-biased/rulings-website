@@ -18,7 +18,7 @@ The app is a FastAPI server rendering Jinja templates plus a JSON API, with a Sv
 
 **Workflow.** Don't postpone work or fixes that can be done now. The amount of code needing a rewrite is never a reason to defer — the coding loop is agentic and rewrites fast. After any non-trivial change, invoke the `reviewer` subagent before committing and address its findings.
 
-**Commits.** Never reference pst ticket numbers in git commit messages or PR titles/bodies (hard rule). pst numbers are line positions, not stable ids — and `#N` reads as a GitHub issue ref. Describe the change itself; track tickets via the `pst` CLI, not the commit log.
+**Commits.** Never reference pst ticket numbers in git commit messages or PR titles/bodies (hard rule): pst numbers are line positions, not stable ids, and `#N` would be read as a GitHub issue ref. Describe the change itself; track pst tickets via the `pst` CLI, not the commit log. **GitHub** issue numbers are the exception — when a commit fixes a known GitHub issue, close it from the commit with a `Fixes #N` line just above the trailers.
 
 ## Commands
 
