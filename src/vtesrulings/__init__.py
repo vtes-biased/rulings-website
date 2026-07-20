@@ -77,11 +77,15 @@ def symbol_replace(s: str, d: list):
     """Owns the escaping for the author-supplied chains it heads: `s` is author-supplied and what it
     returns is `| safe`. escape() is a no-op on Markup, so a caller that escaped already (ruling_body,
     card_text — which must inject its own markup first) hands one in rather than double-escaping."""
-    s = str(markupsafe.escape(s))
-    for symbol in d:
+    esc = markupsafe.escape
+    s = str(esc(s))
+    # one entry per *occurrence* comes in, and replace() is global: a repeated symbol must be
+    # deduped or the second pass rewrites the [pot] now sitting inside the injected data-marker
+    for text, symbol in {sub["text"]: sub["symbol"] for sub in d}.items():
         s = s.replace(
-            symbol["text"],
-            f'<span class="krcg-icon" contenteditable="false">{symbol["symbol"]}</span>',
+            text,
+            f'<span class="krcg-icon" contenteditable="false"'
+            f' data-marker="{esc(text)}">{symbol}</span>',
         )
     return s
 
@@ -108,12 +112,15 @@ def bold_traits(s: str) -> markupsafe.Markup:
     )
 
 
-def card_span(card: dict, label: str) -> str:
-    """`label` is already escaped. See cardChip in island/tokens.ts for what the attributes are."""
+def card_span(card: dict, label: str, marker: str = "") -> str:
+    """`label` is already escaped. See cardChip in island/tokens.ts for what the attributes are.
+    `marker` is the ruling's `{Card}` token, which setupMarkerCopy puts back on the clipboard —
+    card text has no such token (krcg writes `<Card>`), so its spans carry none and copy as text."""
     esc = markupsafe.escape
+    attr = f' data-marker="{esc(marker)}"' if marker else ""
     return (
         f'<span class="krcg-card" data-name="{esc(card["name"])}"'
-        f' data-uid="{esc(card["uid"])}">{label}</span>'
+        f' data-uid="{esc(card["uid"])}"{attr}>{label}</span>'
     )
 
 
@@ -170,8 +177,11 @@ def ruling_body(ruling: dict):
     the markers in their escaped form too."""
     esc = markupsafe.escape
     s = symbol_replace(esc(ruling["text"]), ruling["symbols"])
-    for card in ruling["cards"]:
-        s = s.replace(str(esc(card["text"])), card_span(card, str(esc(card["printed_name"]))))
+    for text, card in {c["text"]: c for c in ruling["cards"]}.items():  # dedupe, see symbol_replace
+        s = s.replace(
+            str(esc(text)),
+            card_span(card, str(esc(card["printed_name"])), text),
+        )
     for reference in ruling["references"]:
         s = s.replace(str(esc(reference["text"])), "")
     return markupsafe.Markup(newlines(s.strip()))

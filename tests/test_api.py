@@ -1323,7 +1323,8 @@ def test_ruling_body_card_variant():
         "references": [{"text": "[ANK 20220805]"}],
     }
     assert vtesrulings.ruling_body(ruling) == (
-        'Merge with <span class="krcg-card" data-name="Theo Bell (G2 ADV)" data-uid="201363">Theo Bell</span>'
+        'Merge with <span class="krcg-card" data-name="Theo Bell (G2 ADV)" data-uid="201363"'
+        ' data-marker="{Theo Bell (ADV)}">Theo Bell</span>'
     )
 
 
@@ -1345,7 +1346,8 @@ def test_ruling_body_escapes():
     }
     assert vtesrulings.ruling_body(ruling) == (
         "&lt;script&gt;x&lt;/script&gt; "
-        '<span class="krcg-card" data-name="Anna &#34;Dictatrix11&#34; Suljic" data-uid="200102">'
+        '<span class="krcg-card" data-name="Anna &#34;Dictatrix11&#34; Suljic" data-uid="200102"'
+        ' data-marker="{Anna &#34;Dictatrix11&#34; Suljic}">'
         "Anna &#34;Dictatrix11&#34; Suljic</span>"
     )
 
@@ -1355,11 +1357,28 @@ def test_symbol_replace_escapes():
     proposal-authored. Markup input (ruling_body) must not be escaped twice."""
     symbols = [{"text": "[pot]", "symbol": "▲"}]
     assert vtesrulings.symbol_replace("<b>x</b> & [pot]", symbols) == (
-        '&lt;b&gt;x&lt;/b&gt; &amp; <span class="krcg-icon" contenteditable="false">▲</span>'
+        "&lt;b&gt;x&lt;/b&gt; &amp; "
+        '<span class="krcg-icon" contenteditable="false" data-marker="[pot]">▲</span>'
     )
     assert vtesrulings.symbol_replace(markupsafe.Markup("&amp; [pot]"), symbols) == (
-        '&amp; <span class="krcg-icon" contenteditable="false">▲</span>'
+        '&amp; <span class="krcg-icon" contenteditable="false" data-marker="[pot]">▲</span>'
     )
+
+
+def test_repeated_marker_is_not_nested():
+    """parse_symbols/parse_cards yield one substitution per occurrence and str.replace is global, so
+    the second pass would rewrite the marker inside the data-marker it just injected."""
+    symbols = [{"text": "[pot]", "symbol": "P"}, {"text": "[pot]", "symbol": "P"}]
+    out = vtesrulings.symbol_replace("[pot] and [pot]", symbols)
+    assert out.count('data-marker="[pot]"') == 2
+    assert "<span" not in out.split('data-marker="')[1].split('"')[0]
+
+    card = {"text": "{Abbot}", "uid": "1", "name": "Abbot", "printed_name": "Abbot"}
+    body = vtesrulings.ruling_body(
+        {"text": "{Abbot} then {Abbot}", "symbols": [], "cards": [card, card], "references": []}
+    )
+    assert body.count('data-marker="{Abbot}"') == 2
+    assert "<span" not in body.split('data-marker="')[1].split('"')[0]
 
 
 @pytest.mark.parametrize(
@@ -1495,8 +1514,9 @@ async def test_card_page_renders_symbols(client):
     page = await client.get("/index.html?uid=201623")  # Abraham DuSable, whose text has a [tha]
     assert page.status_code == 200
     body = page.text.split('id="cardText">')[1].split("</p>")[0]
-    assert "[tha]" not in body
-    assert '<span class="krcg-icon" contenteditable="false">' in body
+    # the literal marker survives only as the copy-to-clipboard data-marker, never as body text
+    assert body.count("[tha]") == body.count('data-marker="[tha]"') == 1
+    assert '<span class="krcg-icon" contenteditable="false" data-marker="[tha]">' in body
     assert body.startswith("<strong>Camarilla:</strong>")  # the sect header, bold as on the card
 
 

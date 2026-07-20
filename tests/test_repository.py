@@ -108,3 +108,20 @@ async def test_load_base_normalizes_card_tokens(app, tmp_path):
     assert ruling.text == "Merge with {Theo Bell (G2 ADV)} or {Louhi}. [RTR 20070707]"
     assert ruling.uid == utils.stable_hash(ruling.text)
     assert [c.uid for c in ruling.cards] == ["201363", "200860"]
+
+
+async def test_build_ruling_dedupes_pasted_reference(app):
+    """A [REF] pasted into the body and re-appended from the footer must not survive twice: the
+    editor keys its reference list by uid, so a duplicate breaks it."""
+    text = "See [RTR 20070707] and also this. [RTR 20070707] [RTR 20080808]"
+    ruling = utils.build_ruling(
+        vtesrulings.app.state.cards_map,
+        {
+            "RTR 20070707": models.Reference(uid="RTR 20070707", url="https://x", source="RTR"),
+            "RTR 20080808": models.Reference(uid="RTR 20080808", url="https://y", source="RTR"),
+        },
+        text,
+        models.NID(uid="100015", name="Academic Hunting Ground"),
+    )
+    assert ruling.text == "See [RTR 20070707] and also this. [RTR 20080808]"
+    assert [r.uid for r in ruling.references] == ["RTR 20070707", "RTR 20080808"]

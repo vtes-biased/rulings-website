@@ -4,30 +4,42 @@
 // the footer badges and are re-appended on save (reference editing itself is #39).
 
 import { ANKHA_SYMBOLS } from "./types"
-import type { Ruling } from "./types"
+import type { CardItem, CardSub, Ruling } from "./types"
 
 const SYMBOL_KEYS = Object.keys(ANKHA_SYMBOLS).map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
 const RE_TOKEN = new RegExp(`\\[(?:${SYMBOL_KEYS.join("|")})\\]|\\{[^}]+\\}`, "g")
 const RE_SYMBOL = new RegExp(`\\[(?:${SYMBOL_KEYS.join("|")})\\]`, "g")
+const RE_ANY = /\[[^\]\n]*\]|\{[^}\n]+\}/g
 
 type Tok =
     | { t: "text"; v: string }
     | { t: "sym"; marker: string; glyph: string }
     | { t: "card"; marker: string; label: string; name: string; uid: string }
 
-/** Tokenize a group-card prefix: plain text + symbol chips only (no cards, no references). */
-export function symbolTokens(text: string): Tok[] {
+const symTok = (marker: string): Tok =>
+    ({ t: "sym", marker, glyph: ANKHA_SYMBOLS[marker.slice(1, -1)] })
+
+const cardTok = (marker: string, c?: CardSub): Tok => {
+    const fb = marker.slice(1, -1)
+    return { t: "card", marker, label: c?.printed_name ?? fb, name: c?.name ?? fb, uid: c?.uid ?? "" }
+}
+
+function scan(text: string, re: RegExp, tok: (marker: string) => Tok): Tok[] {
     const toks: Tok[] = []
     let last = 0
-    for (const m of text.matchAll(RE_SYMBOL)) {
-        const marker = m[0]
+    for (const m of text.matchAll(re)) {
         const start = m.index
         if (start > last) toks.push({ t: "text", v: text.slice(last, start) })
-        last = start + marker.length
-        toks.push({ t: "sym", marker, glyph: ANKHA_SYMBOLS[marker.slice(1, -1)] })
+        last = start + m[0].length
+        toks.push(tok(m[0]))
     }
     if (last < text.length) toks.push({ t: "text", v: text.slice(last) })
     return toks
+}
+
+/** Tokenize a group-card prefix: plain text + symbol chips only (no cards, no references). */
+export function symbolTokens(text: string): Tok[] {
+    return scan(text, RE_SYMBOL, symTok)
 }
 
 export function tokenize(ruling: Ruling): Tok[] {
@@ -36,22 +48,37 @@ export function tokenize(ruling: Ruling): Tok[] {
     // `ruling_body` filter) — no separate source list to drift from utils.RULING_AUTHORS
     let text = ruling.text
     for (const ref of ruling.references) text = text.replace(ref.text, "")
-    const toks: Tok[] = []
-    let last = 0
-    for (const m of text.matchAll(RE_TOKEN)) {
-        const marker = m[0]
-        const start = m.index
-        if (start > last) toks.push({ t: "text", v: text.slice(last, start) })
-        last = start + marker.length
-        if (marker[0] === "{") {
-            const c = byMarker.get(marker), fb = marker.slice(1, -1)
-            toks.push({ t: "card", marker, label: c?.printed_name ?? fb, name: c?.name ?? fb, uid: c?.uid ?? "" })
-        } else {
-            toks.push({ t: "sym", marker, glyph: ANKHA_SYMBOLS[marker.slice(1, -1)] })
+    return scan(text, RE_TOKEN, (m) => (m[0] === "{" ? cardTok(m, byMarker.get(m)) : symTok(m)))
+}
+
+/** Tokenize raw pasted text, with no ruling to resolve card markers against. Bracket tokens that
+    aren't symbols stay literal text: a pasted [REF] is what save() parses back into a reference,
+    and prose brackets ("[sic]") must survive a paste untouched. */
+export function parseText(text: string): Tok[] {
+    // hasOwn, not a truthiness test: [constructor] and [toString] would otherwise chip up
+    return scan(text, RE_ANY, (m) =>
+        m[0] === "{" ? cardTok(m)
+        : Object.hasOwn(ANKHA_SYMBOLS, m.slice(1, -1)) ? symTok(m)
+        : { t: "text", v: m })
+}
+
+/** A pasted card chip carries only the {marker} name. Look up its id and printed label so it
+    behaves like one inserted from the card search (image modal, card link). Best-effort: the
+    marker is what gets saved, and the server normalizes it either way. */
+export async function resolveCardChip(el: HTMLElement) {
+    const name = el.dataset.name ?? ""
+    try {
+        const r = await fetch(`/api/complete?query=${encodeURIComponent(name)}`)
+        if (!r.ok) return
+        const hits = (await r.json()) as CardItem[]
+        // an exact hit, or a sole one — a printed-name alias ({Theo Bell (ADV)}) matches no label
+        const hit = hits.find((i) => i.label === name) ?? (hits.length === 1 ? hits[0] : null)
+        if (hit) {
+            el.dataset.uid = hit.value
+            el.dataset.name = hit.label // krcg.js slugs the image URL off the unique name
+            el.textContent = hit.printed_name
         }
-    }
-    if (last < text.length) toks.push({ t: "text", v: text.slice(last) })
-    return toks
+    } catch { /* offline — leave the chip on its raw marker label */ }
 }
 
 export function symbolChip(marker: string, glyph: string): HTMLElement {
@@ -112,23 +139,33 @@ export function renderPrefix(node: HTMLElement, prefix: string) {
     return { update: fill }
 }
 
-/** Walk the editor DOM back to text: text nodes verbatim, chips to their marker, <br> and any
-    browser-injected block wrappers to newlines. */
-export function serialize(host: HTMLElement): string {
+/** Walk rendered DOM back to text: text nodes verbatim, chips to their marker, <br> and any
+    browser-injected block wrappers to newlines. Takes the editor host, or a cloned selection
+    fragment for the copy handler.
+
+    A whitespace-only text node holding a newline is template indentation, not content \u2014 the editor
+    never builds one (typed and pasted line breaks are always <br>), so collapsing it to a single
+    space is safe here and keeps SSR markup from copying out with its source formatting. */
+export function serialize(host: Node): string {
     let out = ""
     const walk = (node: Node) => {
         for (const child of node.childNodes) {
-            if (child.nodeType === Node.TEXT_NODE) out += child.nodeValue
-            else if (child instanceof HTMLElement) {
+            if (child.nodeType === Node.TEXT_NODE) {
+                const v = child.nodeValue ?? ""
+                out += /\n/.test(v) && !v.trim() ? " " : v
+            } else if (child instanceof HTMLElement) {
                 if (child.dataset.marker) out += child.dataset.marker
                 else if (child.tagName === "BR") out += "\n"
+                else if (child.tagName === "BUTTON") continue // edit-mode controls aren't content
                 else {
-                    if (/^(DIV|P|LI)$/.test(child.tagName) && out && !out.endsWith("\n")) out += "\n"
+                    if (/^(DIV|P|LI)$/.test(child.tagName) && out.trim() && !out.endsWith("\n")) {
+                        out += "\n"
+                    }
                     walk(child)
                 }
             }
         }
     }
     walk(host)
-    return out.replace(/\u00a0/g, " ").trim()
+    return out.replace(/\u00a0/g, " ").replace(/[ \t]*\n[ \t]*/g, "\n").trim()
 }

@@ -11,7 +11,7 @@
     {% if ruling.references %}
     <div class="ruling__refs">
         {% for reference in ruling.references %}
-        <a class="ref" href="{{ reference.url }}" target="_blank" rel="noopener">{{ reference.uid }}</a>
+        <a class="ref" href="{{ reference.url }}" target="_blank" rel="noopener" data-marker="{{ reference.text }}">{{ reference.uid }}</a>
         {% endfor %}
     </div>
     {% elif ruling.kind != 'REMINDER' %}

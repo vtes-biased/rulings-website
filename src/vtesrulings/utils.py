@@ -133,6 +133,8 @@ RULING_AUTHORS = {
 }
 
 RE_RULING_REFERENCE = re.compile(r"\[(?:" + r"|".join(RULING_AUTHORS) + r")\s[\w0-9-]+\]")
+#: Same token, plus the whitespace ahead of it, so dedupe_references drops the gap with the marker.
+RE_DUP_RULING_REFERENCE = re.compile(r"\s*(" + RE_RULING_REFERENCE.pattern + r")")
 RE_SYMBOL = re.compile(r"\[(?:" + r"|".join(ANKHA_SYMBOLS) + r")\]")
 RE_CARD = re.compile(r"{[^}]+}")
 # A REMINDER ruling with no overrides serializes as a bare string with this trailing tag, keeping
@@ -243,6 +245,25 @@ def normalize_cards(card_map: krcg.collections.CardDict, text: str) -> str:
     return RE_CARD.sub(lambda m: "{" + card_map[m.group(0)[1:-1]].unique_name + "}", text)
 
 
+def dedupe_references(text: str) -> str:
+    """The editor keeps references in its footer and re-appends them to the body on every save, so a
+    [REF] pasted into the body text (copying a ruling brings its markers along) ends up stored — and
+    parsed back — twice. A duplicate key blows up the editor's reference list, so drop it here, at
+    the one point every ruling text passes through. The leading whitespace is part of the match, so
+    text with no duplicate comes back byte-identical — build_ruling also runs on YAML load, where
+    stable_hash(text) is the ruling uid and any rewrite would renumber existing rulings."""
+    seen: set[str] = set()
+
+    def keep(match: re.Match) -> str:
+        token = match.group(1)
+        if token in seen:
+            return ""
+        seen.add(token)
+        return match.group(0)
+
+    return RE_DUP_RULING_REFERENCE.sub(keep, text)
+
+
 def parse_references(
     references: typing.Mapping[str, models.Reference], text: str
 ) -> typing.Generator[models.ReferencesSubstitution, None, None]:
@@ -291,7 +312,7 @@ def build_ruling(
     """Build a Ruling object from text.
     The uid is the stable_hash() of the text, or random if the text is empty.
     """
-    text = normalize_cards(card_map, text)
+    text = dedupe_references(normalize_cards(card_map, text))
     uid = stable_hash(text) if text else random_uid8()
     ruling = models.Ruling(target=target, uid=uid, text=text, state=state, kind=kind)
     ruling.symbols.extend(parse_symbols(text))

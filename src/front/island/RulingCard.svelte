@@ -162,6 +162,7 @@
         {#each ruling.references as reference (reference.uid)}
         <span class="ref-tag">
             <a class="ref" href={reference.url} target="_blank" rel="noopener" draggable="true"
+                data-marker={reference.text}
                 ondragstart={(e) => e.dataTransfer?.setData("application/json", JSON.stringify(reference))}
             >{reference.uid}</a>
             {#if editRefs}

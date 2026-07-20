@@ -1,7 +1,7 @@
 <script lang="ts">
     import { onMount, type Snippet } from "svelte"
     import { debounce } from "../js/net.js"
-    import { serialize, symbolChip } from "./tokens"
+    import { nodesFromTokens, parseText, resolveCardChip, serialize, symbolChip } from "./tokens"
     import { SYMBOL_ENTRIES } from "./types"
 
     // Shared contenteditable core for ruling text and group-card prefixes. A regular contenteditable
@@ -70,13 +70,15 @@
     }
 
     function insertAtCaret(node: Node) {
+        // a fragment is emptied by insertNode, so grab the node the caret must land after first
+        const tail = node instanceof DocumentFragment ? node.lastChild : node
         const range = savedRange && host.contains(savedRange.commonAncestorContainer)
             ? savedRange
             : endRange()
         range.deleteContents()
         range.insertNode(node)
         host.focus()
-        caretAfter(node)
+        if (tail) caretAfter(tail)
         onSave(serialize(host))
     }
 
@@ -94,13 +96,19 @@
     function onPaste(ev: ClipboardEvent) {
         ev.preventDefault()
         const text = ev.clipboardData?.getData("text/plain") ?? ""
-        insertAtCaret(document.createTextNode(text))
+        const frag = document.createDocumentFragment()
+        frag.append(...nodesFromTokens(parseText(text)))
+        const pasted = [...frag.querySelectorAll<HTMLElement>(".krcg-card")]
+        insertAtCaret(frag)
+        pasted.forEach(resolveCardChip)
     }
 
     function onBeforeInput(ev: InputEvent) {
         // block rich formatting and dropped markup; normalize Enter to a single <br>
         if (ev.inputType.startsWith("format") || ev.inputType === "insertFromDrop") ev.preventDefault()
-        else if (ev.inputType === "insertParagraph") {
+        // insertLineBreak too: under white-space: pre-wrap Chrome would insert a bare "\n" text
+        // node, which serialize() cannot tell from template indentation
+        else if (ev.inputType === "insertParagraph" || ev.inputType === "insertLineBreak") {
             ev.preventDefault()
             insertAtCaret(document.createElement("br"))
         }

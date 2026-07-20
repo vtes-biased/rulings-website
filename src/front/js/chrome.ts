@@ -1,6 +1,7 @@
 // Always-on chrome behaviors (no framework): modals, toast, collapse, autocomplete, nav, theme
 // toggle, login, and the proposal lifecycle. Ruling/group editing is not here — it is the island.
 import { ready, debounce, showToast, displayError, do_fetch, FOCUSABLE, trapTab } from "./net.js"
+import { serialize } from "../island/tokens"
 import type { SelectItem } from "./net.js"
 export { ready, do_fetch, displayError } from "./net.js"
 
@@ -389,6 +390,37 @@ function setupCopyLinks() {
     })
 }
 
+// Symbols and card names render as atomic chips, so a plain copy yields the ankha font's raw
+// letters ("p" for [pot]). Rewrite a selection touching a chip into the canonical
+// [sym]/{Card}/[REF] text — what the YAML holds and what krcg bots read.
+function setupMarkerCopy() {
+    for (const type of ["copy", "cut"] as const) {
+        document.addEventListener(type, (ev: ClipboardEvent) => {
+            const sel = window.getSelection()
+            if (!sel || sel.isCollapsed || !sel.rangeCount) return
+            const range = sel.getRangeAt(0)
+            const frag = range.cloneContents()
+            if (!frag.querySelector("[data-marker]")) return
+            const anchor = range.commonAncestorContainer
+            const host = (anchor instanceof Element ? anchor : anchor.parentElement)
+                ?.closest<HTMLElement>("[contenteditable='true']")
+            // A cut whose range escapes the editor must stay native: cancelling it would leave us
+            // deleting read-only page DOM, with nothing to save it back to.
+            if (type === "cut" && !host) return
+            ev.preventDefault()
+            ev.clipboardData?.setData("text/plain", serialize(frag))
+            if (!host || type !== "cut") return
+            // chips are atomic: cloneContents already copied the whole marker of any chip the range
+            // clips, so a leftover with a shortened label would duplicate the cut text on save
+            const chips = [...host.querySelectorAll<HTMLElement>("[data-marker]")]
+                .map((el) => [el, el.textContent] as const)
+            range.deleteContents()
+            for (const [el, text] of chips) if (el.textContent !== text) el.remove()
+            host.dispatchEvent(new InputEvent("input", { bubbles: true }))
+        })
+    }
+}
+
 export function initChrome() {
     setupModals()
     setupAlerts()
@@ -400,6 +432,7 @@ export function initChrome() {
     for (const input of document.querySelectorAll<HTMLInputElement>("input.autocomplete")) setupAutocomplete(input)
     bindCardHover()
     setupCopyLinks()
+    setupMarkerCopy()
 }
 
 ready(initChrome)
