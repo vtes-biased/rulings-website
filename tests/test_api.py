@@ -1356,12 +1356,86 @@ def test_symbol_replace_escapes():
     )
 
 
+@pytest.mark.parametrize(
+    "text,types,expected",
+    [
+        # Library: the leading requirements paragraph is bold, discipline sections are not.
+        (
+            "Only usable during a bleed action.\n[DOM] +3 bleed (limited).",
+            ["ACTION MODIFIER"],
+            "<strong>Only usable during a bleed action.</strong><br>[DOM] +3 bleed (limited).",
+        ),
+        # A single-line library card has no bold header.
+        ("Put this card in play.", ["MASTER"], "Put this card in play."),
+        # An effect paragraph on line 0 is still the bold header (Determine, Rejuvenate)…
+        (
+            "Play when a monster is bleeding you.\nOr play when a monster plays an action card.",
+            ["REACTION"],
+            "<strong>Play when a monster is bleeding you.</strong><br>"
+            "Or play when a monster plays an action card.",
+        ),
+        # …but "Choose X …" is setup shared by the sections below, not a header (Gestalt).
+        (
+            "Choose X ready Blood Brothers you control.\n[san] +X intercept.",
+            ["REACTION"],
+            "Choose X ready Blood Brothers you control.<br>[san] +X intercept.",
+        ),
+        # A library line opening on an icon is body text, never the header.
+        (
+            "[dom] +2 bleed.\n[DOM] +3 bleed.",
+            ["ACTION MODIFIER"],
+            "[dom] +2 bleed.<br>[DOM] +3 bleed.",
+        ),
+        # Crypt: sect/title header, plus the trait tail.
+        (
+            "Independent: Ambrogino can act. Red List. +1 bleed.\n[MERGED] +1 stealth.",
+            ["VAMPIRE"],
+            "<strong>Independent:</strong> Ambrogino can act. <strong>Red List.</strong> "
+            "<strong>+1 bleed.</strong><br>[MERGED] <strong>+1 stealth.</strong>",
+        ),
+        # A colon inside ability text is not a header — [MERGED] titles are.
+        (
+            "[MERGED] Menele can strike: steal 2 blood.",
+            ["VAMPIRE"],
+            "[MERGED] Menele can strike: steal 2 blood.",
+        ),
+        (
+            "[MERGED] Baron of London: +1 bleed.",
+            ["VAMPIRE"],
+            "[MERGED] <strong>Baron of London:</strong> <strong>+1 bleed.</strong>",
+        ),
+        # A title-only crypt line is wholly bold; imbued traits need not tail the line.
+        (
+            "Camarilla Prince of Nairobi.",
+            ["VAMPIRE"],
+            "<strong>Camarilla Prince of Nairobi.</strong>",
+        ),
+        (
+            "+1 strength. Pedro cannot maneuver.",
+            ["IMBUED"],
+            "<strong>+1 strength.</strong> Pedro cannot maneuver.",
+        ),
+    ],
+)
+def test_card_text_bolds_by_placement(text, types, expected):
+    """Card data carries no bold markup; the printed card implies it by placement."""
+    assert vtesrulings.card_text(text, types, []) == expected
+
+
+def test_card_text_escapes():
+    """Inference runs on raw text, so card_text owns the escaping of every fragment it emits."""
+    assert vtesrulings.card_text("<b>Unique.</b>\n& more", ["MASTER"], []) == (
+        "<strong>&lt;b&gt;Unique.&lt;/b&gt;</strong><br>&amp; more"
+    )
+
+
 @pytest.mark.asyncio
 async def test_card_page_renders_symbols(client):
-    """The card-text chain is symbolreplace (which escapes) then newlines: glyphs land as markup,
-    the card's own text does not."""
+    """The card-text chain is the cardtext filter: glyphs and inferred bold land as markup, the
+    card's own text does not."""
     page = await client.get("/index.html?uid=201623")  # Abraham DuSable, whose text has a [tha]
     assert page.status_code == 200
     body = page.text.split('id="cardText">')[1].split("</p>")[0]
     assert "[tha]" not in body
     assert '<span class="krcg-icon" contenteditable="false">' in body
+    assert body.startswith("<strong>Camarilla:</strong>")  # the sect header, bold as on the card

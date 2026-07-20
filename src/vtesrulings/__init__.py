@@ -24,6 +24,7 @@ from . import db
 from . import discord
 from . import proposal
 from . import repository
+from . import utils
 
 logger = logging.getLogger()
 version = importlib.metadata.version("vtes-rulings")
@@ -73,9 +74,9 @@ def external_link(name, url, anchor=None, class_=None, params=None):
 
 
 def symbol_replace(s: str, d: list):
-    """Head of every text→markup filter chain, so it owns the escaping: `s` is author-supplied and
-    what it returns is `| safe`. escape() is a no-op on Markup, so a caller that escaped already
-    (ruling_body) hands one in rather than double-escaping."""
+    """Owns the escaping for the author-supplied chains it heads: `s` is author-supplied and what it
+    returns is `| safe`. escape() is a no-op on Markup, so a caller that escaped already (ruling_body,
+    card_text — which must inject its own markup first) hands one in rather than double-escaping."""
     s = str(markupsafe.escape(s))
     for symbol in d:
         s = s.replace(
@@ -87,6 +88,58 @@ def symbol_replace(s: str, d: list):
 
 def newlines(s: str):
     return s.replace("\n", "<br>")
+
+
+def split_icon(s: str) -> tuple[str, str]:
+    """Peel a leading [MERGED]-style icon off a line — it stays outside the bold, as on the card."""
+    icon = utils.RE_ICON_LINE.match(s)
+    return (icon.group(0), s[icon.end() :]) if icon else ("", s)
+
+
+def bold_traits(s: str) -> markupsafe.Markup:
+    """Traits usually tail the line, but not always (Pedro Cortez), so every sentence is tested."""
+    esc = markupsafe.escape
+    prefix, s = split_icon(s)
+    return esc(prefix) + markupsafe.Markup(" ").join(
+        markupsafe.Markup("<strong>%s</strong>") % p
+        if utils.RE_CRYPT_TRAIT.fullmatch(p)
+        else esc(p)
+        for p in utils.RE_SENTENCES.split(s.strip())
+    )
+
+
+def card_text(s: str, types: list[str], symbols: list[dict]) -> markupsafe.Markup:
+    """The CSV carries no bold markup, but the printed card bolds by placement: on crypt cards the
+    sect/title header and the trait sentences, on library cards the leading requirements paragraph.
+    Inference runs on the raw text, so escaping is per-fragment here and symbol_replace — which owns
+    it for the author-supplied chains — gets handed Markup and no-ops on it."""
+    crypt = any(t.upper() in ("VAMPIRE", "IMBUED") for t in types)
+    sections = s.split("\n")
+    out = []
+    for index, section in enumerate(sections):
+        if crypt:
+            head, sep, tail = section.partition(":")
+            prefix, title = split_icon(head)
+            if sep and utils.RE_CRYPT_HEADER.search(title):
+                section = (
+                    markupsafe.escape(prefix)
+                    + markupsafe.Markup("<strong>%s:</strong> ") % title
+                    + bold_traits(tail)
+                )
+            else:
+                section = bold_traits(section)
+        elif (
+            section
+            and index == 0
+            and len(sections) > 1
+            and not utils.RE_ICON_LINE.match(section)
+            and not utils.RE_SHARED_SETUP.match(section)
+        ):
+            section = markupsafe.Markup("<strong>%s</strong>") % section
+        else:
+            section = markupsafe.escape(section)
+        out.append(symbol_replace(section, symbols))
+    return markupsafe.Markup("<br>".join(out))
 
 
 def ruling_body(ruling: dict):
@@ -111,7 +164,7 @@ templates.env.globals["version"] = version  # ty: ignore[invalid-assignment]  # 
 templates.env.globals["external_link"] = external_link  # ty: ignore[invalid-assignment]
 templates.env.globals["rulings_repo_url"] = repository.RULINGS_REPO_WEB  # ty: ignore[invalid-assignment]
 templates.env.filters["symbolreplace"] = symbol_replace
-templates.env.filters["newlines"] = newlines
+templates.env.filters["cardtext"] = card_text
 templates.env.filters["rulingbody"] = ruling_body
 
 

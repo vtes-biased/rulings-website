@@ -140,6 +140,34 @@ RE_CARD = re.compile(r"{[^}]+}")
 # in-memory Ruling, orthogonal to any inline reference). See serialize_ruling.
 RE_REMINDER = re.compile(r"\s*\[REMINDER\]\s*$", re.IGNORECASE)
 
+# Card text carries no bold markup, but the printed card bolds by placement — see card_text.
+#: A line opening on a bracketed icon ([dom], [MERGED], [REACTION]…) is body text, never a header.
+RE_ICON_LINE = re.compile(r"^\[[\w ]+\]\s*")
+RE_SENTENCES = re.compile(r"(?<=\.)\s+")
+#: Line 0 opening on "Choose X …" is setup shared by the discipline sections under it, not the
+#: requirements header, so it is not bold (Gestalt, Coagulated Entity — the only two).
+RE_SHARED_SETUP = re.compile(r"^Choose X ")
+CRYPT_SECT = r"Camarilla|Sabbat|Independent|Anarch|Laibon"
+CRYPT_TITLE = (
+    r"primogen|prince|justicar|imperator|inner circle|bishop|archbishop|priscus"
+    r"|cardinal|regent|baron|magaji|kholo|votes?"
+)
+#: A crypt line's `…:` prefix is the bold sect/title header only if it reads as one — otherwise the
+#: colon is just punctuation in the ability text ("[MERGED] Menele can strike: …").
+RE_CRYPT_HEADER = re.compile(rf"\b(?:{CRYPT_SECT}|{CRYPT_TITLE})\b", re.IGNORECASE)
+#: The closed vocabulary of crypt trait sentences, printed bold wherever they sit on the card. A
+#: keyword trait introduced by a future set stays unbolded until it is added here.
+RE_CRYPT_TRAIT = re.compile(
+    r"(?:[+-]\d+ (?:bleed|strength|stealth|intercept|hunt|hand size|vote|ballot)s?"
+    r"|\d+ votes? \(titled\)"
+    rf"|(?:Advanced, )?(?:{CRYPT_SECT})(?:[\w' -]*?(?:{CRYPT_TITLE}))?(?: of [\w' ,.-]+)?"
+    rf"|(?:[\w']+ ){{0,2}}(?:{CRYPT_TITLE})(?: of [\w' ,.-]+)?"
+    r"|Scarce|Sterile|Infernal|Black Hand|Red List|Seraph|Blood cursed|Non-unique"
+    r"|Flight \[FLIGHT\]"
+    r"|(?:[\w']+ ){1,2}(?:circle|slave))\.",
+    re.IGNORECASE,
+)
+
 
 def build_nid(label: str) -> models.NID:
     uid, name = label.split("|")
