@@ -20,6 +20,9 @@
 
     const members = $derived(groupStore.group?.cards ?? [])
     const byUid = $derived(new Map(members.map((c) => [c.uid, c])))
+
+    const prop = new URLSearchParams(window.location.search).get("prop")
+    const cardHref = (cid: string) => `index.html?uid=${cid}${prop ? `&prop=${prop}` : ""}`
     // Cards whose editor is shown: those already overridden + drafts added via the picker (kept even
     // before their first save so a row doesn't vanish/remount mid-edit).
     let drafts = $state<string[]>([])
@@ -124,7 +127,7 @@
     {@const prefix = byUid.get(uid)?.prefix ?? ""}
     <div class="adapt-row">
         <div class="adapt-row-head">
-            <span class="adapt-card krcg-card" data-noclick="true">{byUid.get(uid)?.name ?? uid}</span>
+            <a href={cardHref(uid)} class="adapt-card krcg-card no-underline" data-noclick="true">{byUid.get(uid)?.name ?? uid}</a>
             <button type="button" class="btn btn-secondary btn-sm" onclick={() => reset(uid)}>↺ Reset</button>
         </div>
         <TokenEditor ruling={seed(uid)} editor={handleFor(uid)}

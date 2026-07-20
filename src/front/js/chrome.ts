@@ -240,19 +240,13 @@ function setupAutocomplete(input: HTMLInputElement) {
         if (h) input.removeAttribute("aria-activedescendant")
     }
 
-    const withProp = (href: string): string => {
-        const prop = new URLSearchParams(window.location.search).get("prop")
-        if (!prop) return href
-        const [path, hash] = href.split("#")
-        return `${path}${path.includes("?") ? "&" : "?"}prop=${prop}${hash ? "#" + hash : ""}`
-    }
     const uidHref = (value: string): string => {
         const u = new URL(window.location.href)
         u.searchParams.delete("uid"); u.searchParams.delete("prop"); u.searchParams.set("uid", value)
         return u.pathname + u.search
     }
     const toSections = (data: any): typeof sections => {
-        if (!grouped) return [{ items: (data as SelectItem[]).map((d) => ({ label: d.label, href: uidHref(String(d.value)) })) }]
+        if (!grouped) return [{ items: (data as SelectItem[]).map((d) => ({ label: d.label, href: uidHref(d.value) })) }]
         return [
             { title: "Cards", items: (data.cards || []).map((c: any) => ({ label: c.label, href: c.url })) },
             { title: "Groups", items: (data.groups || []).map((g: any) => ({ label: g.label, href: g.url })) },
@@ -334,6 +328,14 @@ function cardTarget(e: Event): HTMLElement | null {
     return e.target instanceof Element ? e.target.closest<HTMLElement>(".krcg-card") : null
 }
 
+// Staying in the proposal across a navigation: every in-app link carries the prop through.
+const withProp = (href: string): string => {
+    const prop = new URLSearchParams(window.location.search).get("prop")
+    if (!prop) return href
+    const [path, hash] = href.split("#")
+    return `${path}${path.includes("?") ? "&" : "?"}prop=${prop}${hash ? "#" + hash : ""}`
+}
+
 function bindCardHover() {
     document.addEventListener("mouseover", (e) => {
         const el = cardTarget(e)
@@ -345,8 +347,29 @@ function bindCardHover() {
     })
     document.addEventListener("click", (e) => {
         const el = cardTarget(e)
-        if (el && el.dataset.noclick !== "true" && typeof clickCard === "function") clickCard.call(el)
+        if (!el || el.dataset.noclick === "true" || typeof clickCard !== "function") return
+        // krcg.js defines clickCard at parse time but only builds the modal on window load, and it
+        // is loaded async — in between, clickCard throws on the image it expects to find.
+        const modal = document.getElementById("krcg-click-modal")
+        if (!modal) return
+        clickCard.call(el)
+        showCardLink(modal, el.dataset.uid)
     })
+}
+
+// The modal is krcg.js's and closes on any click inside it, so the link must not bubble.
+function showCardLink(modal: HTMLElement, uid: string | undefined) {
+    let link = document.getElementById("krcg-card-link") as HTMLAnchorElement | null
+    if (!link) {
+        link = document.createElement("a")
+        link.id = "krcg-card-link"
+        link.className = "btn btn-primary"
+        link.textContent = "Go to card"
+        link.addEventListener("click", (e) => e.stopPropagation())
+        modal.appendChild(link)
+    }
+    link.hidden = !uid
+    if (uid) link.href = withProp(`index.html?uid=${encodeURIComponent(uid)}`)
 }
 
 // Per-ruling copy-link: reflect the #r-<uid> anchor in the address bar and copy the permalink.

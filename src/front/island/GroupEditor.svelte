@@ -63,7 +63,7 @@
     const debouncedSave = debounce(saveNow, 400)
 
     async function addCard(item: SelectItem) {
-        const cid = String(item.value)
+        const cid = item.value
         const present = group.cards.find((c) => c.uid === cid)
         if (present) {
             // a removed card is re-added by restoring it (keeps its base prefix); active → no-op

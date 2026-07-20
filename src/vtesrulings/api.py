@@ -128,7 +128,7 @@ async def complete_card(request: Request):
     text = urllib.parse.unquote(text)
     ret = request.app.state.cards_map.complete(text)
     return [
-        {"label": card.unique_name, "value": card.id, "printed_name": card.printed_name}
+        {"label": card.unique_name, "value": str(card.id), "printed_name": card.printed_name}
         for card in ret
     ]
 

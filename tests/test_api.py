@@ -1035,21 +1035,21 @@ async def test_complete(client):
     response = await client.get("/api/complete?query=paris")
     assert response.status_code == 200
     assert response.json() == [
-        {"label": "The Louvre, Paris", "value": 101127, "printed_name": "The Louvre, Paris"},
-        {"label": "Paris Opera House", "value": 101352, "printed_name": "Paris Opera House"},
-        {"label": "Crusade: Paris", "value": 100468, "printed_name": "Crusade: Paris"},
+        {"label": "The Louvre, Paris", "value": "101127", "printed_name": "The Louvre, Paris"},
+        {"label": "Paris Opera House", "value": "101352", "printed_name": "Paris Opera House"},
+        {"label": "Crusade: Paris", "value": "100468", "printed_name": "Crusade: Paris"},
         {
             "label": "Praxis Seizure: Paris",
-            "value": 101467,
+            "value": "101467",
             "printed_name": "Praxis Seizure: Paris",
         },
     ]
     response = await client.get("/api/complete?query=theo bell")
     assert response.status_code == 200
     assert response.json() == [
-        {"label": "Theo Bell (G2)", "value": 201362, "printed_name": "Theo Bell"},
-        {"label": "Theo Bell (G2 ADV)", "value": 201363, "printed_name": "Theo Bell"},
-        {"label": "Theo Bell (G6)", "value": 201613, "printed_name": "Theo Bell"},
+        {"label": "Theo Bell (G2)", "value": "201362", "printed_name": "Theo Bell"},
+        {"label": "Theo Bell (G2 ADV)", "value": "201363", "printed_name": "Theo Bell"},
+        {"label": "Theo Bell (G6)", "value": "201613", "printed_name": "Theo Bell"},
     ]
 
 
@@ -1315,6 +1315,7 @@ def test_ruling_body_card_variant():
         "cards": [
             {
                 "text": "{Theo Bell (ADV)}",
+                "uid": "201363",
                 "name": "Theo Bell (G2 ADV)",
                 "printed_name": "Theo Bell",
             }
@@ -1322,7 +1323,7 @@ def test_ruling_body_card_variant():
         "references": [{"text": "[ANK 20220805]"}],
     }
     assert vtesrulings.ruling_body(ruling) == (
-        'Merge with <span class="krcg-card" data-name="Theo Bell (G2 ADV)">Theo Bell</span>'
+        'Merge with <span class="krcg-card" data-name="Theo Bell (G2 ADV)" data-uid="201363">Theo Bell</span>'
     )
 
 
@@ -1335,6 +1336,7 @@ def test_ruling_body_escapes():
         "cards": [
             {
                 "text": '{Anna "Dictatrix11" Suljic}',
+                "uid": "200102",
                 "name": 'Anna "Dictatrix11" Suljic',
                 "printed_name": 'Anna "Dictatrix11" Suljic',
             }
@@ -1343,7 +1345,7 @@ def test_ruling_body_escapes():
     }
     assert vtesrulings.ruling_body(ruling) == (
         "&lt;script&gt;x&lt;/script&gt; "
-        '<span class="krcg-card" data-name="Anna &#34;Dictatrix11&#34; Suljic">'
+        '<span class="krcg-card" data-name="Anna &#34;Dictatrix11&#34; Suljic" data-uid="200102">'
         "Anna &#34;Dictatrix11&#34; Suljic</span>"
     )
 
@@ -1441,7 +1443,7 @@ def test_card_text_links_named_cards():
     assert vtesrulings.card_text(
         "Cancel <Immortal Grapple> as it is played.", ["COMBAT"], [], [GRAPPLE]
     ) == (
-        'Cancel <span class="krcg-card" data-name="Immortal Grapple">Immortal Grapple</span>'
+        'Cancel <span class="krcg-card" data-name="Immortal Grapple" data-uid="100959">Immortal Grapple</span>'
         " as it is played."
     )
 
@@ -1458,7 +1460,7 @@ def test_card_text_carries_the_unique_name():
     """The span shows the printed name but points at the printing, for krcg.js image lookup."""
     mithras = {"uid": "201001", "name": "Mithras (G3)", "printed_name": "Mithras"}
     assert vtesrulings.card_text("not <Mithras>.", ["MASTER"], [], [mithras]) == (
-        'not <span class="krcg-card" data-name="Mithras (G3)">Mithras</span>.'
+        'not <span class="krcg-card" data-name="Mithras (G3)" data-uid="201001">Mithras</span>.'
     )
 
 
@@ -1467,7 +1469,7 @@ def test_card_text_links_a_name_the_bold_inference_splits_on():
     carry a colon ('Crusade: Chicago'), others a period ('Dr. Jest'). No card names one today."""
     jest = {"uid": "200366", "name": "Dr. Jest", "printed_name": "Dr. Jest"}
     assert vtesrulings.card_text("While <Dr. Jest> is ready.", ["VAMPIRE"], [], [jest]) == (
-        'While <span class="krcg-card" data-name="Dr. Jest">Dr. Jest</span> is ready.'
+        'While <span class="krcg-card" data-name="Dr. Jest" data-uid="200366">Dr. Jest</span> is ready.'
     )
     # "votes" reads as a title, so the header branch would bold up to the marker's own colon
     crusade = {"uid": "100453", "name": "Crusade: Chicago", "printed_name": "Crusade: Chicago"}
@@ -1475,7 +1477,7 @@ def test_card_text_links_a_name_the_bold_inference_splits_on():
         "Anson gets 2 votes and can find <Crusade: Chicago>.", ["VAMPIRE"], [], [crusade]
     ) == (
         "Anson gets 2 votes and can find "
-        '<span class="krcg-card" data-name="Crusade: Chicago">Crusade: Chicago</span>.'
+        '<span class="krcg-card" data-name="Crusade: Chicago" data-uid="100453">Crusade: Chicago</span>.'
     )
 
 
@@ -1504,5 +1506,8 @@ async def test_card_page_links_named_cards(client):
     page = await client.get("/index.html?uid=101125")  # Lost in Crowds names Into Thin Air
     assert page.status_code == 200
     body = page.text.split('id="cardText">')[1].split("</p>")[0]
-    assert '<span class="krcg-card" data-name="Into Thin Air">Into Thin Air</span>' in body
+    assert (
+        '<span class="krcg-card" data-name="Into Thin Air" data-uid="101001">Into Thin Air</span>'
+        in body
+    )
     assert "&lt;" not in body

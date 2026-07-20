@@ -15,7 +15,7 @@
     {#snippet tools({ insert })}
     <div class="editor-card">
         <CardSearch placeholder="Insert card…"
-            onPick={(item) => insert(cardChip(`{${item.label}}`, item.printed_name, item.label))} />
+            onPick={(item) => insert(cardChip(`{${item.label}}`, item.printed_name, item.label, item.value))} />
     </div>
     {/snippet}
 </SymbolEditor>

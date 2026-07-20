@@ -109,9 +109,12 @@ def bold_traits(s: str) -> markupsafe.Markup:
 
 
 def card_span(card: dict, label: str) -> str:
-    """`label` is already escaped. data-name is the unique name, so krcg.js shows the right
-    printing of a duplicated vampire — see cardChip in island/tokens.ts."""
-    return f'<span class="krcg-card" data-name="{markupsafe.escape(card["name"])}">{label}</span>'
+    """`label` is already escaped. See cardChip in island/tokens.ts for what the attributes are."""
+    esc = markupsafe.escape
+    return (
+        f'<span class="krcg-card" data-name="{esc(card["name"])}"'
+        f' data-uid="{esc(card["uid"])}">{label}</span>'
+    )
 
 
 def card_replace(s: str, cards: list[dict]) -> str:

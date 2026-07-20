@@ -71,7 +71,7 @@
         {% if change.overrides %}
         <div class="mb-2 ml-3 border-l-2 border-hairline pl-3 text-sm">
             {% for ov in change.overrides %}
-            <div><span class="krcg-card">{{ ov.card.name }}</span>:
+            <div><span class="krcg-card" data-uid="{{ ov.card.uid }}">{{ ov.card.name }}</span>:
                 {% if ov.old %}<span class="text-text-muted line-through">{{ ov.old }}</span> → {% endif %}
                 {% if ov.new %}{{ ov.new }}{% else %}<em class="text-text-muted">(cleared)</em>{% endif %}
             </div>
