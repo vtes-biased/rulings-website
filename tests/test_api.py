@@ -1,4 +1,5 @@
 import krcg.collections
+import markupsafe
 import pytest
 import typing
 
@@ -1341,3 +1342,26 @@ def test_ruling_body_escapes():
         '<span class="krcg-card" data-name="Anna &#34;Dictatrix11&#34; Suljic">'
         "Anna &#34;Dictatrix11&#34; Suljic</span>"
     )
+
+
+def test_symbol_replace_escapes():
+    """symbol_replace heads the `| safe` filter chains, so it owns escaping: group prefixes are
+    proposal-authored. Markup input (ruling_body) must not be escaped twice."""
+    symbols = [{"text": "[pot]", "symbol": "▲"}]
+    assert vtesrulings.symbol_replace("<b>x</b> & [pot]", symbols) == (
+        '&lt;b&gt;x&lt;/b&gt; &amp; <span class="krcg-icon" contenteditable="false">▲</span>'
+    )
+    assert vtesrulings.symbol_replace(markupsafe.Markup("&amp; [pot]"), symbols) == (
+        '&amp; <span class="krcg-icon" contenteditable="false">▲</span>'
+    )
+
+
+@pytest.mark.asyncio
+async def test_card_page_renders_symbols(client):
+    """The card-text chain is symbolreplace (which escapes) then newlines: glyphs land as markup,
+    the card's own text does not."""
+    page = await client.get("/index.html?uid=201623")  # Abraham DuSable, whose text has a [tha]
+    assert page.status_code == 200
+    body = page.text.split('id="cardText">')[1].split("</p>")[0]
+    assert "[tha]" not in body
+    assert '<span class="krcg-icon" contenteditable="false">' in body

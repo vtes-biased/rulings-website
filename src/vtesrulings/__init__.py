@@ -73,6 +73,10 @@ def external_link(name, url, anchor=None, class_=None, params=None):
 
 
 def symbol_replace(s: str, d: list):
+    """Head of every text→markup filter chain, so it owns the escaping: `s` is author-supplied and
+    what it returns is `| safe`. escape() is a no-op on Markup, so a caller that escaped already
+    (ruling_body) hands one in rather than double-escaping."""
+    s = str(markupsafe.escape(s))
     for symbol in d:
         s = s.replace(
             symbol["text"],
@@ -90,8 +94,7 @@ def ruling_body(ruling: dict):
     Text is proposal-authored, so escape it before injecting any markup — which means matching
     the markers in their escaped form too."""
     esc = markupsafe.escape
-    s = str(esc(ruling["text"]))
-    s = symbol_replace(s, ruling["symbols"])
+    s = symbol_replace(esc(ruling["text"]), ruling["symbols"])
     for card in ruling["cards"]:
         # data-name is the unique name, see cardChip in island/tokens.ts
         s = s.replace(
