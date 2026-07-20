@@ -137,6 +137,10 @@ RE_RULING_REFERENCE = re.compile(r"\[(?:" + r"|".join(RULING_AUTHORS) + r")\s[\w
 RE_DUP_RULING_REFERENCE = re.compile(r"\s*(" + RE_RULING_REFERENCE.pattern + r")")
 RE_SYMBOL = re.compile(r"\[(?:" + r"|".join(ANKHA_SYMBOLS) + r")\]")
 RE_CARD = re.compile(r"{[^}]+}")
+#: Markdown-like emphasis in ruling text: **bold**/__bold__, *italic*/_italic_. The delimiter must
+#: hug its content and sit on a word boundary, so prose asterisks ("a * b"), snake_case names and
+#: the ankha glyphs that are themselves punctuation are left alone. Mirrored in island/tokens.ts.
+RE_EMPHASIS = re.compile(r"(?<![\w*_])(\*\*|__|\*|_)(?![\s*_])(.+?)(?<![\s*_])\1(?![\w*_])")
 # A REMINDER ruling with no overrides serializes as a bare string with this trailing tag, keeping
 # the YAML simple; the tag is stripped on load and re-appended on serialize (kind is a flag on the
 # in-memory Ruling, orthogonal to any inline reference). See serialize_ruling.
@@ -245,6 +249,16 @@ def normalize_cards(card_map: krcg.collections.CardDict, text: str) -> str:
     return RE_CARD.sub(lambda m: "{" + card_map[m.group(0)[1:-1]].unique_name + "}", text)
 
 
+def normalize_emphasis(text: str) -> str:
+    """Collapse the underscore spelling onto the asterisk one. The editor renders emphasis away into
+    <b>/<i> for read mode and rebuilds the delimiters from the tag name on copy, so a stored __bold__
+    would come back as **bold** and renumber the ruling; Discord also reads __x__ as underline, not
+    bold. Idempotent, and a no-op on every ruling in the repo today — see normalize_cards."""
+    return RE_EMPHASIS.sub(
+        lambda m: ("*" * len(m.group(1))) + m.group(2) + ("*" * len(m.group(1))), text
+    )
+
+
 def dedupe_references(text: str) -> str:
     """The editor keeps references in its footer and re-appends them to the body on every save, so a
     [REF] pasted into the body text (copying a ruling brings its markers along) ends up stored — and
@@ -282,8 +296,9 @@ def parse_references(
 
 def plain_text(text: str) -> str:
     """Ruling/card text stripped of markup for search and snippets: drop [symbol] and [REF]
-    tokens, unwrap {Card} braces, collapse whitespace."""
+    tokens, unwrap {Card} braces and emphasis delimiters, collapse whitespace."""
     text = RE_RULING_REFERENCE.sub("", text)
+    text = RE_EMPHASIS.sub(r"\2", text)  # after the refs, as in ruling_body
     text = RE_SYMBOL.sub("", text)
     text = RE_CARD.sub(lambda m: m.group(0)[1:-1], text)
     return " ".join(text.split())
@@ -312,7 +327,7 @@ def build_ruling(
     """Build a Ruling object from text.
     The uid is the stable_hash() of the text, or random if the text is empty.
     """
-    text = dedupe_references(normalize_cards(card_map, text))
+    text = dedupe_references(normalize_emphasis(normalize_cards(card_map, text)))
     uid = stable_hash(text) if text else random_uid8()
     ruling = models.Ruling(target=target, uid=uid, text=text, state=state, kind=kind)
     ruling.symbols.extend(parse_symbols(text))

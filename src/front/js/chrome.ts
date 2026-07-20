@@ -400,7 +400,9 @@ function setupMarkerCopy() {
             if (!sel || sel.isCollapsed || !sel.rangeCount) return
             const range = sel.getRangeAt(0)
             const frag = range.cloneContents()
-            if (!frag.querySelector("[data-marker]")) return
+            // b/i is authored emphasis: it has no marker attribute, but its delimiters are text
+            // the clipboard must carry too. <strong>/<em> (card text) is deliberately excluded.
+            if (!frag.querySelector("[data-marker], b, i")) return
             const anchor = range.commonAncestorContainer
             const host = (anchor instanceof Element ? anchor : anchor.parentElement)
                 ?.closest<HTMLElement>("[contenteditable='true']")

@@ -10,11 +10,16 @@ const SYMBOL_KEYS = Object.keys(ANKHA_SYMBOLS).map((k) => k.replace(/[.*+?^${}()
 const RE_TOKEN = new RegExp(`\\[(?:${SYMBOL_KEYS.join("|")})\\]|\\{[^}]+\\}`, "g")
 const RE_SYMBOL = new RegExp(`\\[(?:${SYMBOL_KEYS.join("|")})\\]`, "g")
 const RE_ANY = /\[[^\]\n]*\]|\{[^}\n]+\}/g
+// Markdown-like emphasis, mirroring utils.RE_EMPHASIS — see it for the word-boundary rationale.
+// \p{L}\p{N}_ rather than \w: the two renderers must agree, and Python's \w is unicode-aware while
+// JS's is ASCII-only, so "*x*é" would render here and stay literal server-side.
+const RE_EMPHASIS = /(?<![\p{L}\p{N}_*])(\*\*|__|\*|_)(?![\s*_])(.+?)(?<![\s*_])\1(?![\p{L}\p{N}_*])/gu
 
 type Tok =
     | { t: "text"; v: string }
     | { t: "sym"; marker: string; glyph: string }
     | { t: "card"; marker: string; label: string; name: string; uid: string }
+    | { t: "emph"; tag: "b" | "i"; toks: Tok[] }
 
 const symTok = (marker: string): Tok =>
     ({ t: "sym", marker, glyph: ANKHA_SYMBOLS[marker.slice(1, -1)] })
@@ -37,18 +42,35 @@ function scan(text: string, re: RegExp, tok: (marker: string) => Tok): Tok[] {
     return toks
 }
 
+/** Split on emphasis first, then scan each run for markers: emphasis wraps whole spans of text and
+    chips ("*never {Abbot}*"), so it nests rather than sitting alongside them. Read mode only — the
+    editor leaves the delimiters as literal text, so they stay visible and deletable like any other
+    character; rendering them away would leave the author no way back out of a bold word. */
+function scanEmphasized(text: string, re: RegExp, tok: (marker: string) => Tok): Tok[] {
+    const toks: Tok[] = []
+    let last = 0
+    for (const m of text.matchAll(RE_EMPHASIS)) {
+        if (m.index > last) toks.push(...scan(text.slice(last, m.index), re, tok))
+        last = m.index + m[0].length
+        toks.push({ t: "emph", tag: m[1].length === 2 ? "b" : "i", toks: scan(m[2], re, tok) })
+    }
+    if (last < text.length) toks.push(...scan(text.slice(last), re, tok))
+    return toks
+}
+
 /** Tokenize a group-card prefix: plain text + symbol chips only (no cards, no references). */
 export function symbolTokens(text: string): Tok[] {
     return scan(text, RE_SYMBOL, symTok)
 }
 
-export function tokenize(ruling: Ruling): Tok[] {
+export function tokenize(ruling: Ruling, emph = false): Tok[] {
     const byMarker = new Map(ruling.cards.map((c) => [c.text, c]))
     // strip reference markers first, keyed off the ruling's own resolved references (mirrors the
     // `ruling_body` filter) — no separate source list to drift from utils.RULING_AUTHORS
     let text = ruling.text
     for (const ref of ruling.references) text = text.replace(ref.text, "")
-    return scan(text, RE_TOKEN, (m) => (m[0] === "{" ? cardTok(m, byMarker.get(m)) : symTok(m)))
+    const split = emph ? scanEmphasized : scan
+    return split(text, RE_TOKEN, (m) => (m[0] === "{" ? cardTok(m, byMarker.get(m)) : symTok(m)))
 }
 
 /** Tokenize raw pasted text, with no ruling to resolve card markers against. Bracket tokens that
@@ -119,7 +141,12 @@ export function nodesFromTokens(toks: Tok[]): Node[] {
     for (const tok of toks) {
         if (tok.t === "text") nodes.push(...textNodes(tok.v))
         else if (tok.t === "sym") nodes.push(symbolChip(tok.marker, tok.glyph))
-        else nodes.push(cardChip(tok.marker, tok.label, tok.name, tok.uid))
+        else if (tok.t === "card") nodes.push(cardChip(tok.marker, tok.label, tok.name, tok.uid))
+        else {
+            const el = document.createElement(tok.tag)
+            el.append(...nodesFromTokens(tok.toks))
+            nodes.push(el)
+        }
     }
     return nodes
 }
@@ -127,7 +154,7 @@ export function nodesFromTokens(toks: Tok[]): Node[] {
 /** Svelte action: render a ruling's body (glyphs, card spans, refs stripped) into `node`. Shared by
     the read-only branches and conceptually the editor — one token→DOM path, no HTML string to escape. */
 export function renderBody(node: HTMLElement, ruling: Ruling) {
-    const fill = (r: Ruling) => node.replaceChildren(...nodesFromTokens(tokenize(r)))
+    const fill = (r: Ruling) => node.replaceChildren(...nodesFromTokens(tokenize(r, true)))
     fill(ruling)
     return { update: fill }
 }
@@ -157,6 +184,21 @@ export function serialize(host: Node): string {
                 if (child.dataset.marker) out += child.dataset.marker
                 else if (child.tagName === "BR") out += "\n"
                 else if (child.tagName === "BUTTON") continue // edit-mode controls aren't content
+                // <strong>/<em> is the card-text bold inference — no delimiters to restore, so it
+                // falls through to bare text. The tag name is enough to pick the delimiter back:
+                // utils.normalize_emphasis rules out the underscore spelling.
+                else if (child.tagName === "B" || child.tagName === "I") {
+                    const mark = child.tagName === "B" ? "**" : "*"
+                    const start = out.length
+                    walk(child)
+                    const inner = out.slice(start)
+                    // a delimiter only parses back when it hugs its content, and a selection can
+                    // clip a <b> down to its edge whitespace
+                    if (inner.trim()) {
+                        out = out.slice(0, start) +
+                            inner.replace(/^(\s*)([\s\S]*?)(\s*)$/, `$1${mark}$2${mark}$3`)
+                    }
+                }
                 else {
                     if (/^(DIV|P|LI)$/.test(child.tagName) && out.trim() && !out.endsWith("\n")) {
                         out += "\n"

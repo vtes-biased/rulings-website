@@ -5,7 +5,7 @@ import typing
 
 import vtesrulings
 import vtesrulings.discord
-from vtesrulings import models, repository
+from vtesrulings import models, repository, utils
 
 
 def test_serialize_ruling():
@@ -1350,6 +1350,83 @@ def test_ruling_body_escapes():
         ' data-marker="{Anna &#34;Dictatrix11&#34; Suljic}">'
         "Anna &#34;Dictatrix11&#34; Suljic</span>"
     )
+
+
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        ("a **bold** b", "a <b>bold</b> b"),
+        ("a __bold__ b", "a <b>bold</b> b"),
+        ("a *italic* b", "a <i>italic</i> b"),
+        ("a _italic_ b", "a <i>italic</i> b"),
+        ("(*italic*), **bold**.", "(<i>italic</i>), <b>bold</b>."),
+        ("*two* and *more*", "<i>two</i> and <i>more</i>"),
+        # a delimiter must hug its content and sit on a word boundary
+        ("a * b * c", "a * b * c"),
+        ("snake_case_name", "snake_case_name"),
+        ("2*3*4", "2*3*4"),
+        ("stars ** here", "stars ** here"),
+        ("a *dangling", "a *dangling"),
+        # runs on escaped text, and leaves the markers it spans for the later passes to resolve
+        ("*never {Abbot}*", "<i>never {Abbot}</i>"),
+        ("&lt;b&gt; *x*", "&lt;b&gt; <i>x</i>"),
+    ],
+)
+def test_emphasis(text, expected):
+    assert vtesrulings.emphasis(text) == expected
+
+
+def test_ruling_body_emphasis():
+    """Emphasis resolves before the chips go in: the [red] glyph is itself a "*" and would pair up
+    with a stray asterisk from inside the injected span. Markers inside emphasis still resolve."""
+    ruling = {
+        "text": "*Only {Abbot}* is **not** [red] optional",
+        "symbols": [{"text": "[red]", "symbol": "*"}],
+        "cards": [
+            {
+                "text": "{Abbot}",
+                "uid": "100038",
+                "name": "Abbot",
+                "printed_name": "Abbot",
+            }
+        ],
+        "references": [],
+    }
+    assert vtesrulings.ruling_body(ruling) == (
+        '<i>Only <span class="krcg-card" data-name="Abbot" data-uid="100038"'
+        ' data-marker="{Abbot}">Abbot</span></i> is <b>not</b> '
+        '<span class="krcg-icon" contenteditable="false" data-marker="[red]">*</span> optional'
+    )
+
+
+def test_ruling_body_strips_references_before_emphasizing():
+    """The editor drops reference markers before it looks for emphasis, so SSR must too — else a
+    ruling flips rendering the moment the island hydrates over it."""
+    ruling = {
+        "text": "*See [LSJ 20040518]*",
+        "symbols": [],
+        "cards": [],
+        "references": [{"text": "[LSJ 20040518]"}],
+    }
+    assert vtesrulings.ruling_body(ruling) == "*See *"
+
+
+def test_plain_text_drops_emphasis():
+    assert utils.plain_text("A **bold** _claim_ about {Abbot} [pot] [LSJ 20040518]") == (
+        "A bold claim about Abbot"
+    )
+
+
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        ("__bold__ and _it_", "**bold** and *it*"),
+        ("**bold** and *it*", "**bold** and *it*"),  # idempotent
+        ("snake_case stays", "snake_case stays"),
+    ],
+)
+def test_normalize_emphasis(text, expected):
+    assert utils.normalize_emphasis(text) == expected
 
 
 def test_symbol_replace_escapes():

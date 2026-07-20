@@ -94,6 +94,20 @@ def newlines(s: str):
     return s.replace("\n", "<br>")
 
 
+def emphasis(s: str) -> markupsafe.Markup:
+    """Markdown-like *italic*/**bold**. `s` is already escaped (as for card_span), no chip is
+    injected yet — several ankha glyphs are punctuation ([red] is "*") and would pair up from
+    inside a span — and references are already stripped, or `*text [LSJ 20040518]*` would
+    emphasize here and not in the editor, which strips them first (tokenize, island/tokens.ts).
+    Card markers do ride through, so the replace that follows still finds them."""
+
+    def wrap(match):
+        tag = "b" if len(match.group(1)) == 2 else "i"
+        return f"<{tag}>{match.group(2)}</{tag}>"
+
+    return markupsafe.Markup(utils.RE_EMPHASIS.sub(wrap, s))
+
+
 def split_icon(s: str) -> tuple[str, str]:
     """Peel a leading [MERGED]-style icon off a line — it stays outside the bold, as on the card."""
     icon = utils.RE_ICON_LINE.match(s)
@@ -176,14 +190,15 @@ def ruling_body(ruling: dict):
     Text is proposal-authored, so escape it before injecting any markup — which means matching
     the markers in their escaped form too."""
     esc = markupsafe.escape
-    s = symbol_replace(esc(ruling["text"]), ruling["symbols"])
+    s = esc(ruling["text"])
+    for reference in ruling["references"]:  # before emphasis, see it for why
+        s = s.replace(str(esc(reference["text"])), "")
+    s = symbol_replace(emphasis(s), ruling["symbols"])
     for text, card in {c["text"]: c for c in ruling["cards"]}.items():  # dedupe, see symbol_replace
         s = s.replace(
             str(esc(text)),
             card_span(card, str(esc(card["printed_name"])), text),
         )
-    for reference in ruling["references"]:
-        s = s.replace(str(esc(reference["text"])), "")
     return markupsafe.Markup(newlines(s.strip()))
 
 
