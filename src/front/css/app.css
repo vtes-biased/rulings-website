@@ -113,7 +113,8 @@
     .ac-header { @apply border-b border-hairline bg-surface-2 px-3 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-text-muted; }
 
     /* the signature record card: a state-spined ruling */
-    .ruling { @apply relative my-2 rounded-lg border border-hairline bg-surface p-4; border-left-width: 3px; border-left-color: var(--color-state-original); }
+    .ruling { @apply relative my-2 scroll-mt-4 rounded-lg border border-hairline bg-surface p-4; border-left-width: 3px; border-left-color: var(--color-state-original); }
+    .ruling:target { @apply bg-primary/10 ring-2 ring-primary/70; }
     .ruling--new { border-left-color: var(--color-state-new); }
     .ruling--modified { border-left-color: var(--color-state-modified); }
     .ruling--deleted { border-left-color: var(--color-state-deleted); }

@@ -23,6 +23,10 @@ ready(() => {
         )
         list.replaceChildren()
         mount(RulingsEditor, { target: list, props: { source, initial, rulebook } })
+        // :target binds to the element node, not the id, so the #r-<uid> card we just replaced stays
+        // unmatched however faithfully Svelte re-renders it. A fragment-only location.replace is a
+        // same-document navigation: it re-resolves the target and re-scrolls, no reload, no history entry.
+        if (location.hash) location.replace(location.href)
     }
 
     const groupEditor = document.getElementById("groupEditor")

@@ -102,7 +102,7 @@
     }
 </script>
 
-<article class="ruling ruling--{ruling.state.toLowerCase()}"
+<article id="r-{ruling.uid}" class="ruling ruling--{ruling.state.toLowerCase()}"
     ondragover={editRefs ? (e) => e.preventDefault() : undefined}
     ondrop={editRefs ? onDrop : undefined}>
     {#if ruling.state !== "ORIGINAL"}
