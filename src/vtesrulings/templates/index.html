@@ -69,7 +69,7 @@
             <span class="krcg-icon text-lg">|</span>
             {% endif %}
         </div>
-        <p class="mt-3 max-w-prose leading-relaxed" id="cardText">{{ current.text | cardtext(current.types, current.text_symbols) }}</p>
+        <p class="mt-3 max-w-prose leading-relaxed" id="cardText">{{ current.text | cardtext(current.types, current.text_symbols, current.cards) }}</p>
     </div>
 </section>
 

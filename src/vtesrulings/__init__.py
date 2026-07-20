@@ -108,7 +108,24 @@ def bold_traits(s: str) -> markupsafe.Markup:
     )
 
 
-def card_text(s: str, types: list[str], symbols: list[dict]) -> markupsafe.Markup:
+def card_span(card: dict, label: str) -> str:
+    """`label` is already escaped. data-name is the unique name, so krcg.js shows the right
+    printing of a duplicated vampire — see cardChip in island/tokens.ts."""
+    return f'<span class="krcg-card" data-name="{markupsafe.escape(card["name"])}">{label}</span>'
+
+
+def card_replace(s: str, cards: list[dict]) -> str:
+    """Swap each `<Card Name>` marker krcg leaves in card text for the span a ruling's {Card}
+    token gets. Matched in escaped form, since the text is escaped before any markup goes in."""
+    for card in cards:
+        name = str(markupsafe.escape(card["printed_name"]))
+        s = s.replace(f"&lt;{name}&gt;", card_span(card, name))
+    return s
+
+
+def card_text(
+    s: str, types: list[str], symbols: list[dict], cards: list[dict]
+) -> markupsafe.Markup:
     """The CSV carries no bold markup, but the printed card bolds by placement: on crypt cards the
     sect/title header and the trait sentences, on library cards the leading requirements paragraph.
     Inference runs on the raw text, so escaping is per-fragment here and symbol_replace — which owns
@@ -120,7 +137,9 @@ def card_text(s: str, types: list[str], symbols: list[dict]) -> markupsafe.Marku
         if crypt:
             head, sep, tail = section.partition(":")
             prefix, title = split_icon(head)
-            if sep and utils.RE_CRYPT_HEADER.search(title):
+            # a header colon never sits inside a card marker: 132 names carry a colon, and
+            # bolding up to it would cut the marker in half ("<Crusade: Chicago>")
+            if sep and "<" not in head and utils.RE_CRYPT_HEADER.search(title):
                 section = (
                     markupsafe.escape(prefix)
                     + markupsafe.Markup("<strong>%s:</strong> ") % title
@@ -138,7 +157,7 @@ def card_text(s: str, types: list[str], symbols: list[dict]) -> markupsafe.Marku
             section = markupsafe.Markup("<strong>%s</strong>") % section
         else:
             section = markupsafe.escape(section)
-        out.append(symbol_replace(section, symbols))
+        out.append(card_replace(symbol_replace(section, symbols), cards))
     return markupsafe.Markup("<br>".join(out))
 
 
@@ -149,12 +168,7 @@ def ruling_body(ruling: dict):
     esc = markupsafe.escape
     s = symbol_replace(esc(ruling["text"]), ruling["symbols"])
     for card in ruling["cards"]:
-        # data-name is the unique name, see cardChip in island/tokens.ts
-        s = s.replace(
-            str(esc(card["text"])),
-            f'<span class="krcg-card" data-name="{esc(card["name"])}">'
-            f"{esc(card['printed_name'])}</span>",
-        )
+        s = s.replace(str(esc(card["text"])), card_span(card, str(esc(card["printed_name"]))))
     for reference in ruling["references"]:
         s = s.replace(str(esc(reference["text"])), "")
     return markupsafe.Markup(newlines(s.strip()))

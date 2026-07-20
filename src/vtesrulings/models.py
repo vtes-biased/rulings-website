@@ -129,6 +129,8 @@ class Card(BaseCard):
     text: str
     symbols: list[SymbolSubstitution] = dataclasses.field(default_factory=list)
     text_symbols: list[SymbolSubstitution] = dataclasses.field(default_factory=list)
+    #: cards named in `text`, which marks each one `<Card Name>`
+    cards: list[BaseCard] = dataclasses.field(default_factory=list)
 
 
 @pydantic.dataclasses.dataclass(kw_only=True)

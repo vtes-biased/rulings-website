@@ -343,6 +343,7 @@ class Manager:
                 blood_cost=costs["blood"],
                 conviction_cost=costs["conviction"],
             )
+        ret.cards = [self.get_base_card(ref.id) for ref in card.cards]
         for s in ret.types:
             if s in utils.ANKHA_SYMBOLS:
                 ret.symbols.append(models.SymbolSubstitution(text=s, symbol=utils.ANKHA_SYMBOLS[s]))

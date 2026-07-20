@@ -87,6 +87,7 @@ async def test_get_card(client):
         "text": "Requires a justicar or Inner Circle member.\nChoose a ready Camarilla vampire. Successful referendum means you search your library for an equipment card and put this card and the equipment on the chosen vampire (ignore requirements; shuffle afterward); pay half the cost rounded down of the equipment. The attached vampire can enter combat with a vampire as a +1 stealth Ⓓ action. The attached vampire cannot commit diablerie. A vampire can have only one Alastor.",
         "symbols": [{"text": "POLITICAL ACTION", "symbol": "2"}],
         "text_symbols": [],
+        "cards": [],
         "pool_cost": "",
         "blood_cost": "",
         "conviction_cost": "",
@@ -670,6 +671,7 @@ async def test_add_card_ruling(client):
             "vampire can gain blood from only one hunting ground each turn."
         ),
         "text_symbols": [],
+        "cards": [],
         "types": ["MASTER"],
         "uid": "100015",
     }
@@ -775,6 +777,7 @@ async def test_update_card_ruling(client):
             "her pool and burn this card."
         ),
         "text_symbols": [],
+        "cards": [],
         "types": ["ACTION"],
         "uid": "100002",
     }
@@ -838,6 +841,7 @@ async def test_delete_card_ruling(client):
             "her pool and burn this card."
         ),
         "text_symbols": [],
+        "cards": [],
         "types": ["ACTION"],
         "uid": "100002",
     }
@@ -1419,13 +1423,66 @@ def test_symbol_replace_escapes():
 )
 def test_card_text_bolds_by_placement(text, types, expected):
     """Card data carries no bold markup; the printed card implies it by placement."""
-    assert vtesrulings.card_text(text, types, []) == expected
+    assert vtesrulings.card_text(text, types, [], []) == expected
 
 
 def test_card_text_escapes():
     """Inference runs on raw text, so card_text owns the escaping of every fragment it emits."""
-    assert vtesrulings.card_text("<b>Unique.</b>\n& more", ["MASTER"], []) == (
+    assert vtesrulings.card_text("<b>Unique.</b>\n& more", ["MASTER"], [], []) == (
         "<strong>&lt;b&gt;Unique.&lt;/b&gt;</strong><br>&amp; more"
+    )
+
+
+GRAPPLE = {"uid": "100959", "name": "Immortal Grapple", "printed_name": "Immortal Grapple"}
+
+
+def test_card_text_links_named_cards():
+    """krcg marks a named card `<Card Name>`; each marker becomes a card span."""
+    assert vtesrulings.card_text(
+        "Cancel <Immortal Grapple> as it is played.", ["COMBAT"], [], [GRAPPLE]
+    ) == (
+        'Cancel <span class="krcg-card" data-name="Immortal Grapple">Immortal Grapple</span>'
+        " as it is played."
+    )
+
+
+def test_card_text_links_every_occurrence():
+    """A name is marked wherever it appears, so every mention links."""
+    html = vtesrulings.card_text(
+        "<Immortal Grapple> beats <Immortal Grapple>.", ["COMBAT"], [], [GRAPPLE]
+    )
+    assert html.count('class="krcg-card"') == 2
+
+
+def test_card_text_carries_the_unique_name():
+    """The span shows the printed name but points at the printing, for krcg.js image lookup."""
+    mithras = {"uid": "201001", "name": "Mithras (G3)", "printed_name": "Mithras"}
+    assert vtesrulings.card_text("not <Mithras>.", ["MASTER"], [], [mithras]) == (
+        'not <span class="krcg-card" data-name="Mithras (G3)">Mithras</span>.'
+    )
+
+
+def test_card_text_links_a_name_the_bold_inference_splits_on():
+    """A crypt line is cut at its first colon and split on sentence ends, and 132 card names
+    carry a colon ('Crusade: Chicago'), others a period ('Dr. Jest'). No card names one today."""
+    jest = {"uid": "200366", "name": "Dr. Jest", "printed_name": "Dr. Jest"}
+    assert vtesrulings.card_text("While <Dr. Jest> is ready.", ["VAMPIRE"], [], [jest]) == (
+        'While <span class="krcg-card" data-name="Dr. Jest">Dr. Jest</span> is ready.'
+    )
+    # "votes" reads as a title, so the header branch would bold up to the marker's own colon
+    crusade = {"uid": "100453", "name": "Crusade: Chicago", "printed_name": "Crusade: Chicago"}
+    assert vtesrulings.card_text(
+        "Anson gets 2 votes and can find <Crusade: Chicago>.", ["VAMPIRE"], [], [crusade]
+    ) == (
+        "Anson gets 2 votes and can find "
+        '<span class="krcg-card" data-name="Crusade: Chicago">Crusade: Chicago</span>.'
+    )
+
+
+def test_card_text_leaves_unmarked_angle_brackets():
+    """A literal `<b>` escapes to the same shape as a marker; only a known name is a link."""
+    assert vtesrulings.card_text("a <b> and <Nope>.", ["MASTER"], [], [GRAPPLE]) == (
+        "a &lt;b&gt; and &lt;Nope&gt;."
     )
 
 
@@ -1439,3 +1496,13 @@ async def test_card_page_renders_symbols(client):
     assert "[tha]" not in body
     assert '<span class="krcg-icon" contenteditable="false">' in body
     assert body.startswith("<strong>Camarilla:</strong>")  # the sect header, bold as on the card
+
+
+@pytest.mark.asyncio
+async def test_card_page_links_named_cards(client):
+    """End to end: the template hands the filter the card's references, so the marker links."""
+    page = await client.get("/index.html?uid=101125")  # Lost in Crowds names Into Thin Air
+    assert page.status_code == 200
+    body = page.text.split('id="cardText">')[1].split("</p>")[0]
+    assert '<span class="krcg-card" data-name="Into Thin Air">Into Thin Air</span>' in body
+    assert "&lt;" not in body
