@@ -98,15 +98,27 @@ function setupThemeToggle() {
 function loginManagement() {
     const loginForm = document.getElementById("loginForm") as HTMLFormElement | null
     if (!loginForm) return
-    const next = encodeURIComponent(window.location.pathname + window.location.search)
+    const dest = window.location.pathname + window.location.search
+    const next = encodeURIComponent(dest)
     const loginButton = document.getElementById("loginButton")
     const logoutButton = document.getElementById("logoutButton")
     if (loginButton) {
         const loginModal = document.getElementById("loginModal") as HTMLElement
-        const loginSubmit = document.getElementById("loginSubmit") as HTMLButtonElement
-        loginButton.addEventListener("click", () => openModal(loginModal))
-        loginForm.action = `/login?next=${next}`
-        loginSubmit.addEventListener("click", () => loginForm.submit())
+        const loginError = document.getElementById("loginError") as HTMLElement
+        loginButton.addEventListener("click", () => { loginError.hidden = true; openModal(loginModal) })
+        // AJAX so a bad password shows inline instead of navigating to the raw 401 JSON.
+        // redirect:"manual" — the 302's Set-Cookie still lands in the jar; we skip fetching the
+        // destination and let the navigation below load it (once) with the fresh session cookie.
+        loginForm.addEventListener("submit", async (ev) => {
+            ev.preventDefault()
+            loginError.hidden = true
+            const res = await fetch(`/login?next=${next}`,
+                { method: "post", body: new FormData(loginForm), redirect: "manual" })
+            if (res.type === "opaqueredirect" || res.ok) { window.location.href = dest; return }
+            loginError.hidden = false
+            loginError.textContent = res.status === 401
+                ? "Invalid VEKN login or password." : "Login failed, please try again."
+        })
     }
     if (logoutButton) {
         logoutButton.addEventListener("click", () => { loginForm.action = `/logout?next=${next}`; loginForm.submit() })

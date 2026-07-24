@@ -84,12 +84,13 @@
             <form class="modal__body" id="loginForm" method="post" action="/login">
                 <input type="text" class="input" placeholder="VEKN login" name="username">
                 <input type="password" class="input" placeholder="VEKN password" name="password">
+                <p class="text-sm text-state-deleted" id="loginError" role="alert" hidden></p>
                 <p class="text-sm text-text-muted">Use your <a href="https://www.vekn.net" target="_blank"
                         rel="noopener">VEKN</a> membership credentials — the same account as the VEKN site.</p>
             </form>
             <div class="modal__footer">
                 <button type="button" class="btn btn-secondary" data-close>Cancel</button>
-                <button type="button" class="btn btn-primary" id="loginSubmit" form="loginForm">Login</button>
+                <button type="submit" class="btn btn-primary" form="loginForm">Login</button>
             </div>
         </div>
     </div>
