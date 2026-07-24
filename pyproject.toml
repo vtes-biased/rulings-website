@@ -76,6 +76,11 @@ source-exclude = ["**/.DS_Store"]
 line-length = 100
 target-version = "py313"
 
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's dependency-injection idiom places Depends() in argument defaults by design; treat it
+# as immutable so B008 keeps flagging genuinely mutable defaults (def f(x=[])) but not this.
+extend-immutable-calls = ["fastapi.Depends"]
+
 [tool.ty.environment]
 python-version = "3.13"
 

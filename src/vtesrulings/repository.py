@@ -1,23 +1,23 @@
-import aiofiles
-import aiofiles.threadpool.text
-import aiohttp
-import asgiref.sync
 import asyncio
-import git
 import io
-import jwt
-import krcg.collections
 import logging
 import os
 import pathlib
 import time
 import typing
+
+import aiofiles
+import aiofiles.threadpool.text
+import aiohttp
+import asgiref.sync
+import git
+import jwt
+import krcg.collections
 import yaml
 import yamlfix
 import yamlfix.model
 
-from . import models
-from . import utils
+from . import models, utils
 
 logger = logging.getLogger()
 COMMIT_LOCK = asyncio.Lock()
@@ -148,17 +148,19 @@ async def _installation_token(installation_id: str | None = GITHUB_INSTALLATION_
     now = int(time.time())
     pem = pathlib.Path(GITHUB_PRIVATE_KEY).expanduser().read_text()
     assertion = jwt.encode({"iat": now - 60, "exp": now + 540, "iss": GITHUB_APP_ID}, pem, "RS256")
-    async with aiohttp.ClientSession() as session:
-        async with session.post(
+    async with (
+        aiohttp.ClientSession() as session,
+        session.post(
             f"{GITHUB_API}/app/installations/{installation_id}/access_tokens",
             headers={
                 "Authorization": f"Bearer {assertion}",
                 "Accept": "application/vnd.github+json",
             },
             json={"permissions": {"contents": "write"}},
-        ) as resp:
-            resp.raise_for_status()
-            return (await resp.json())["token"]
+        ) as resp,
+    ):
+        resp.raise_for_status()
+        return (await resp.json())["token"]
 
 
 async def dispatch_krcg_static_rebuild() -> None:
@@ -170,16 +172,18 @@ async def dispatch_krcg_static_rebuild() -> None:
     token = await _installation_token(KRCG_STATIC_INSTALLATION_ID)
     if not token:
         return
-    async with aiohttp.ClientSession() as session:
-        async with session.post(
+    async with (
+        aiohttp.ClientSession() as session,
+        session.post(
             f"{GITHUB_API}/repos/{KRCG_STATIC_REPO}/dispatches",
             headers={
                 "Authorization": f"Bearer {token}",
                 "Accept": "application/vnd.github+json",
             },
             json={"event_type": KRCG_STATIC_DISPATCH_EVENT},
-        ) as resp:
-            resp.raise_for_status()
+        ) as resp,
+    ):
+        resp.raise_for_status()
 
 
 async def recent_changes(repo: git.Repo, limit: int = 8) -> list[dict]:

@@ -1,9 +1,9 @@
-import aiohttp
-import arrow
 import datetime
 import html.parser
 import urllib.parse
 
+import aiohttp
+import arrow
 
 VEKN_AUTHORS = {
     "213-ankha": "ANK",
@@ -74,9 +74,8 @@ class VEKNParser(SmartParser):
 async def get_vekn_reference(url: str):
     parsed_url = urllib.parse.urlparse(url)
     parser = VEKNParser(parsed_url.fragment)
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as response:
-            parser.feed(await response.text())
+    async with aiohttp.ClientSession() as session, session.get(url) as response:
+        parser.feed(await response.text())
     if not parser.author:
         raise ValueError("Message not found in VEKN forum")
     if parser.author not in VEKN_AUTHORS.values():

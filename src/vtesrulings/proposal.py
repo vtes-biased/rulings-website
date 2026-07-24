@@ -1,12 +1,12 @@
 import collections.abc
 import copy
-import functools
+import typing
+
 import krcg.collections
 import krcg.models
 import pydantic.dataclasses
-import typing
-from . import models
-from . import utils
+
+from . import models, utils
 
 
 @pydantic.dataclasses.dataclass(kw_only=True)
@@ -32,10 +32,13 @@ class Manager:
         self.card_map = card_map
         self.base = index
         self.prop: Proposal = proposal or Proposal()
+        # per-instance caches: cards are mutated after retrieval (groups/backrefs/rulings) so they
+        # can't be shared across proposals, and a method-level functools.cache would pin every
+        # Manager instance for the process lifetime (B019).
+        self._base_card_cache: dict[int | str, models.BaseCard] = {}
+        self._card_cache: dict[int | str, models.CryptCard | models.LibraryCard] = {}
 
-    def all_references(
-        self, deleted: bool = False
-    ) -> typing.Generator[models.Reference, None, None]:
+    def all_references(self, deleted: bool = False) -> typing.Generator[models.Reference]:
         for reference in self.prop.references.values():
             if deleted or reference.state != models.State.DELETED:
                 yield reference
@@ -64,18 +67,18 @@ class Manager:
             }
             if url in rev_proposal:
                 return rev_proposal[url]
-            remove = set(
+            remove = {
                 uid
                 for uid, ref in self.prop.references.items()
                 if not deleted and ref.state == models.State.DELETED
-            )
+            }
             rev_base = {
                 ref.url: ref for ref in self.base.references.values() if ref.uid not in remove
             }
             return rev_base[url]
         raise KeyError()
 
-    def all_groups(self, deleted: bool = False) -> typing.Generator[models.Group, None, None]:
+    def all_groups(self, deleted: bool = False) -> typing.Generator[models.Group]:
         for group in sorted(self.prop.groups.values(), key=lambda g: g.name if g else ""):
             if group.state == models.State.DELETED and not deleted:
                 continue
@@ -94,7 +97,7 @@ class Manager:
             return ret
         return self.base.groups[uid]
 
-    def all_rulings(self, deleted: bool = False) -> typing.Generator[models.Ruling, None, None]:
+    def all_rulings(self, deleted: bool = False) -> typing.Generator[models.Ruling]:
         """Allows iteration on all Ruling objects"""
         for uid in self.base.rulings:
             yield from self.get_rulings(uid, False, deleted)
@@ -104,7 +107,7 @@ class Manager:
 
     def get_rulings(
         self, uid: str, group: bool = True, deleted: bool = False
-    ) -> typing.Generator[models.Ruling, None, None]:
+    ) -> typing.Generator[models.Ruling]:
         """Yields all Ruling currently listed for the card or group.
         If it's a card, this includes rulings from groups the card is part of,
         except if group is False.
@@ -189,7 +192,7 @@ class Manager:
 
     def get_groups_of(
         self, card_uid: str
-    ) -> typing.Generator[tuple[models.Group, models.CardInGroup], None, None]:
+    ) -> typing.Generator[tuple[models.Group, models.CardInGroup]]:
         """Yield the groups the card is a member of, alongside the CardInGroup object.
         The CardInGroup object includes the prefix the card should use in the group.
         """
@@ -216,7 +219,7 @@ class Manager:
             if match:
                 yield group, match[0]
 
-    def get_groups_of_card(self, card_uid: str) -> typing.Generator[models.GroupOfCard, None, None]:
+    def get_groups_of_card(self, card_uid: str) -> typing.Generator[models.GroupOfCard]:
         """Yield the groups the card is a part of, as GroupOfCard objects.
         The GroupOfCard object includes the prefix the card uses in the group.
         """
@@ -229,12 +232,12 @@ class Manager:
                 symbols=card.symbols,
             )
 
-    def get_backrefs(self, card_uid: str) -> typing.Generator[models.BaseCard, None, None]:
+    def get_backrefs(self, card_uid: str) -> typing.Generator[models.BaseCard]:
         """Yield the cards that have a ruling mentioning the given card."""
         backrefs = []
         for target_uid, rulings in self.prop.rulings.items():
             for ruling_uid, ruling in rulings.items():
-                if card_uid not in set(c.uid for c in ruling.cards):
+                if card_uid not in {c.uid for c in ruling.cards}:
                     continue
                 if ruling.state == models.State.DELETED:
                     continue
@@ -245,7 +248,7 @@ class Manager:
                 continue
             backrefs.append(backref)
         seen: set[str] = set()  # a card reachable via two groups (or a group + direct ruling) once
-        for uid in sorted(set(b.target_uid for b in backrefs)):
+        for uid in sorted({b.target_uid for b in backrefs}):
             if uid.startswith(("G", "P")):
                 try:
                     members = self.get_group(uid).cards
@@ -273,22 +276,24 @@ class Manager:
             card = self.card_map[int(card_or_group_id)]
             return models.NID(uid=str(card.id), name=card.unique_name)
 
-    @functools.cache
     def get_base_card(self, card_id_or_name: int | str) -> models.BaseCard:
         """Get the BaseCard matching the ID. Yield KeyError if not found.
         WARNINGS:
             - a card ID _must_ be an int, or it will not be found,
             - this is cached: groups, backrefs and rulings must be set outside.
         """
+        if card_id_or_name in self._base_card_cache:
+            return self._base_card_cache[card_id_or_name]
         card = self.card_map[card_id_or_name]
-        return models.BaseCard(
+        ret = models.BaseCard(
             uid=str(card.id),
             name=card.unique_name,
             printed_name=card.printed_name,
             img=card.url,
         )
+        self._base_card_cache[card_id_or_name] = ret
+        return ret
 
-    @functools.cache
     def get_card(self, card_id_or_name: int | str) -> models.CryptCard | models.LibraryCard:
         """
         Retrieve a card. Yield KeyError if not found.
@@ -296,6 +301,8 @@ class Manager:
             - a card ID _must_ be an int, or it will not be found,
             - this is cached: groups, backrefs and rulings must be set outside.
         """
+        if card_id_or_name in self._card_cache:
+            return self._card_cache[card_id_or_name]
         card = self.card_map[card_id_or_name]
         ret: models.CryptCard | models.LibraryCard
         if isinstance(card, krcg.models.CryptCard):
@@ -353,6 +360,7 @@ class Manager:
                 ret.symbols.append(
                     models.SymbolSubstitution(text=s, symbol=utils.ANKHA_SYMBOLS[key])
                 )
+        self._card_cache[card_id_or_name] = ret
         return ret
 
     def build_ruling(
@@ -669,10 +677,10 @@ class Manager:
         Remove unused references if there's none.
         """
         errors = []
-        listed_refs = set(r.uid for r in self.all_references())
+        listed_refs = {r.uid for r in self.all_references()}
         used_references = set()
         for ruling in self.all_rulings():
-            ruling_refs = set(r.uid for r in ruling.references)
+            ruling_refs = {r.uid for r in ruling.references}
             ruling_refs &= listed_refs
             if not ruling_refs and ruling.kind != models.RulingKind.REMINDER:
                 errors.append(
@@ -833,7 +841,7 @@ class Manager:
             if not ret.groups[key].cards:
                 del ret.groups[key]
         for target, rulings in self.prop.rulings.items():
-            ret.rulings.setdefault(target, dict())
+            ret.rulings.setdefault(target, {})
             for key, value in rulings.items():
                 if value.state == models.State.DELETED or not value.text.strip():
                     ret.rulings[target].pop(key, None)

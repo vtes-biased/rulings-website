@@ -1,13 +1,14 @@
 import dataclasses
 import enum
 import logging
-import orjson
 import os
+import uuid
+
+import orjson
 import psycopg
 import psycopg.rows
 import psycopg.types.json
 import psycopg_pool
-import uuid
 
 logger = logging.getLogger()
 
@@ -47,108 +48,113 @@ class User:
 
 
 async def init():
-    async with POOL.connection() as conn:
-        async with conn.cursor() as cursor:
-            logger.debug("Initialising DB")
-            await cursor.execute(
-                "CREATE TABLE IF NOT EXISTS users("
-                "uid UUID DEFAULT gen_random_uuid() PRIMARY KEY, "
-                "vekn TEXT UNIQUE, "
-                "category TEXT)"
-            )
-            await cursor.execute(
-                "CREATE TABLE IF NOT EXISTS proposals("
-                "uid TEXT PRIMARY KEY, "
-                "usr UUID REFERENCES users(uid), "
-                "data json)"
-            )
+    async with POOL.connection() as conn, conn.cursor() as cursor:
+        logger.debug("Initialising DB")
+        await cursor.execute(
+            "CREATE TABLE IF NOT EXISTS users("
+            "uid UUID DEFAULT gen_random_uuid() PRIMARY KEY, "
+            "vekn TEXT UNIQUE, "
+            "category TEXT)"
+        )
+        await cursor.execute(
+            "CREATE TABLE IF NOT EXISTS proposals("
+            "uid TEXT PRIMARY KEY, "
+            "usr UUID REFERENCES users(uid), "
+            "data json)"
+        )
 
 
 def reset():
-    with psycopg.connect(CONNINFO) as conn:
-        with conn.cursor() as cursor:
-            logger.warning("Reset DB")
-            cursor.execute("DROP TABLE proposals")
-            cursor.execute("DROP TABLE users")
+    with psycopg.connect(CONNINFO) as conn, conn.cursor() as cursor:
+        logger.warning("Reset DB")
+        cursor.execute("DROP TABLE proposals")
+        cursor.execute("DROP TABLE users")
 
 
 async def get_or_create_user(vekn: str) -> User:
-    async with POOL.connection() as conn:
-        async with conn.cursor(row_factory=psycopg.rows.class_row(User)) as cursor:
-            ret = await cursor.execute("SELECT * FROM users WHERE vekn=%s FOR UPDATE", [vekn])
-            ret = await ret.fetchone()
-            if ret:
-                return ret
-            ret = await cursor.execute(
-                "INSERT INTO users VALUES (DEFAULT, %s, %s) RETURNING *",
-                [vekn, UserCategory.BASIC],
-            )
-            ret = await ret.fetchone()
-            assert ret is not None  # INSERT ... RETURNING * always yields a row
+    async with (
+        POOL.connection() as conn,
+        conn.cursor(row_factory=psycopg.rows.class_row(User)) as cursor,
+    ):
+        ret = await cursor.execute("SELECT * FROM users WHERE vekn=%s FOR UPDATE", [vekn])
+        ret = await ret.fetchone()
+        if ret:
             return ret
+        ret = await cursor.execute(
+            "INSERT INTO users VALUES (DEFAULT, %s, %s) RETURNING *",
+            [vekn, UserCategory.BASIC],
+        )
+        ret = await ret.fetchone()
+        assert ret is not None  # INSERT ... RETURNING * always yields a row
+        return ret
 
 
 async def get_user(uid: uuid.UUID) -> User | None:
-    async with POOL.connection() as conn:
-        async with conn.cursor(row_factory=psycopg.rows.class_row(User)) as cursor:
-            ret = await cursor.execute("SELECT * FROM users WHERE uid=%s", [uid])
-            return await ret.fetchone()
+    async with (
+        POOL.connection() as conn,
+        conn.cursor(row_factory=psycopg.rows.class_row(User)) as cursor,
+    ):
+        ret = await cursor.execute("SELECT * FROM users WHERE uid=%s", [uid])
+        return await ret.fetchone()
 
 
 async def get_50_users() -> list[User]:
-    async with POOL.connection() as conn:
-        async with conn.cursor(row_factory=psycopg.rows.class_row(User)) as cursor:
-            ret = await cursor.execute("SELECT * FROM users LIMIT 50")
-            return await ret.fetchall()
+    async with (
+        POOL.connection() as conn,
+        conn.cursor(row_factory=psycopg.rows.class_row(User)) as cursor,
+    ):
+        ret = await cursor.execute("SELECT * FROM users LIMIT 50")
+        return await ret.fetchall()
 
 
 async def complete_user_vekn(vekn: str) -> list[User]:
     vekn = vekn.strip().replace("%", "")
-    async with POOL.connection() as conn:
-        async with conn.cursor(row_factory=psycopg.rows.class_row(User)) as cursor:
-            ret = await cursor.execute(
-                "SELECT * FROM users WHERE vekn ILIKE %s LIMIT 10", [f"%{vekn}%"]
-            )
-            return await ret.fetchall()
+    async with (
+        POOL.connection() as conn,
+        conn.cursor(row_factory=psycopg.rows.class_row(User)) as cursor,
+    ):
+        ret = await cursor.execute(
+            "SELECT * FROM users WHERE vekn ILIKE %s LIMIT 10", [f"%{vekn}%"]
+        )
+        return await ret.fetchall()
 
 
 async def make_user(uid: uuid.UUID, category: UserCategory) -> None:
-    async with POOL.connection() as conn:
-        async with conn.cursor(row_factory=psycopg.rows.class_row(User)) as cursor:
-            ret = await cursor.execute(
-                "UPDATE users SET category=%s WHERE uid=%s AND category <> 'ADMIN'",
-                [category, uid],
-            )
-            if ret.rowcount < 1:
-                raise ValueError(f"User '{uid}' not found")
+    async with (
+        POOL.connection() as conn,
+        conn.cursor(row_factory=psycopg.rows.class_row(User)) as cursor,
+    ):
+        ret = await cursor.execute(
+            "UPDATE users SET category=%s WHERE uid=%s AND category <> 'ADMIN'",
+            [category, uid],
+        )
+        if ret.rowcount < 1:
+            raise ValueError(f"User '{uid}' not found")
 
 
 def make_admin(username: str):
-    with psycopg.connect(CONNINFO) as conn:
-        with conn.cursor() as cursor:
-            ret = cursor.execute(
-                "UPDATE users SET category=%s WHERE vekn=%s",
-                [UserCategory.ADMIN, username],
-            )
-            if ret.rowcount < 1:
-                raise ValueError(f"User '{username}' not found")
-            logger.warning("%s is now admin", username)
+    with psycopg.connect(CONNINFO) as conn, conn.cursor() as cursor:
+        ret = cursor.execute(
+            "UPDATE users SET category=%s WHERE vekn=%s",
+            [UserCategory.ADMIN, username],
+        )
+        if ret.rowcount < 1:
+            raise ValueError(f"User '{username}' not found")
+        logger.warning("%s is now admin", username)
 
 
 async def all_proposal_ids() -> set[str]:
-    async with POOL.connection() as conn:
-        async with conn.cursor() as cursor:
-            ret = await cursor.execute("SELECT uid FROM proposals")
-            return {r[0] for r in await ret.fetchall()}
+    async with POOL.connection() as conn, conn.cursor() as cursor:
+        ret = await cursor.execute("SELECT uid FROM proposals")
+        return {r[0] for r in await ret.fetchall()}
 
 
 async def insert_proposal(proposal: dict) -> None:
-    async with POOL.connection() as conn:
-        async with conn.cursor() as cursor:
-            await cursor.execute(
-                "INSERT INTO proposals VALUES (%s, %s, %s) ",
-                [proposal["uid"], proposal["usr"], psycopg.types.json.Json(proposal)],
-            )
+    async with POOL.connection() as conn, conn.cursor() as cursor:
+        await cursor.execute(
+            "INSERT INTO proposals VALUES (%s, %s, %s) ",
+            [proposal["uid"], proposal["usr"], psycopg.types.json.Json(proposal)],
+        )
 
 
 async def update_proposal(connection: psycopg.AsyncConnection, proposal: dict) -> None:

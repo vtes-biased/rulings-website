@@ -1,7 +1,8 @@
+import typing
+
 import krcg.collections
 import markupsafe
 import pytest
-import typing
 
 import vtesrulings
 import vtesrulings.discord
@@ -1473,8 +1474,10 @@ def test_repeated_marker_is_not_nested():
         (
             "Play when a monster is bleeding you.\nOr play when a monster plays an action card.",
             ["REACTION"],
-            "<strong>Play when a monster is bleeding you.</strong><br>"
-            "Or play when a monster plays an action card.",
+            (
+                "<strong>Play when a monster is bleeding you.</strong><br>"
+                "Or play when a monster plays an action card."
+            ),
         ),
         # …but "Choose X …" is setup shared by the sections below, not a header (Gestalt).
         (
@@ -1492,8 +1495,10 @@ def test_repeated_marker_is_not_nested():
         (
             "Independent: Ambrogino can act. Red List. +1 bleed.\n[MERGED] +1 stealth.",
             ["VAMPIRE"],
-            "<strong>Independent:</strong> Ambrogino can act. <strong>Red List.</strong> "
-            "<strong>+1 bleed.</strong><br>[MERGED] <strong>+1 stealth.</strong>",
+            (
+                "<strong>Independent:</strong> Ambrogino can act. <strong>Red List.</strong> "
+                "<strong>+1 bleed.</strong><br>[MERGED] <strong>+1 stealth.</strong>"
+            ),
         ),
         # A colon inside ability text is not a header — [MERGED] titles are.
         (

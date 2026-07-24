@@ -19,12 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import api
-from . import db
-from . import discord
-from . import proposal
-from . import repository
-from . import utils
+from . import api, db, discord, proposal, repository, utils
 
 logger = logging.getLogger()
 version = importlib.metadata.version("vtes-rulings")
@@ -325,7 +320,7 @@ async def index(request: Request, page: str, user: db.User | None = Depends(api.
         }
         if user and (prop.usr == str(user.uid) or user.category != db.UserCategory.BASIC):
             proposal_dict["editable"] = True
-        for target in prop.rulings.keys():
+        for target in prop.rulings:
             if target.startswith(("G", "P")):
                 if target in prop.groups:
                     continue
@@ -353,7 +348,7 @@ async def index(request: Request, page: str, user: db.User | None = Depends(api.
         context["search_params"] = ""
         context["search_params_2"] = ""
     if page == "groups.html":
-        context["groups"] = list(asdict(g) for g in manager.all_groups(deleted=True))
+        context["groups"] = [asdict(g) for g in manager.all_groups(deleted=True)]
         uid = request.query_params.get("uid", None)
         if uid:
             try:

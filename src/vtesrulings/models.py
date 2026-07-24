@@ -1,6 +1,7 @@
 import dataclasses
-import pydantic.dataclasses
 import enum
+
+import pydantic.dataclasses
 
 
 class State(enum.StrEnum):

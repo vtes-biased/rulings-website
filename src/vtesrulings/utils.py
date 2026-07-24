@@ -1,11 +1,12 @@
 import base64
 import datetime
 import hashlib
-import krcg.collections
 import random
 import re
 import typing
 import urllib.parse
+
+import krcg.collections
 
 from . import models
 
@@ -218,7 +219,7 @@ def check_reference(reference: models.Reference) -> None:
             raise ValueError(f"{name} was not Rules Director anymore on {ref_date}")
 
 
-def parse_symbols(text: str) -> typing.Generator[models.SymbolSubstitution, None, None]:
+def parse_symbols(text: str) -> typing.Generator[models.SymbolSubstitution]:
     """Yield all symbols in the given text. See ANKHA_SYMBOLS."""
     for symbol in RE_SYMBOL.findall(text):
         yield models.SymbolSubstitution(
@@ -229,7 +230,7 @@ def parse_symbols(text: str) -> typing.Generator[models.SymbolSubstitution, None
 
 def parse_cards(
     card_map: krcg.collections.CardDict, text: str
-) -> typing.Generator[models.CardSubstitution, None, None]:
+) -> typing.Generator[models.CardSubstitution]:
     """Yield all cards in the given text."""
     for token in RE_CARD.findall(text):
         card = card_map[token[1:-1]]
@@ -280,7 +281,7 @@ def dedupe_references(text: str) -> str:
 
 def parse_references(
     references: typing.Mapping[str, models.Reference], text: str
-) -> typing.Generator[models.ReferencesSubstitution, None, None]:
+) -> typing.Generator[models.ReferencesSubstitution]:
     """Yield all ruling references in the given text."""
     for token in RE_RULING_REFERENCE.findall(text):
         reference = references[token[1:-1]]

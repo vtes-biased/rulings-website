@@ -1,21 +1,16 @@
 import dataclasses
 import logging
-import orjson
-import psycopg
 import urllib.parse
 import uuid
 from dataclasses import asdict
 
 import fastapi
+import orjson
+import psycopg
 from fastapi import Depends, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 
-from . import db
-from . import discord
-from . import proposal
-from . import repository
-from . import scraper
-from . import utils
+from . import db, discord, proposal, repository, scraper, utils
 
 logger = logging.getLogger()
 router = fastapi.APIRouter()
@@ -300,7 +295,7 @@ async def search_reference(
             try:
                 uid = await scraper.get_vekn_reference(params["url"])
                 return {"computed_uid": uid}
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - surface any scrape/network failure as a 400
                 return JSONResponse(e.args[:1], status_code=400)
         raise HTTPException(404)
 

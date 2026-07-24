@@ -1,10 +1,10 @@
-import aiohttp
 import logging
 import os
 import urllib.parse
 
-from . import models
-from . import proposal
+import aiohttp
+
+from . import models, proposal
 
 logger = logging.getLogger()
 DISCORD_WEBHOOK = os.getenv("DISCORD_WEBHOOK")
@@ -121,12 +121,11 @@ def _counts(prop: proposal.Proposal) -> list[dict]:
 
 
 async def _post(url: str, payload: dict) -> dict:
-    async with aiohttp.ClientSession() as session:
-        async with session.post(url, json=payload) as resp:
-            resp.raise_for_status()
-            data = await resp.json()
-            logger.info("discord said: %s", data)
-            return data
+    async with aiohttp.ClientSession() as session, session.post(url, json=payload) as resp:
+        resp.raise_for_status()
+        data = await resp.json()
+        logger.info("discord said: %s", data)
+        return data
 
 
 async def submit_proposal(prop: proposal.Proposal, diff: models.ProposalDiff):
