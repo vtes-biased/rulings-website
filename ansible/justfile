@@ -7,12 +7,11 @@
 # (artifacts-only via --tags app — skips db/nginx; use a full deploy for any of those).
 #
 # Ansible tooling comes from the repo-root project's dev group (`uv run --project`).
-# The deploy/dry recipes default ANSIBLE_VAULT_PASSWORD_FILE to ./.vault_pass
-# when unset — decrypt secrets/vault-pass.age into it first (see README).
+# The vault password comes from ansible.cfg (vault_password_file = .vault_pass) —
+# decrypt secrets/vault-pass.age into it first (see README).
 
 repo_root := parent_directory(justfile_directory())
 build_dir := justfile_directory() / "build"
-vault_pass := justfile_directory() / ".vault_pass"
 
 default:
     @just --list
@@ -40,7 +39,6 @@ build:
 deploy:
     #!/usr/bin/env bash
     set -euo pipefail
-    export ANSIBLE_VAULT_PASSWORD_FILE="${ANSIBLE_VAULT_PASSWORD_FILE:-{{ vault_pass }}}"
     if [ -z "${QUICK:-}" ]; then just galaxy; fi
     extra=""
     if [ -n "${RELEASE_TAG:-}" ]; then extra="-e release_tag=${RELEASE_TAG}"; fi
@@ -52,7 +50,6 @@ deploy:
 dry-deploy: galaxy
     #!/usr/bin/env bash
     set -euo pipefail
-    export ANSIBLE_VAULT_PASSWORD_FILE="${ANSIBLE_VAULT_PASSWORD_FILE:-{{ vault_pass }}}"
     extra=""
     if [ -n "${RELEASE_TAG:-}" ]; then extra="-e release_tag=${RELEASE_TAG}"; fi
     if [ "${SOURCE:-}" = local ]; then just build; extra="$extra -e artifact_source=local"; fi
