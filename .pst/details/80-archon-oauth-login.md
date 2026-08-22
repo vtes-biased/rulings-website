@@ -1,5 +1,35 @@
 # Archon OAuth2 login
 
+## Status (2026-08-22): the code is done, the cutover is not
+
+Landed on `main`, unpushed at the time of writing, and green (`just lint`,
+`npm run build`, `just test` — 79 passed):
+
+- **#82 / #85** `d51fae2` — the authorization-code + PKCE flow (`archon.py`,
+  `GET /login`, `GET /login/callback`), the login modal replaced by a "Login with
+  Archon" link, `POST /login` kept as a `TESTING`-only session mint.
+- **#83 / #84 / #87** `df74542` — `users` keyed on the archon uid with the roles
+  re-checked hourly; `UserCategory` collapsed to one `approver` flag; the hand-run
+  ladder (`/user/*`, `require_admin`, `admin.html`, `makeadmin`, `admin.ts`)
+  deleted; approval covered by a test.
+
+**What remains, in order:**
+
+1. **#81 — register the OAuth client on archon.** Blocks everything, including
+   local login: there is no way into the app without a client id and secret but
+   `TESTING=1`. Needs an IC or DEV archon account. Then the credentials go into
+   `ansible/inventories/production/group_vars/all/vault.yml`.
+2. **#86 — prepare the production users.** Apply the rulemongers' VEKN ids to
+   their legacy rows (the table is in that ticket's detail file; the ids come by
+   hand, nothing derives them), and ask everyone else on Discord to submit any
+   draft they care about.
+3. **Deploy: one hard cutover.** Stop the old unit *before* the new one first
+   boots — `db.init()` migrates the shared `users` table into a shape the old
+   app silently corrupts (closed ticket #93 has the verified detail, and the
+   rationale is repeated in the production ansible vars).
+4. **After: recover on demand**, per #86's detail file — a legacy row is
+   unreachable after the cutover, never destroyed, so this is not time-critical.
+
 ## What archon provides (verified in `archon-vibe`, 2026-08-22)
 
 Full RFC 6749 + RFC 7636 (PKCE S256) provider, `backend/src/routes/oauth.py`,

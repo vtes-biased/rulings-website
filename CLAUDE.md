@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A web app for curating official rulings for **VTES** (Vampire: The Eternal Struggle). Authenticated players draft **proposals** to add/edit rulings, groups, and references; proposals are discussed on Discord; a rulemonger/admin **approves** them, at which point the change is serialized to YAML and git-pushed to a **separate** repository (`git@github.com:vtes-biased/vtes-rulings.git`), which is the durable source of truth.
+A web app for curating official rulings for **VTES** (Vampire: The Eternal Struggle). Authenticated players draft **proposals** to add/edit rulings, groups, and references; proposals are discussed on Discord; an **approver** (anyone holding `IC` or `Rulemonger` on archon) **approves** them, at which point the change is serialized to YAML and git-pushed to a **separate** repository (`git@github.com:vtes-biased/vtes-rulings.git`), which is the durable source of truth.
 
-The app is a FastAPI server rendering Jinja templates plus a JSON API, with a Svelte editor island (TypeScript) and Tailwind CSS, built by Vite. (The `v2` branch completed the stack rework — Quart→FastAPI, Parcel→Vite, the Svelte editor island replacing the old `layout.ts`, and Bootstrap→Tailwind; see `.pst/tickets` and `.pst/details/`. It's being merged to `main` and deployed to replace the live Quart app.)
+The app is a FastAPI server rendering Jinja templates plus a JSON API, with a Svelte editor island (TypeScript) and Tailwind CSS, built by Vite. (The stack rework — Quart→FastAPI, Parcel→Vite, the Svelte editor island replacing the old `layout.ts`, Bootstrap→Tailwind — has landed on `main`; see `.pst/tickets` and `.pst/details/`. **`rulings.krcg.org` still runs the old app**: the switch is a single hard cutover, blocked on epic #80's remaining ops steps, and it is one-way — the new `db.init()` migrates the shared `users` table into a shape the old app corrupts. Read `.pst/details/80-archon-oauth-login.md` before touching login, users or the deploy.)
 
 ## Principles (enforced)
 
@@ -39,6 +39,7 @@ Frontend build only: `npm run build` (or `npm run front` to watch).
 
 - **PostgreSQL** running locally: database `vtes-rulings`, user `vtes-rulings` (see `db.py` `CONNINFO`, override the name with `DB_NAME`, creds with `DB_USER`/`DB_PWD`, or the whole DSN with `DATABASE_URL` — prod passes a unix-socket peer-auth DSN).
 - **Rulings repo push**: the read path (startup clone) is anonymous HTTPS on the public `RULINGS_GIT` repo; the *push* on approval authenticates as a **GitHub App** — `repository.py` mints a short-lived installation token from `RULINGS_GITHUB_APP_ID` (App ID or Client ID) + `RULINGS_GITHUB_INSTALLATION_ID` + `RULINGS_GITHUB_PRIVATE_KEY` (PEM path) and pushes over HTTPS as `rulings-bot[bot]`. Unset → plain `git push` (tests, local file remotes). No `id_rsa` on the host.
+- **Logging in locally needs a registered archon OAuth client** (`ARCHON_CLIENT_ID` + `ARCHON_CLIENT_SECRET`, redirect URI matched verbatim — epic #80, ticket #81). Without one there is no way in but `TESTING=1`, which turns `POST /login` into a direct session mint.
 - Network access: on startup the app clones the rulings repo to a temp dir and loads the full VEKN card database via `krcg` (`load_local`).
 - **Tests are hermetic** (no SSH/network): `conftest.py` serves a vendored rulings snapshot (`tests/fixtures/rulings/`, pinned commit in `SOURCE`) as a local bare git remote via `RULINGS_GIT`, and runs against a throwaway `vtes-rulings-test` database it creates/drops per session — so the role needs `CREATEDB` and access to the `postgres` maintenance DB. Card data is pinned by the locked `krcg` version (`load_local` reads krcg-packaged CSVs, no network).
 
