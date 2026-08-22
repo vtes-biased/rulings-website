@@ -97,6 +97,7 @@ ANKHA_SYMBOLS = {
 
 RULING_DOMAINS = {
     "boardgamegeek.com",
+    "www.blackchantry.com",
     "www.boardgamegeek.com",
     "groups.google.com",
     "www.vekn.net",
@@ -201,12 +202,7 @@ def build_reference(
 def check_reference(reference: models.Reference) -> None:
     if not reference.url:
         raise ValueError(f"Reference {reference.uid} has no URL")
-    if urllib.parse.urlparse(reference.url).hostname not in {
-        "boardgamegeek.com",
-        "www.boardgamegeek.com",
-        "groups.google.com",
-        "www.vekn.net",
-    }:
+    if urllib.parse.urlparse(reference.url).hostname not in RULING_DOMAINS:
         raise ValueError(f"Ruling URL not from a reference domain: {reference.url}")
     name, date_from, date_to = RULING_AUTHORS[reference.source]
     if date_from or date_to:
