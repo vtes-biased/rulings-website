@@ -4,7 +4,7 @@ export type State = "ORIGINAL" | "NEW" | "MODIFIED" | "DELETED"
 export type RulingKind = "RULING" | "REMINDER"
 
 export interface NID { uid: string; name: string }
-export interface SymbolSub { text: string; symbol: string }
+export interface SymbolSub { text: string; symbol: string; count: string }
 export interface CardSub { uid: string; name: string; printed_name: string; img: string; text: string }
 export interface Reference { uid: string; url: string; source: string; date: string | null; state: State }
 export interface RefSub extends Reference { text: string }

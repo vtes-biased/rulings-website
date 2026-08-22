@@ -7,8 +7,10 @@ import { ANKHA_SYMBOLS } from "./types"
 import type { CardItem, CardSub, Ruling } from "./types"
 
 const SYMBOL_KEYS = Object.keys(ANKHA_SYMBOLS).map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
-const RE_TOKEN = new RegExp(`\\[(?:${SYMBOL_KEYS.join("|")})\\]|\\{[^}]+\\}`, "g")
-const RE_SYMBOL = new RegExp(`\\[(?:${SYMBOL_KEYS.join("|")})\\]`, "g")
+// A cost marker carries its count inside the brackets, [1 CONVICTION] — mirrors utils.RE_SYMBOL.
+const SYMBOL = `\\[(?:\\d+ )?(?:${SYMBOL_KEYS.join("|")})\\]`
+const RE_TOKEN = new RegExp(`${SYMBOL}|\\{[^}]+\\}`, "g")
+const RE_SYMBOL = new RegExp(SYMBOL, "g")
 const RE_ANY = /\[[^\]\n]*\]|\{[^}\n]+\}/g
 // Markdown-like emphasis, mirroring utils.RE_EMPHASIS — see it for the word-boundary rationale.
 // \p{L}\p{N}_ rather than \w: the two renderers must agree, and Python's \w is unicode-aware while
@@ -17,12 +19,24 @@ const RE_EMPHASIS = /(?<![\p{L}\p{N}_*])(\*\*|__|\*|_)(?![\s*_])(.+?)(?<![\s*_])
 
 type Tok =
     | { t: "text"; v: string }
-    | { t: "sym"; marker: string; glyph: string }
+    | { t: "sym"; marker: string; glyph: string; count: string }
     | { t: "card"; marker: string; label: string; name: string; uid: string }
     | { t: "emph"; tag: "b" | "i"; toks: Tok[] }
 
-const symTok = (marker: string): Tok =>
-    ({ t: "sym", marker, glyph: ANKHA_SYMBOLS[marker.slice(1, -1)] })
+// The count a marker carries and the ANKHA_SYMBOLS key beside it: a symbol key may itself hold a
+// space ("ACTION MODIFIER"), so only a leading run of digits counts as one.
+const symbolParts = (marker: string): [string, string] => {
+    const inner = marker.slice(1, -1)
+    const sp = inner.indexOf(" ")
+    return sp > 0 && /^\d+$/.test(inner.slice(0, sp))
+        ? [inner.slice(0, sp), inner.slice(sp + 1)]
+        : ["", inner]
+}
+
+const symTok = (marker: string): Tok => {
+    const [count, key] = symbolParts(marker)
+    return { t: "sym", marker, glyph: ANKHA_SYMBOLS[key], count }
+}
 
 // A stored marker names the card id ahead of the name, {101563|Reanimated Corpse}. Resolved chips
 // take their label from the ruling's card list; this is the fallback for a marker with nothing to
@@ -90,7 +104,7 @@ export function parseText(text: string): Tok[] {
     // hasOwn, not a truthiness test: [constructor] and [toString] would otherwise chip up
     return scan(text, RE_ANY, (m) =>
         m[0] === "{" ? cardTok(m)
-        : Object.hasOwn(ANKHA_SYMBOLS, m.slice(1, -1)) ? symTok(m)
+        : Object.hasOwn(ANKHA_SYMBOLS, symbolParts(m)[1]) ? symTok(m)
         : { t: "text", v: m })
 }
 
@@ -113,12 +127,21 @@ export async function resolveCardChip(el: HTMLElement) {
     } catch { /* offline — leave the chip on its raw marker label */ }
 }
 
-export function symbolChip(marker: string, glyph: string): HTMLElement {
+export function symbolChip(marker: string, glyph: string, count = ""): HTMLElement {
     const el = document.createElement("span")
     el.className = "krcg-icon"
     el.contentEditable = "false"
     el.dataset.marker = marker
-    el.textContent = glyph
+    // the count belongs to the chip, not beside it: serialize reads data-marker and never descends,
+    // so a digit outside would come back doubled — and inside the glyph the font would draw it as
+    // another icon
+    if (count) {
+        const n = document.createElement("span")
+        n.className = "krcg-count"
+        n.textContent = count
+        el.append(n)
+    }
+    el.append(glyph)
     return el
 }
 
@@ -150,7 +173,7 @@ export function nodesFromTokens(toks: Tok[]): Node[] {
     const nodes: Node[] = []
     for (const tok of toks) {
         if (tok.t === "text") nodes.push(...textNodes(tok.v))
-        else if (tok.t === "sym") nodes.push(symbolChip(tok.marker, tok.glyph))
+        else if (tok.t === "sym") nodes.push(symbolChip(tok.marker, tok.glyph, tok.count))
         else if (tok.t === "card") nodes.push(cardChip(tok.marker, tok.label, tok.name, tok.uid))
         else {
             const el = document.createElement(tok.tag)

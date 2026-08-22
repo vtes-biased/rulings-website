@@ -27,7 +27,10 @@ RULING_DOMAINS = {
 RE_RULING_REFERENCE = re.compile(r"\[(?:" + r"|".join(RULING_AUTHORS) + r")\s[\w0-9-]+\]")
 #: Same token, plus the whitespace ahead of it, so dedupe_references drops the gap with the marker.
 RE_DUP_RULING_REFERENCE = re.compile(r"\s*(" + RE_RULING_REFERENCE.pattern + r")")
-RE_SYMBOL = re.compile(r"\[(?:" + r"|".join(ANKHA_SYMBOLS) + r")\]")
+#: A cost marker carries its count inside the brackets, `[1 CONVICTION]` — the CSV's own form
+#: for an imbued power's cost. The count is captured apart: the ankha font maps digits to
+#: other icons, so it can never be rendered as part of the glyph. Mirrored in island/tokens.ts.
+RE_SYMBOL = re.compile(r"\[(?:(\d+) )?(" + r"|".join(ANKHA_SYMBOLS) + r")\]")
 RE_CARD = re.compile(r"{[^}]+}")
 #: Markdown-like emphasis in ruling text: **bold**/__bold__, *italic*/_italic_. The delimiter must
 #: hug its content and sit on a word boundary, so prose asterisks ("a * b"), snake_case names and
@@ -107,10 +110,12 @@ def check_reference(reference: models.Reference) -> None:
 
 def parse_symbols(text: str) -> typing.Generator[models.SymbolSubstitution]:
     """Yield all symbols in the given text. See ANKHA_SYMBOLS."""
-    for symbol in RE_SYMBOL.findall(text):
+    for match in RE_SYMBOL.finditer(text):
+        count, key = match.groups()
         yield models.SymbolSubstitution(
-            text=symbol,
-            symbol=ANKHA_SYMBOLS[symbol[1:-1]],
+            text=match.group(0),
+            symbol=ANKHA_SYMBOLS[key],
+            count=count or "",
         )
 
 

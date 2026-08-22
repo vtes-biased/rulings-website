@@ -1,4 +1,5 @@
 import base64
+import dataclasses
 import datetime
 import hashlib
 import typing
@@ -91,7 +92,7 @@ async def test_get_card(client):
         "types": ["POLITICAL ACTION"],
         "disciplines": [],
         "text": "Requires a justicar or Inner Circle member.\nChoose a ready Camarilla vampire. Successful referendum means you search your library for an equipment card and put this card and the equipment on the chosen vampire (ignore requirements; shuffle afterward); pay half the cost rounded down of the equipment. The attached vampire can enter combat with a vampire as a +1 stealth Ⓓ action. The attached vampire cannot commit diablerie. A vampire can have only one Alastor.",
-        "symbols": [{"text": "POLITICAL ACTION", "symbol": "2"}],
+        "symbols": [{"text": "POLITICAL ACTION", "symbol": "2", "count": ""}],
         "text_symbols": [],
         "cards": [],
         "pool_cost": "",
@@ -319,7 +320,7 @@ async def test_get_group(client):
                 "img": "https://static.krcg.org/card/coma.jpg",
                 "state": "ORIGINAL",
                 "prefix": "[DEM]",
-                "symbols": [{"text": "[DEM]", "symbol": "E"}],
+                "symbols": [{"text": "[DEM]", "symbol": "E", "count": ""}],
             },
             {
                 "uid": "100527",
@@ -346,7 +347,7 @@ async def test_get_group(client):
                 "img": "https://static.krcg.org/card/faeriewards.jpg",
                 "state": "ORIGINAL",
                 "prefix": "[MYT]",
-                "symbols": [{"text": "[MYT]", "symbol": "X"}],
+                "symbols": [{"text": "[MYT]", "symbol": "X", "count": ""}],
             },
             {
                 "uid": "100701",
@@ -400,7 +401,7 @@ async def test_get_group(client):
                 "img": "https://static.krcg.org/card/puppetmaster.jpg",
                 "state": "ORIGINAL",
                 "prefix": "[DOM]",
-                "symbols": [{"text": "[DOM]", "symbol": "D"}],
+                "symbols": [{"text": "[DOM]", "symbol": "D", "count": ""}],
             },
             {
                 "uid": "101252",
@@ -445,7 +446,10 @@ async def test_get_group(client):
                 "img": "https://static.krcg.org/card/serpentsnumbingkiss.jpg",
                 "state": "ORIGINAL",
                 "prefix": "[PRE][SER]",
-                "symbols": [{"text": "[PRE]", "symbol": "R"}, {"text": "[SER]", "symbol": "S"}],
+                "symbols": [
+                    {"text": "[PRE]", "symbol": "R", "count": ""},
+                    {"text": "[SER]", "symbol": "S", "count": ""},
+                ],
             },
             {
                 "uid": "101733",
@@ -773,7 +777,7 @@ async def test_update_card_ruling(client):
             },
         ],
         "symbols": [
-            {"symbol": "0", "text": "ACTION"},
+            {"symbol": "0", "text": "ACTION", "count": ""},
         ],
         "text": (
             "+1 stealth action.\n"
@@ -838,7 +842,7 @@ async def test_delete_card_ruling(client):
         "pool_cost": "",
         "printed_name": "419 Operation",
         "rulings": [],
-        "symbols": [{"symbol": "0", "text": "ACTION"}],
+        "symbols": [{"symbol": "0", "text": "ACTION", "count": ""}],
         "text": (
             "+1 stealth action.\n"
             "Put this card in play. During your unlock phase, you may move 1 pool from "
@@ -982,7 +986,7 @@ async def test_update_group(client):
                 "img": "https://static.krcg.org/card/obedience.jpg",
                 "state": "NEW",
                 "prefix": "[DOM]",
-                "symbols": [{"text": "[DOM]", "symbol": "D"}],
+                "symbols": [{"text": "[DOM]", "symbol": "D", "count": ""}],
             },
             {
                 "uid": "101417",
@@ -1013,7 +1017,7 @@ async def test_update_group(client):
             "name": "Vote playable once per game",
             "state": "MODIFIED",
             "prefix": "[DOM]",
-            "symbols": [{"text": "[DOM]", "symbol": "D"}],
+            "symbols": [{"text": "[DOM]", "symbol": "D", "count": ""}],
         }
     ]
     # As its rulings
@@ -1387,7 +1391,7 @@ def test_ruling_body_emphasis():
     with a stray asterisk from inside the injected span. Markers inside emphasis still resolve."""
     ruling = {
         "text": "*Only {Abbot}* is **not** [red] optional",
-        "symbols": [{"text": "[red]", "symbol": "*"}],
+        "symbols": [{"text": "[red]", "symbol": "*", "count": ""}],
         "cards": [
             {
                 "text": "{Abbot}",
@@ -1446,6 +1450,24 @@ def test_symbol_replace_escapes():
     assert vtesrulings.symbol_replace(markupsafe.Markup("&amp; [pot]"), symbols) == (
         '&amp; <span class="krcg-icon" contenteditable="false" data-marker="[pot]">▲</span>'
     )
+
+
+def test_cost_marker_renders_its_count_beside_the_glyph():
+    """[1 CONVICTION] is the CSV's own form for an imbued power's cost, and the ankha font draws
+    digits as other icons, so the count renders in its own span — inside the chip, which is what
+    the editor serializes back through data-marker."""
+    symbols = [
+        dataclasses.asdict(s) for s in utils.parse_symbols("[ACTION MODIFIER] [1 CONVICTION]")
+    ]
+    assert symbols == [
+        {"text": "[ACTION MODIFIER]", "symbol": "1", "count": ""},
+        {"text": "[1 CONVICTION]", "symbol": "¤", "count": "1"},
+    ]
+    assert vtesrulings.symbol_replace("[1 CONVICTION]", symbols[1:]) == (
+        '<span class="krcg-icon" contenteditable="false" data-marker="[1 CONVICTION]">'
+        '<span class="krcg-count">1</span>¤</span>'
+    )
+    assert utils.plain_text("[1 CONVICTION] Only usable") == "Only usable"
 
 
 def test_repeated_marker_is_not_nested():
@@ -1605,6 +1627,20 @@ async def test_card_page_renders_symbols(client):
     assert body.count("[tha]") == body.count('data-marker="[tha]"') == 1
     assert '<span class="krcg-icon" contenteditable="false" data-marker="[tha]">' in body
     assert body.startswith("<strong>Camarilla:</strong>")  # the sect header, bold as on the card
+
+
+@pytest.mark.asyncio
+async def test_card_page_renders_a_cost_marker(client):
+    """End to end for the CSV's cost form: the count is drawn beside the glyph, in its own span
+    inside the chip — the chip's data-marker still holds the whole marker for the copy path."""
+    page = await client.get("/index.html?uid=100919")  # Hide, an imbued power costing 1 conviction
+    assert page.status_code == 200
+    body = page.text.split('id="cardText">')[1].split("</p>")[0]
+    assert body.count("[1 CONVICTION]") == body.count('data-marker="[1 CONVICTION]"') == 2
+    assert (
+        '<span class="krcg-icon" contenteditable="false" data-marker="[1 CONVICTION]">'
+        '<span class="krcg-count">1</span>\u00a4</span>' in body
+    )
 
 
 @pytest.mark.asyncio

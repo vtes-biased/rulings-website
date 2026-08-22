@@ -57,6 +57,8 @@ class Reference(UID):
 class SymbolSubstitution:
     text: str
     symbol: str
+    #: the count a cost marker carries, `[1 CONVICTION]` — rendered beside the glyph, never in it
+    count: str = ""
 
 
 @pydantic.dataclasses.dataclass

@@ -61,6 +61,9 @@
     .krcg-card:hover { @apply underline; text-underline-offset: 0.25em; }
     /* discipline / type glyphs (ankha webfont) — inherit text color, the glyph shape carries the meaning */
     .krcg-icon { font-family: "Ankha VTES"; font-style: normal; }
+    /* a cost marker's count sits inside the chip ([1 CONVICTION]) — out of the ankha font, where
+       digits are other icons */
+    .krcg-icon .krcg-count { font-family: var(--font-text); }
     .krcg-clan { font-family: "VTES Clans"; font-style: normal; }
 
     /* krcg.js hover-preview modals (injected by the external script) */
