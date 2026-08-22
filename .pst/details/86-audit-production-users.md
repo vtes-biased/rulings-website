@@ -1,75 +1,76 @@
-# Normalizing production users before the archon cutover
+# Production users at the archon cutover
 
-## The problem
-
-`vekn.net/api/vekn/login` accepts a **username** as well as a VEKN id, so
-`users.vekn` holds both shapes — the dev database has `lip` next to `9999999`.
-The adoption path in `db.login_user` matches `archon_uid IS NULL AND vekn = <the
-userinfo vekn_id>`, so a row keyed on a username is never adopted: that person
-gets a fresh row on their first archon login and their **in-flight proposals go
-with the old one**, invisible to them. Approved rulings live in git and are
-unaffected.
-
-## The plan: fix `vekn`, not `archon_uid`
-
-The ticket first said to write `archon_uid` onto the legacy row by hand. Setting
-`vekn` to the person's real VEKN id instead is strictly better:
-
-- it needs only the VEKN id — no archon uid lookup, no archon database access;
-- `db.login_user`'s existing adoption then does the work automatically, with no
-  hand-written archon uid to get wrong;
-- it touches only columns the **currently deployed** app already has, so it runs
-  *before* the cutover rather than in the window after it — and the boot of the
-  new app is one-way (see #93).
-
-## 1. Audit (read-only)
-
-On gravelines (`152.228.170.51`, user `deploy`, passwordless sudo):
+## The audit (run 2026-08-22, 42 rows)
 
 ```shell
 sudo -u postgres psql -d vtes-rulings -c "
 SELECT u.uid, u.vekn, u.category,
-       count(p.uid)                                                   AS proposals,
+       count(p.uid)                                                        AS proposals,
        count(p.uid) FILTER (WHERE coalesce(p.data->>'channel_id','') <> '') AS submitted
   FROM users u LEFT JOIN proposals p ON p.usr = u.uid
  GROUP BY u.uid, u.vekn, u.category
  ORDER BY u.vekn ~ '^[0-9]+\$', count(p.uid) DESC;"
 ```
 
-Non-numeric `vekn` rows sort first. Only those **owning proposals** need work;
-a username row with no proposal costs its owner nothing but a new row.
+**Not one of the 42 rows holds a numeric VEKN id — every one is a vekn.net login
+handle** (`the1andonlime`, `Hobbesgoblin`, `Ankha`, …). v1.3.0 stored
+`params["username"]` verbatim (`__init__.py:262`): vekn.net was asked to check the
+password and never asked for the member id. The `9999999` row in the dev database
+was simply someone typing their id into the login box.
 
-## 2. Map each one
+So `db.login_user`'s adoption path (`archon_uid IS NULL AND vekn = <the userinfo
+vekn_id>`) fires for **nobody** in production. It stays in the code because it is
+correct and cheap, not because it will do any work here.
 
-For every non-numeric `vekn` that still owns a proposal, identify the person and
-their VEKN id (that is the human step — the database cannot tell you).
+Handle → VEKN id cannot be automated either: vekn.net's member API exposes id,
+name and city, and archon's own member sync (`vekn_api.py`, `vekn_push.py`) keys
+on exactly those. Nothing anywhere stores the login handle. Mapping a handle to a
+person is human recognition.
 
-No row holds that id yet:
+## What is actually at risk
+
+| | rows | proposals |
+|---|---|---|
+| own something | 11 | 17 |
+| of which **submitted** | 4 | 9 |
+| of which **unsubmitted drafts** | 7 | 8 |
+
+A submitted proposal is in the approver queue — `db.get_submitted_proposals`
+filters on `channel_id`, not on owner, and `api.proposal_update` lets an approver
+edit someone else's — so all 9 stay fully actionable after the cutover. Their
+authors lose only their own handle on them.
+
+That leaves **8 drafts across 7 people**: `Oracle.kid` (2), plus one each for
+`trydeflectingthisgrapple`, `squidalot`, `zavierazo`, `Gr33n`, `dvorax` and
+`marciohiroyuki`.
+
+## Therefore: no pre-cutover hand-mapping
+
+Mapping 42 handles by hand to save 8 drafts is not worth it, and mapping is not
+time-critical anyway: **the legacy rows and their proposals are not destroyed by
+the cutover**, they are merely unreachable by their author. Recovery works just as
+well a month later.
+
+1. Before the switch, ask people to **submit** any draft they care about. That is
+   one click and it moves the proposal into the queue, where ownership stops
+   mattering.
+2. After the switch, recover on demand. The person logs in through archon, which
+   gives them a fresh row; then move the old row's proposals onto it:
 
 ```sql
-UPDATE users SET vekn = '<vekn-id>' WHERE vekn = '<username>';
+-- <handle> is the vekn.net login handle; <vekn-id> the archon-reported VEKN id
+UPDATE proposals SET usr = (SELECT uid FROM users WHERE vekn = '<vekn-id>')
+ WHERE usr = (SELECT uid FROM users WHERE vekn = '<handle>');
+DELETE FROM users WHERE vekn = '<handle>';
 ```
 
-A row already holds it (they logged in both ways at different times) — move the
-proposals over and drop the duplicate:
+Note this moves the proposals rather than writing `archon_uid` onto the legacy
+row: by then the fresh row already holds that uid, and `archon_uid` is UNIQUE.
 
-```sql
-UPDATE proposals SET usr = '<numeric-row-uid>' WHERE usr = '<legacy-row-uid>';
-DELETE FROM users WHERE uid = '<legacy-row-uid>';
-```
+## Housekeeping seen in the dump
 
-## 3. Verify
-
-```shell
-sudo -u postgres psql -d vtes-rulings -c "
-SELECT u.vekn, count(p.uid) FROM users u JOIN proposals p ON p.usr = u.uid
- WHERE u.vekn !~ '^[0-9]+\$' GROUP BY u.vekn;"
-```
-
-Empty means every in-flight proposal survives the cutover.
-
-## Fallback
-
-If the list is long enough that hand-mapping is silly, ask people to submit their
-drafts before the cutover instead — a submitted proposal lives in the approver's
-queue and no longer depends on its owner's row being found.
+Four people already hold two rows apiece from case-variant logins — `Hobbesgoblin`
+twice, `Artemis`/`artemis`, `Oracle.kid`/`oracle.kid`,
+`Trydeflectingthisgrapple`/`trydeflectingthisgrapple`. They lose a proposal to a
+mistyped capital today, which is the same failure the cutover generalizes, and the
+same two statements above fix it.
