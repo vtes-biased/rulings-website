@@ -132,9 +132,8 @@ export function symbolChip(marker: string, glyph: string, count = ""): HTMLEleme
     el.className = "krcg-icon"
     el.contentEditable = "false"
     el.dataset.marker = marker
-    // the count belongs to the chip, not beside it: serialize reads data-marker and never descends,
-    // so a digit outside would come back doubled — and inside the glyph the font would draw it as
-    // another icon
+    // inside the chip: serialize reads data-marker and never descends, so a digit beside it would
+    // come back doubled
     if (count) {
         const n = document.createElement("span")
         n.className = "krcg-count"

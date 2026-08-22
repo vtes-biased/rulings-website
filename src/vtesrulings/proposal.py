@@ -441,8 +441,8 @@ class Manager:
         Returns the effective ruling that card now sees. See pst #27."""
         if not target_uid.startswith(("G", "P")):
             raise ValueError("Overrides only apply to group rulings")
+        utils.check_reference_tokens(text or "")
         text = utils.normalize_cards(self.card_map, (text or "").strip())
-        utils.check_reference_tokens(text)
         if text and not self._card_in_group(card_uid, target_uid):
             raise ValueError(f"Card {card_uid} is not a member of group {target_uid}")
         prop = self.prop.rulings.setdefault(target_uid, {})
@@ -548,22 +548,16 @@ class Manager:
                 state = models.State.NEW
                 if uid in self.base.groups:
                     group.state = models.State.MODIFIED
-            try:
-                symbols = list(utils.parse_symbols(prefix))
-            except KeyError:
-                raise ValueError(f'Invalid symbol for card {cid}: "{prefix}"')
-            (
-                group.cards.append(
-                    models.CardInGroup(
-                        uid=card.uid,
-                        name=card.name,
-                        printed_name=card.printed_name,
-                        img=card.img,
-                        prefix=prefix,
-                        state=state,
-                        symbols=symbols,
-                    )
-                ),
+            group.cards.append(
+                models.CardInGroup(
+                    uid=card.uid,
+                    name=card.name,
+                    printed_name=card.printed_name,
+                    img=card.img,
+                    prefix=prefix,
+                    state=state,
+                    symbols=list(utils.parse_symbols(prefix)),
+                )
             )
         if group.state == models.State.ORIGINAL:
             # edited back to the base group: drop the overlay entirely

@@ -2,10 +2,13 @@ import base64
 import dataclasses
 import datetime
 import hashlib
+import pathlib
+import re
 import typing
 import urllib.parse
 
 import krcg.collections
+import krcg.rulings
 import markupsafe
 import pytest
 
@@ -834,14 +837,30 @@ async def test_mistyped_reference_source_is_refused(client):
         json={"text": "New wording! [KOT 20081119]"},
     )
     assert response.status_code == 400
-    assert "names no ruling source" in response.json()[0]
+    assert "resolves to no reference" in response.json()[0]
     response = await client.put(
         "/api/ruling/100002/KRO5H6MD",
-        json={"text": "[ACTION MODIFIER] [1 CONVICTION] Fine. [REVERSAL] [ANK 20221011-3]"},
+        json={"text": "New wording! [Ank 20221011-3]"},  # the case typo drops just as silently
+    )
+    assert response.status_code == 400
+    response = await client.put(
+        "/api/ruling/100002/KRO5H6MD",
+        # a bracket carrying no date is prose, and stays the author's business
+        json={"text": "[ACTION MODIFIER] [1 CONVICTION] Fine [see below]. [ANK 20221011-3]"},
     )
     assert response.status_code == 200
+    # the per-card override path is the second way text reaches a ruling
+    rid = (
+        await client.post("/api/ruling/G00030", json={"text": "Group wording [RTR 20070707]"})
+    ).json()["uid"]
+    response = await client.put(
+        f"/api/ruling/G00030/{rid}/override/100064",
+        json={"text": "Overridden. [KOT 20081119]"},
+    )
+    assert response.status_code == 400
+    assert "resolves to no reference" in response.json()[0]
     # loading the base index never validates: a past commit's typo must not stop the app starting
-    assert utils.build_ruling({}, {}, "x [KOT 20081119]", target=models.NID(uid="1", name="x"))
+    utils.build_ruling({}, {}, "x [KOT 20081119]", target=models.NID(uid="1", name="x"))
 
 
 @pytest.mark.asyncio
@@ -1463,14 +1482,27 @@ def test_normalize_emphasis(text, expected):
 def test_symbol_replace_escapes():
     """symbol_replace heads the `| safe` filter chains, so it owns escaping: group prefixes are
     proposal-authored. Markup input (ruling_body) must not be escaped twice."""
-    symbols = [{"text": "[pot]", "symbol": "▲"}]
+    symbols = [{"text": "[pot]", "symbol": "▲", "count": ""}]
     assert vtesrulings.symbol_replace("<b>x</b> & [pot]", symbols) == (
         "&lt;b&gt;x&lt;/b&gt; &amp; "
         '<span class="krcg-icon" contenteditable="false" data-marker="[pot]">▲</span>'
     )
+    # three glyphs are markup: "<" (mal), ">" (MAL), "&" (mar)
+    assert vtesrulings.symbol_replace("[mal]", [{"text": "[mal]", "symbol": "<", "count": ""}]) == (
+        '<span class="krcg-icon" contenteditable="false" data-marker="[mal]">&lt;</span>'
+    )
     assert vtesrulings.symbol_replace(markupsafe.Markup("&amp; [pot]"), symbols) == (
         '&amp; <span class="krcg-icon" contenteditable="false" data-marker="[pot]">▲</span>'
     )
+
+
+def test_island_mirrors_the_krcg_symbols():
+    """utils reads the map from krcg; the editor cannot, so its copy is hand-written and would
+    drift on the next krcg release — rendering a glyph the server does not, or none at all."""
+    ts = (pathlib.Path(__file__).parents[1] / "src/front/island/types.ts").read_text()
+    body = ts.split("ANKHA_SYMBOLS: Record<string, string> = {")[1].split("\n}")[0]
+    mirrored = dict(re.findall(r'"?(\w[\w ]*?)"?: "(.)"', body))
+    assert mirrored == krcg.rulings.ANKHA_SYMBOLS
 
 
 def test_cost_marker_renders_its_count_beside_the_glyph():
@@ -1494,7 +1526,7 @@ def test_cost_marker_renders_its_count_beside_the_glyph():
 def test_repeated_marker_is_not_nested():
     """parse_symbols/parse_cards yield one substitution per occurrence and str.replace is global, so
     the second pass would rewrite the marker inside the data-marker it just injected."""
-    symbols = [{"text": "[pot]", "symbol": "P"}, {"text": "[pot]", "symbol": "P"}]
+    symbols = [{"text": "[pot]", "symbol": "P", "count": ""}] * 2
     out = vtesrulings.symbol_replace("[pot] and [pot]", symbols)
     assert out.count('data-marker="[pot]"') == 2
     assert "<span" not in out.split('data-marker="')[1].split('"')[0]

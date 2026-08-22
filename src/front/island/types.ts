@@ -1,4 +1,6 @@
-// Domain types mirroring models.py, plus the ankha symbol map (utils.py ANKHA_SYMBOLS).
+// Domain types mirroring models.py, plus the ankha symbol map. krcg owns that map (utils.py
+// binds it); this copy is hand-written because the browser cannot read it from there, and a
+// test compares the two so a krcg release cannot drift them apart.
 
 export type State = "ORIGINAL" | "NEW" | "MODIFIED" | "DELETED"
 export type RulingKind = "RULING" | "REMINDER"

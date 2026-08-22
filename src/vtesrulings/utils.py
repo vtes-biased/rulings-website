@@ -11,10 +11,13 @@ import krcg.rulings
 
 from . import models
 
-#: krcg owns both tables — same rulings format, same font — so a krcg release carrying a new
-#: discipline or a new Rules Director lands here with the version bump, not a second edit.
+#: krcg owns the tables and the format regexes — the same rulings file, read by the same font, so
+#: a release carrying a new discipline or a new Rules Director lands here with the version bump.
 ANKHA_SYMBOLS = krcg.rulings.ANKHA_SYMBOLS
 RULING_AUTHORS = krcg.rulings.RULING_AUTHORS
+RE_RULING_REFERENCE = krcg.rulings.RE_RULING_REFERENCE
+RE_CARD = krcg.rulings.RE_CARD
+RE_REMINDER = krcg.rulings.RE_REMINDER
 
 RULING_DOMAINS = {
     "boardgamegeek.com",
@@ -24,28 +27,21 @@ RULING_DOMAINS = {
     "www.vekn.net",
 }
 
-RE_RULING_REFERENCE = re.compile(r"\[(?:" + r"|".join(RULING_AUTHORS) + r")\s[\w0-9-]+\]")
-#: Same token, plus the whitespace ahead of it, so dedupe_references drops the gap with the marker.
+#: Same reference token, plus the whitespace ahead of it, so dedupe_references drops the gap with
+#: the marker.
 RE_DUP_RULING_REFERENCE = re.compile(r"\s*(" + RE_RULING_REFERENCE.pattern + r")")
-#: A cost marker carries its count inside the brackets, `[1 CONVICTION]` — the CSV's own form
-#: for an imbued power's cost. The count is captured apart: the ankha font maps digits to
-#: other icons, so it can never be rendered as part of the glyph. Mirrored in island/tokens.ts.
-#: A reference-shaped token with any three-letter prefix, not just the known sources: a mistyped
-#: source ([KOT 20081119] for [RTR 20081119], which sat in the repo for years) matches no reference
-#: and would otherwise read as prose, dropping out of the ruling unnoticed. The lookahead keeps an
-#: all-caps two-word marker ([NOT PLAYED]) from being read as one.
-RE_LOOSE_REFERENCE = re.compile(r"\[([A-Z]{3})\s(?![A-Z])[\w-]+\]")
+#: The one regex krcg does not own: a cost marker carries its count inside the brackets,
+#: `[1 CONVICTION]` — the CSV's own form for an imbued power's cost — and the count is captured
+#: apart, the ankha font drawing digits as other icons. Mirrored in island/tokens.ts.
 RE_SYMBOL = re.compile(r"\[(?:(\d+) )?(" + r"|".join(ANKHA_SYMBOLS) + r")\]")
-RE_CARD = re.compile(r"{[^}]+}")
+#: A bracket token reading as a reference id — a source, then something long and numeric enough to
+#: be a date. What check_reference_tokens measures against the references that resolve.
+RE_REFERENCE_SHAPED = re.compile(r"\[[^\]\n]*\s\d{6,}[\w-]*\]")
+
 #: Markdown-like emphasis in ruling text: **bold**/__bold__, *italic*/_italic_. The delimiter must
 #: hug its content and sit on a word boundary, so prose asterisks ("a * b"), snake_case names and
 #: the ankha glyphs that are themselves punctuation are left alone. Mirrored in island/tokens.ts.
 RE_EMPHASIS = re.compile(r"(?<![\w*_])(\*\*|__|\*|_)(?![\s*_])(.+?)(?<![\s*_])\1(?![\w*_])")
-# A REMINDER ruling with no overrides serializes as a bare string with this trailing tag, keeping
-# the YAML simple; the tag is stripped on load and re-appended on serialize (kind is a flag on the
-# in-memory Ruling, orthogonal to any inline reference). See serialize_ruling.
-RE_REMINDER = re.compile(r"\s*\[REMINDER\]\s*$", re.IGNORECASE)
-
 # Card text carries no bold markup, but the printed card bolds by placement — see card_text.
 #: A line opening on a bracketed icon ([dom], [MERGED], [REACTION]…) is body text, never a header.
 RE_ICON_LINE = re.compile(r"^\[[\w ]+\]\s*")
@@ -214,12 +210,18 @@ def parse_references(
 
 
 def check_reference_tokens(text: str) -> None:
-    """Raise on a reference token whose source is not one. Edit-time only — the base index loads
-    whatever a past commit left in the file, and must not fail to start over it."""
-    for match in RE_LOOSE_REFERENCE.finditer(text):
-        if match.group(1) not in RULING_AUTHORS:
+    """Raise on a bracket token that reads as a reference and resolves to none. A source typo —
+    [KOT 20081119] for [RTR 20081119], which sat in the repo for years, [Ank …] for [ANK …] — matches
+    no reference, so it reads as prose and drops out of the ruling unseen. Prose in brackets is left
+    alone: it carries no date, and the editor renders it as the literal text it is.
+
+    Edit-time only: the base index loads whatever a past commit left in the file, and must not fail
+    to start over it."""
+    for token in RE_REFERENCE_SHAPED.findall(text):
+        if not RE_RULING_REFERENCE.fullmatch(token):
             raise ValueError(
-                f"{match.group(0)} names no ruling source: use one of {', '.join(RULING_AUTHORS)}"
+                f"{token} resolves to no reference. One reads [SRC YYYYMMDD], SRC being one of "
+                f"{', '.join(RULING_AUTHORS)}"
             )
 
 

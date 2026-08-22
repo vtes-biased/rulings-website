@@ -77,15 +77,12 @@ def symbol_replace(s: str, d: list):
     # one entry per *occurrence* comes in, and replace() is global: a repeated symbol must be
     # deduped or the second pass rewrites the [pot] now sitting inside the injected data-marker
     for text, sub in {sub["text"]: sub for sub in d}.items():
-        # the count rides inside the chip, in its own span: outside it the editor would serialize
-        # it beside the marker that already holds it, and inside the glyph the ankha font would
-        # draw it as another icon
-        count = sub.get("count") or ""
-        count = f'<span class="krcg-count">{esc(count)}</span>' if count else ""
+        count = f'<span class="krcg-count">{esc(sub["count"])}</span>' if sub["count"] else ""
         s = s.replace(
             text,
             f'<span class="krcg-icon" contenteditable="false"'
-            f' data-marker="{esc(text)}">{count}{sub["symbol"]}</span>',
+            # three glyphs are markup themselves: "<" for mal, ">" for MAL, "&" for mar
+            f' data-marker="{esc(text)}">{count}{esc(sub["symbol"])}</span>',
         )
     return s
 

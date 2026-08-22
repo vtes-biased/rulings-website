@@ -13,6 +13,7 @@ import asgiref.sync
 import git
 import jwt
 import krcg.collections
+import krcg.rulings
 import yaml
 import yamlfix
 import yamlfix.model
@@ -322,8 +323,8 @@ async def load_base(repo: git.Repo, card_map: krcg.collections.CardDict) -> mode
                     utils.build_nid(k).uid: utils.normalize_cards(card_map, v)
                     for k, v in (entry.get("overrides") or {}).items()
                 }
-            text = utils.RE_REMINDER.sub("", raw)
-            kind = models.RulingKind.REMINDER if text != raw else models.RulingKind.RULING
+            text, reminder = krcg.rulings.strip_reminder(raw)
+            kind = models.RulingKind.REMINDER if reminder else models.RulingKind.RULING
             # no explicit uid: build_ruling hashes the card-normalized text, so a non-canonical
             # token in the YAML rehashes here and the next commit writes the canonical form back
             ruling = utils.build_ruling(
