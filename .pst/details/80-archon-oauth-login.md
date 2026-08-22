@@ -69,8 +69,11 @@ refreshed in-band.
   (`_handle_refresh_token`: a revoked token's reuse calls
   `revoke_oauth_token_chain`). Two concurrent requests refreshing the same stored
   token means one wins and the other kills the user's session outright. The
-  refresh must be serialized on the user row — `SELECT … FOR UPDATE`, then
-  re-read, since the request that held the lock may already have rotated it.
+  refresh is therefore claimed with a conditional
+  `UPDATE … WHERE roles_checked_at IS NOT DISTINCT FROM <the value we read>`:
+  exactly one request wins the claim and spends the token, and — unlike the
+  `SELECT … FOR UPDATE` this ticket first called for — no row lock or pool
+  connection (of ten) is held across archon's HTTP round-trip.
 - **Legacy `vekn` values are not VEKN ids.** vekn.net login accepts a username,
   and the dev database holds `lip` alongside `9999999`. Matching a legacy row on
   `vekn == vekn_id` therefore misses everyone who logged in by username: they get
