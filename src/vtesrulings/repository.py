@@ -84,7 +84,9 @@ RULINGS_COMMENT = """# ## Design notes
 #
 # 1. The rulings can contain disciplines and card types symbols in brackets (eg. `[pot]`), see the list below
 # 2. The rulings can contain cards in braces, in the same `<card_id>|<card_name>` form as the keys
-#    (eg. `{100006|Abbot}`), using the VEKN CSV cards IDs
+#    (eg. `{100006|Abbot}`), using the VEKN CSV cards IDs. A brace names a card inside a sentence, so
+#    its name carries the suffix telling two same-named cards apart (`{200041|Alan Sovereign (ADV)}`,
+#    where the key is `200041|Alan Sovereign`)
 # 3. Each ruling ends with one or more rulings reference IDs in brackets.
 #    References URLs are listed in the [references.yaml](rulings/references.yaml) file
 # 4. Rulings are attached to a card, the format of the key is `<card_id>|<card_name>`, using the VEKN CSV cards IDs,
