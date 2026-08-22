@@ -58,19 +58,29 @@ well a month later.
    gives them a fresh row; then move the old row's proposals onto it:
 
 ```sql
--- <handle> is the vekn.net login handle; <vekn-id> the archon-reported VEKN id
-UPDATE proposals SET usr = (SELECT uid FROM users WHERE vekn = '<vekn-id>')
- WHERE usr = (SELECT uid FROM users WHERE vekn = '<handle>');
-DELETE FROM users WHERE vekn = '<handle>';
+-- both uids come from the audit query above; never key this on vekn, see below
+UPDATE proposals SET usr = '<fresh-row-uid>' WHERE usr = '<legacy-row-uid>';
+DELETE FROM users WHERE uid = '<legacy-row-uid>';
 ```
 
 Note this moves the proposals rather than writing `archon_uid` onto the legacy
 row: by then the fresh row already holds that uid, and `archon_uid` is UNIQUE.
 
-## Housekeeping seen in the dump
+## Duplicate rows — why the recipe keys on uid
 
-Four people already hold two rows apiece from case-variant logins — `Hobbesgoblin`
-twice, `Artemis`/`artemis`, `Oracle.kid`/`oracle.kid`,
-`Trydeflectingthisgrapple`/`trydeflectingthisgrapple`. They lose a proposal to a
-mistyped capital today, which is the same failure the cutover generalizes, and the
-same two statements above fix it.
+Four people already hold two rows apiece: `Artemis`/`artemis`,
+`Oracle.kid`/`oracle.kid`, `Trydeflectingthisgrapple`/`trydeflectingthisgrapple`
+— and **`Hobbesgoblin` twice over, the two indistinguishable in the dump**
+(`07c05586…`, 3 proposals, and `5b00b1b0…`, none). They lose a proposal to a
+mistyped capital today, the same failure the cutover generalizes.
+
+The identical pair means the production table does not enforce the `vekn UNIQUE`
+that v1.3.0's `CREATE TABLE` declares — `CREATE TABLE IF NOT EXISTS` never
+retrofits a constraint onto a table an older version created — or that one value
+carries invisible whitespace. Either way, **never key a recovery statement on
+`vekn`**: the subquery form errors on two rows and the DELETE takes both. Use the
+uids the audit prints.
+
+Nothing in the new code depends on that constraint here, since the adoption path
+fires for nobody in production; and `login_callback` already turns the unique
+violation an adopted duplicate would raise into a message rather than a 500.
