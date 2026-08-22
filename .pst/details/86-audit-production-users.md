@@ -66,6 +66,39 @@ DELETE FROM users WHERE uid = '<legacy-row-uid>';
 Note this moves the proposals rather than writing `archon_uid` onto the legacy
 row: by then the fresh row already holds that uid, and `archon_uid` is UNIQUE.
 
+## Matching the rulemongers by hand (VEKN ids pending)
+
+The eight rows carrying a tier today. Their VEKN ids are being supplied by hand —
+nothing in the data can derive them.
+
+| handle | row uid | tier | proposals | submitted | VEKN id |
+|---|---|---|---|---|---|
+| the1andonlime | `30e1b2a3-92f9-487c-9f25-999373a411e7` | RULEMONGER | 4 | 4 | |
+| Hobbesgoblin | `07c05586-6583-4746-b6b7-6fd993595a35` | RULEMONGER | 3 | 3 | |
+| squidalot | `964ac13e-1c45-49eb-b738-7a4ab61a40a1` | RULEMONGER | 1 | 0 | |
+| Ankha | `5c41d803-5499-433d-9bdf-530a4b94f2db` | ADMIN | 1 | 1 | |
+| kschaefer | `4b3e09ec-25c5-49c8-8365-baa7e7f1811c` | RULEMONGER | 0 | 0 | |
+| inm8 | `781aad7c-08a9-4a33-9f98-c4da8a23e166` | RULEMONGER | 0 | 0 | |
+| Sergio | `09dfee84-aec4-43e8-b679-98fea840af87` | RULEMONGER | 0 | 0 | |
+| lip | `fff5b489-f823-4ea1-818c-def524189e30` | ADMIN | 0 | 0 | |
+
+Apply each id to its row **before the cutover**. This only rewrites `vekn`, so it
+runs on the current schema, and `db.login_user` then adopts the row at that
+person's first archon login:
+
+```sql
+UPDATE users SET vekn = '<vekn-id>' WHERE uid = '<row-uid>';
+```
+
+Two notes. The tier itself is not worth preserving — `category` is dropped and
+who may approve comes from archon's roles — so for the four rows owning no
+proposal this buys continuity of the row and nothing else. And it must land
+before that person's first archon login: afterwards they already hold a fresh
+row, and the fix is the move-proposals recipe above instead.
+
+Only `07c05586…` carries the `Hobbesgoblin` proposals; the second row of that name
+(`5b00b1b0…`, no proposals) must be left alone.
+
 ## Duplicate rows — why the recipe keys on uid
 
 Four people already hold two rows apiece: `Artemis`/`artemis`,

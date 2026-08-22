@@ -19,7 +19,8 @@ domain: rulings.krcg.org
 # --- port (localhost only, nginx proxies to it) ---------------------------
 # Confirm free on gravelines during Step-0 recon (the co-located krcg-bot/timer/
 # archon-bot own their own ports; the v1 rulings app owns whatever it binds now —
-# pick a DIFFERENT port so the new unit can come up before v1 is removed).
+# a DIFFERENT port keeps the two units from clashing, but they must NOT both run:
+# the cutover is a hard switch, see the database note below.)
 backend_port: 8095
 
 # --- filesystem paths -----------------------------------------------------
@@ -34,8 +35,12 @@ uv_python_install_dir: /opt/uv/python
 # --- database -------------------------------------------------------------
 # Reuse the v1 app's existing `vtes-rulings` DB + role (preserves in-flight proposals).
 # postgres_db is idempotent: with the *existing* password it's a near-no-op that only
-# re-asserts the role and applies statement timeouts — so v1 keeps connecting (TCP
-# password) right up until we stop it, while v2 connects via socket peer auth.
+# re-asserts the role and applies statement timeouts.
+# STOP v1 BEFORE v2 FIRST BOOTS — this is a hard cutover, not an overlap. v2's db.init()
+# drops `category` and appends the archon columns, after which v1's positional
+# `INSERT INTO users VALUES (DEFAULT, %s, %s)` writes the category string into
+# `archon_uid`: the first login through v1 corrupts a row silently, the next 500s on the
+# unique index. The schema move is one-way.
 db_name: vtes-rulings
 db_user: vtes-rulings
 db_password: "{{ vault_db_password }}"
