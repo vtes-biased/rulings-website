@@ -1,4 +1,5 @@
 import base64
+import datetime
 import hashlib
 import typing
 import urllib.parse
@@ -10,7 +11,7 @@ import pytest
 import vtesrulings
 import vtesrulings.archon
 import vtesrulings.discord
-from vtesrulings import models, repository, utils
+from vtesrulings import db, models, repository, utils
 
 
 def test_serialize_ruling():
@@ -1669,3 +1670,136 @@ async def test_login_refuses_an_offsite_next(client, hostile):
     )
     assert response.status_code == 302
     assert response.headers["location"] == "/index.html"
+
+
+async def sql(query: str, *params):
+    """One-value SQL for the auth tests, which set up rows the app has no route to write."""
+    async with db.POOL.connection() as conn, conn.cursor() as cursor:
+        ret = await (await cursor.execute(query, params)).fetchone()  # ty: ignore[invalid-argument-type]
+        return ret[0] if ret else None
+
+
+async def stale(uid, refresh_token: str):
+    """Age a user's roles past the re-check window."""
+    await sql(
+        "UPDATE users SET refresh_token=%s, roles_checked_at=now() - interval '2 hours' "
+        "WHERE uid=%s RETURNING uid",
+        refresh_token,
+        uid,
+    )
+
+
+@pytest.mark.asyncio
+async def test_approval_needs_the_approver_flag_and_publishes(client, monkeypatch):
+    """Approval is the one gated action left: a plain member is refused, an archon approver
+    merges the overlay into the YAML, pushes it and drops the proposal row.
+
+    Approving commits into the session-wide fixture repo and swaps the loaded base index, so
+    this one leaves state behind for whatever runs after it — keep it last in the file.
+    """
+
+    async def submitted(prop, diff):
+        prop.channel_id = "42"
+
+    async def announced(prop, diff):
+        pass
+
+    monkeypatch.setattr(vtesrulings.discord, "submit_proposal", submitted)
+    monkeypatch.setattr(vtesrulings.discord, "proposal_approved", announced)
+    prop_uid = await login_and_proposal(client)
+    text = "Approved through the test suite [RTR 20070707]"
+    assert (await client.post("/api/ruling/100015", json={"text": text})).status_code == 200
+    assert (await client.post("/api/proposal/submit")).status_code == 200
+    # the author is not an approver
+    assert (await client.post("/api/proposal/approve")).status_code == 401
+    await client.post("/logout")
+    response = await client.post("/login", data={"username": "rulemonger", "approver": "1"})
+    assert response.status_code == 302
+    # an approver may pick up someone else's proposal
+    assert (await client.get(f"/index.html?prop={prop_uid}")).status_code == 200
+    assert (await client.post("/api/proposal/approve")).status_code == 200
+    assert await db.get_proposal(prop_uid) is None
+    card = (await client.get("/api/card/100015")).json()
+    # ORIGINAL, not NEW: the ruling is in the base index now, not in an overlay
+    assert any(r["text"] == text and r["state"] == "ORIGINAL" for r in card["rulings"])
+
+
+@pytest.mark.asyncio
+async def test_login_adopts_the_legacy_row_holding_that_vekn_id(client):
+    """Cutover: a user who logged in through vekn.net keeps their row — and the in-flight
+    proposals hanging off it — as long as that row was keyed on the VEKN id itself."""
+    legacy_uid = await sql("INSERT INTO users (vekn) VALUES ('9999999') RETURNING uid")
+    adopted = await db.login_user("archon-uid-1", "9999999", True, "refresh-1")
+    assert adopted.uid == legacy_uid
+    assert adopted.approver is True
+    again = await db.login_user("archon-uid-1", "9999999", False, "refresh-2")
+    assert again.uid == legacy_uid
+    assert again.approver is False  # a demotion on archon lands on the next login
+
+
+@pytest.mark.asyncio
+async def test_stale_roles_are_rechecked_against_archon(client, monkeypatch):
+    """An hour on, the flag is archon's answer again, not the one cached at login."""
+    await client.post("/login", data={"username": "test-user", "approver": "1"})
+    uid = await sql("SELECT uid FROM users WHERE vekn='test-user'")
+    await stale(uid, "refresh-1")
+
+    async def refreshed(refresh_token):
+        assert refresh_token == "refresh-1"
+        return {"access_token": "access-2", "refresh_token": "refresh-2"}
+
+    async def demoted(access_token):
+        assert access_token == "access-2"
+        return {"sub": "archon-uid", "vekn_id": "9999999", "roles": ["PT"]}
+
+    monkeypatch.setattr(vtesrulings.archon, "refresh", refreshed)
+    monkeypatch.setattr(vtesrulings.archon, "userinfo", demoted)
+    assert (await client.get("/index.html")).status_code == 200
+    user = await db.get_user(uid)
+    assert user.approver is False
+    assert user.refresh_token == "refresh-2"  # the rotated token replaced the spent one
+
+
+@pytest.mark.asyncio
+async def test_an_archon_outage_keeps_the_session(client, monkeypatch):
+    """A timeout is not a refusal: keep the roles we have, and do not retry on the next request."""
+    await client.post("/login", data={"username": "test-user", "approver": "1"})
+    uid = await sql("SELECT uid FROM users WHERE vekn='test-user'")
+    await stale(uid, "refresh-1")
+
+    async def unreachable(refresh_token):
+        raise vtesrulings.archon.Error("archon.krcg.org: timeout")
+
+    monkeypatch.setattr(vtesrulings.archon, "refresh", unreachable)
+    assert (await client.get("/index.html")).status_code == 200
+    user = await db.get_user(uid)
+    assert user.approver is True
+    assert user.refresh_token == "refresh-1"
+    # the check was stamped anyway, so the outage costs one archon call an hour, not one a request
+    assert datetime.datetime.now(datetime.UTC) - user.roles_checked_at < datetime.timedelta(
+        minutes=5
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_dead_token_chain_logs_the_user_out(client, monkeypatch):
+    """Archon refusing for good (revoked consent, reused chain, 30d expiry) ends the session
+    rather than 500ing, and strips the flag so the user's other sessions lose it too."""
+    await client.post("/login", data={"username": "test-user", "approver": "1"})
+    uid = await sql("SELECT uid FROM users WHERE vekn='test-user'")
+    await stale(uid, "refresh-1")
+
+    async def refused(refresh_token):
+        raise vtesrulings.archon.Error("archon.krcg.org: Refresh token has been revoked", 400)
+
+    monkeypatch.setattr(vtesrulings.archon, "refresh", refused)
+    elsewhere = client.cookies.get("session")  # a second browser, still holding a live cookie
+    page = await client.get("/index.html")
+    assert page.status_code == 200
+    assert "Your archon session expired" in page.text
+    assert (await client.post("/api/proposal", json={"name": "Nope"})).status_code == 401
+    user = await db.get_user(uid)
+    assert user.approver is False
+    assert user.refresh_token is None
+    client.cookies.set("session", elsewhere)
+    assert (await client.post("/api/proposal", json={"name": "Nope"})).status_code == 401

@@ -20,10 +20,25 @@ SITE_URL_BASE = os.getenv("SITE_URL_BASE", "http://127.0.0.1:5000").rstrip("/")
 #: Archon matches this exactly — no prefix match — so it must be registered verbatim.
 REDIRECT_URI = f"{SITE_URL_BASE}/login/callback"
 SCOPE = "profile:read"
+#: Archon holds no rulings-shaped capability, and its `roles` are already its external contract
+#: (the Discord Linked Roles push reads them). Match the two that mean "may rule".
+APPROVER_ROLES = {"IC", "Rulemonger"}
+#: Bounds how long a refresh holds the user row locked; aiohttp would otherwise wait 5 minutes.
+TIMEOUT = aiohttp.ClientTimeout(total=10)
 
 
 class Error(Exception):
     """Anything that stops us getting an answer: a refusal, an outage, a proxy's HTML error page."""
+
+    def __init__(self, message: str, status: int = 0):
+        #: 400 means archon refused for good (dead token chain, revoked consent); 0 is a transport
+        #: failure, and everything else an outage — both worth retrying, unlike a refusal.
+        self.status = status
+        super().__init__(message)
+
+
+def is_approver(roles: list[str]) -> bool:
+    return bool(APPROVER_ROLES.intersection(roles))
 
 
 def authorization_url(state: str, verifier: str) -> str:
@@ -62,6 +77,25 @@ async def exchange_code(code: str, verifier: str) -> dict:
     )
 
 
+async def refresh(refresh_token: str) -> dict:
+    """Rotates: the returned refresh token replaces the one passed in, which archon revokes.
+
+    Reusing a revoked token makes archon kill the whole chain, so only ever call this holding
+    the user row locked. The one hole left is a rotation archon commits but whose response we
+    lose — the next try then reads as reuse and the user has to log in again.
+    """
+    return await _request(
+        "post",
+        f"{ARCHON_URL}/oauth/token",
+        json={
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+            "client_id": CLIENT_ID,
+            "client_secret": CLIENT_SECRET,
+        },
+    )
+
+
 async def userinfo(access_token: str) -> dict:
     """`{sub, roles, vekn_id, capabilities}` — no name, no email: profile:read sees nothing else."""
     return await _request(
@@ -74,14 +108,14 @@ async def userinfo(access_token: str) -> dict:
 async def _request(method: str, url: str, **kwargs) -> dict:
     try:
         async with (
-            aiohttp.ClientSession() as session,
+            aiohttp.ClientSession(timeout=TIMEOUT) as session,
             session.request(method, url, **kwargs) as response,
         ):
             # content_type=None: a proxy erroring in HTML must land here, not as a ContentTypeError.
             data = await response.json(content_type=None)
             if response.status != 200:
                 detail = data.get("detail") if isinstance(data, dict) else None
-                raise Error(f"{url}: {detail or response.status}")
+                raise Error(f"{url}: {detail or response.status}", response.status)
             return data
     except (aiohttp.ClientError, ValueError) as exc:  # unreachable, or an unparseable body
         raise Error(f"{url}: {exc}") from exc

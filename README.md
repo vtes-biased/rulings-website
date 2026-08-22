@@ -99,8 +99,9 @@ The `rulings-web` script (installed by `uv sync`) exposes admin commands, e.g.:
 
 ```shell
 uv run rulings-web resetdb
-uv run rulings-web makeadmin <vekn-id>
 ```
+
+Who may approve is archon's call, not a local one: hold the `IC` or `Rulemonger` role there.
 
 ## Release & deploy
 

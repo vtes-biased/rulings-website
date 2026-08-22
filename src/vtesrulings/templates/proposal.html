@@ -28,7 +28,7 @@
         {% if proposal.editable %}
         {% if proposal.channel_id %}
         <button type="button" class="btn btn-secondary" id="proposalSubmit">Post update to Discord</button>
-        {% if user.category != 'BASIC' %}
+        {% if user.approver %}
         <button type="button" class="btn btn-success" id="proposalApprove">Approve</button>
         {% endif %}
         {% else %}

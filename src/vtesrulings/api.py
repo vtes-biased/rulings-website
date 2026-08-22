@@ -1,4 +1,5 @@
 import dataclasses
+import datetime
 import logging
 import urllib.parse
 import uuid
@@ -10,27 +11,62 @@ import psycopg
 from fastapi import Depends, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 
-from . import db, discord, proposal, repository, scraper, utils
+from . import archon, db, discord, proposal, repository, scraper, utils
 
 logger = logging.getLogger()
 router = fastapi.APIRouter()
+#: Roles are archon's to grant and revoke: a demotion there must not wait out our session cookie.
+ROLES_MAX_AGE = datetime.timedelta(hours=1)
 
 
 async def get_current_user(request: Request) -> db.User | None:
     uid = request.session.get("user_id", None)
-    if uid:
-        return await db.get_user(uuid.UUID(uid))
-    return None
+    if not uid:
+        return None
+    user = await db.get_user(uuid.UUID(uid))
+    if not user:
+        return None
+    if not user.refresh_token:
+        # No token to ask with. Never checked (a TESTING mint, a hand-written legacy row) means
+        # carry on; checked once and now tokenless means archon refused for good, and every
+        # session of that user has to go, not just the one that saw the refusal.
+        return None if user.roles_checked_at else user
+    if user.roles_checked_at and datetime.datetime.now(datetime.UTC) - user.roles_checked_at < (
+        ROLES_MAX_AGE
+    ):
+        return user
+    if not await db.claim_roles_check(user):
+        return user  # another request is spending the token; its answer lands on the next one
+    return await recheck_roles(request, user)
+
+
+async def recheck_roles(request: Request, user: db.User) -> db.User | None:
+    """Ask archon what this user is now. Only ever called by whoever claimed the check."""
+    try:
+        tokens = await archon.refresh(user.refresh_token)
+        info = await archon.userinfo(tokens["access_token"])
+    except archon.Error as exc:
+        logger.exception("archon roles re-check failed")
+        if exc.status != 400:
+            return user  # unreachable, not refusing: keep the roles we have until the next hour
+        info = {}
+    if not info.get("vekn_id"):
+        # A refusal is final — dead token chain, revoked consent, the 30d expiry — and losing the
+        # VEKN id is the same answer login gives: not a member any more.
+        await db.set_user_roles(user.uid, user.vekn, False, None)
+        request.session.pop("user_id", None)
+        request.session["alert"] = "Your archon session expired, please log in again."
+        return None
+    return await db.set_user_roles(
+        user.uid,
+        info["vekn_id"],
+        archon.is_approver(info.get("roles", [])),
+        tokens["refresh_token"],
+    )
 
 
 async def require_user(user: db.User | None = Depends(get_current_user)) -> db.User:
     if not user:
-        raise HTTPException(401)
-    return user
-
-
-async def require_admin(user: db.User = Depends(require_user)) -> db.User:
-    if user.category != db.UserCategory.ADMIN:
         raise HTTPException(401)
     return user
 
@@ -89,7 +125,7 @@ async def proposal_update(request: Request):
         if not prop:
             raise HTTPException(405)
         prop = proposal.Proposal(**prop)
-        if prop.usr != str(user.uid) and user.category == db.UserCategory.BASIC:
+        if prop.usr != str(user.uid) and not user.approver:
             raise ValueError("You cannot modify someone else's proposal")
         yield ProposalCtx(request=request, conn=conn, prop=prop, user=user)
         await db.update_proposal(conn, asdict(prop))
@@ -243,7 +279,7 @@ async def submit_proposal(ctx: ProposalCtx = Depends(proposal_update)):
 
 @router.post("/proposal/approve")
 async def approve_proposal(ctx: ProposalCtx = Depends(proposal_update)):
-    if ctx.user.category not in [db.UserCategory.RULEMONGER, db.UserCategory.ADMIN]:
+    if not ctx.user.approver:
         raise HTTPException(401)
     update_proposal_from_params(ctx.prop, await get_params(ctx.request))
     if not ctx.prop.channel_id:

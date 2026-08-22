@@ -2,7 +2,6 @@
 // toggle, login, and the proposal lifecycle. Ruling/group editing is not here — it is the island.
 import { ready, debounce, showToast, displayError, do_fetch } from "./net.js"
 import { serialize } from "../island/tokens"
-import type { SelectItem } from "./net.js"
 export { ready, do_fetch, displayError } from "./net.js"
 
 function displayConsistencyErrors(errors: ConsistencyError[]) {
@@ -174,14 +173,12 @@ function setupGroups() {
     })
 }
 
-// --- autocomplete: live search. Flat mode ({label,value} → ?uid=value on the current page, used
-// by admin user search); grouped mode ({cards,groups,rulings} → per-item url, the main box). ---
+// --- autocomplete: live search over {cards,groups,rulings}, each item carrying its own url. ---
 interface AcItem { label: string; href: string; secondary?: string }
 
 function setupAutocomplete(input: HTMLInputElement) {
     const server = input.dataset.server
     if (!server) return
-    const grouped = input.dataset.grouped === "true"
     const threshold = Number(input.dataset.suggestionsThreshold || 1)
     const menu = document.createElement("div")
     menu.className = "ac-menu"
@@ -204,13 +201,7 @@ function setupAutocomplete(input: HTMLInputElement) {
         if (h) input.removeAttribute("aria-activedescendant")
     }
 
-    const uidHref = (value: string): string => {
-        const u = new URL(window.location.href)
-        u.searchParams.delete("uid"); u.searchParams.delete("prop"); u.searchParams.set("uid", value)
-        return u.pathname + u.search
-    }
     const toSections = (data: any): typeof sections => {
-        if (!grouped) return [{ items: (data as SelectItem[]).map((d) => ({ label: d.label, href: uidHref(d.value) })) }]
         return [
             { title: "Cards", items: (data.cards || []).map((c: any) => ({ label: c.label, href: c.url })) },
             { title: "Groups", items: (data.groups || []).map((g: any) => ({ label: g.label, href: g.url })) },

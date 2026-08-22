@@ -4,7 +4,6 @@ import logging
 import os
 import secrets
 import urllib.parse
-import uuid
 from dataclasses import asdict
 
 import aiofiles
@@ -13,6 +12,7 @@ import click
 import jinja2.exceptions
 import krcg.loader
 import markupsafe
+import psycopg.errors
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -218,33 +218,6 @@ async def data_error(request: Request, error: Exception):
     return JSONResponse(error.args[:1], status_code=400)
 
 
-@app.get("/user/search")
-async def user_search(request: Request, user: db.User = Depends(api.require_admin)):
-    vekn = request.query_params.get("query", None)
-    if not vekn:
-        return []
-    users = await db.complete_user_vekn(vekn)
-    return [{"label": u.vekn, "value": str(u.uid)} for u in users]
-
-
-@app.post("/user/promote")
-async def user_promote(request: Request, user: db.User = Depends(api.require_admin)):
-    uid = (await api.get_params(request)).get("uid", None)
-    if not uid:
-        raise HTTPException(404)
-    await db.make_user(uid, db.UserCategory.RULEMONGER)
-    return RedirectResponse("/admin.html", status_code=302)
-
-
-@app.post("/user/demote")
-async def user_demote(request: Request, user: db.User = Depends(api.require_admin)):
-    uid = (await api.get_params(request)).get("uid", None)
-    if not uid:
-        raise HTTPException(404)
-    await db.make_user(uid, db.UserCategory.BASIC)
-    return RedirectResponse("/admin.html", status_code=302)
-
-
 def local_next(request: Request) -> str:
     """`next` comes back from a link anyone can craft, and /login is a plain GET: an absolute or
     protocol-relative value would walk the user through a real archon login and land them offsite."""
@@ -280,7 +253,16 @@ async def login_callback(request: Request):
         return login_failed(
             request, "You need a VEKN ID to contribute — claim yours on archon, then log in again."
         )
-    user = await db.get_or_create_user(info["vekn_id"])
+    try:
+        user = await db.login_user(
+            info["sub"],
+            info["vekn_id"],
+            archon.is_approver(info.get("roles", [])),
+            tokens["refresh_token"],
+        )
+    except psycopg.errors.UniqueViolation:
+        logger.exception("archon login collided on vekn %s", info["vekn_id"])
+        return login_failed(request, "That VEKN ID is already linked to another archon account.")
     request.session["user_id"] = str(user.uid)
     return RedirectResponse(pending["next"], status_code=302)
 
@@ -293,11 +275,16 @@ def login_failed(request: Request, message: str) -> RedirectResponse:
 
 @app.post("/login")
 async def login_testing(request: Request):
-    """Session mint for the test suite — the real flow is GET /login through archon."""
+    """Session mint for the test suite — the real flow is GET /login through archon.
+
+    No refresh token, so `get_current_user` never re-checks these rows against archon.
+    """
     if not TESTING:
         raise HTTPException(404)
     params = await api.get_params(request)
-    user = await db.get_or_create_user(params["username"])
+    user = await db.login_user(
+        params["username"], params["username"], bool(params.get("approver")), None
+    )
     request.session["user_id"] = str(user.uid)
     return RedirectResponse(local_next(request), status_code=302)
 
@@ -346,7 +333,9 @@ async def index(request: Request, page: str, user: db.User | None = Depends(api.
                 ],
             }
     if user:
-        context["user"] = asdict(user)
+        # Not asdict(user): the row holds the archon refresh token, a credential with no business
+        # one `{{ user }}` away from the HTML.
+        context["user"] = {"vekn": user.vekn, "approver": user.approver}
     manager = api.build_manager(request, current_prop)
     if current_prop is not None:
         prop = current_prop
@@ -358,7 +347,7 @@ async def index(request: Request, page: str, user: db.User | None = Depends(api.
             "groups": [],
             "cards": [],
         }
-        if user and (prop.usr == str(user.uid) or user.category != db.UserCategory.BASIC):
+        if user and (prop.usr == str(user.uid) or user.approver):
             proposal_dict["editable"] = True
         for target in prop.rulings:
             if target.startswith(("G", "P")):
@@ -441,7 +430,7 @@ async def index(request: Request, page: str, user: db.User | None = Depends(api.
                 }
                 for p in mine
             ]
-            if user.category != db.UserCategory.BASIC:
+            if user.approver:
                 others = [
                     proposal.Proposal(**p)
                     for p in await db.get_submitted_proposals(ACTIVE_PROPOSALS_CAP)
@@ -453,14 +442,6 @@ async def index(request: Request, page: str, user: db.User | None = Depends(api.
                 ]
         if current_prop is not None:
             context["diff"] = asdict(manager.diff())
-    elif page == "admin.html":
-        if not user or user.category != db.UserCategory.ADMIN:
-            raise HTTPException(401)
-        uid = request.query_params.get("uid", None)
-        if uid:
-            context["users"] = [await db.get_user(uuid.UUID(uid))]
-        else:
-            context["users"] = await db.get_50_users()
     return templates.TemplateResponse(request, page, context)
 
 
@@ -472,9 +453,3 @@ def main():
 @main.command()
 def resetdb():
     db.reset()
-
-
-@main.command()
-@click.argument("username")
-def makeadmin(username: str):
-    db.make_admin(username)

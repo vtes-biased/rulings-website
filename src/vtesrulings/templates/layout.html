@@ -59,9 +59,6 @@
                     aria-label="active proposal"></span>{% endif %}
             </a>
             {% endif %}
-            {% if user and user.category == 'ADMIN' %}
-            <a class="nav-link" href="admin.html{{ search_params }}">Admin</a>
-            {% endif %}
             <div class="ml-auto flex items-center gap-2">
                 <button type="button" id="themeToggle" class="nav-link" aria-label="Toggle theme">
                     {{ icon("circle-half") }}

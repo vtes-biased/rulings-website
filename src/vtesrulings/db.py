@@ -1,5 +1,5 @@
 import dataclasses
-import enum
+import datetime
 import logging
 import os
 import uuid
@@ -34,17 +34,16 @@ POOL = psycopg_pool.AsyncConnectionPool(
 )
 
 
-class UserCategory(enum.StrEnum):
-    BASIC = "BASIC"
-    RULEMONGER = "RULEMONGER"
-    ADMIN = "ADMIN"
-
-
 @dataclasses.dataclass
 class User:
+    """Mirrors archon: `approver` and `vekn` are copies of what userinfo last said."""
+
     uid: uuid.UUID
     vekn: str
-    category: UserCategory = UserCategory.BASIC
+    archon_uid: str | None = None
+    approver: bool = False
+    refresh_token: str | None = None
+    roles_checked_at: datetime.datetime | None = None
 
 
 async def init():
@@ -54,8 +53,25 @@ async def init():
             "CREATE TABLE IF NOT EXISTS users("
             "uid UUID DEFAULT gen_random_uuid() PRIMARY KEY, "
             "vekn TEXT UNIQUE, "
-            "category TEXT)"
+            "archon_uid TEXT UNIQUE, "
+            "approver BOOLEAN NOT NULL DEFAULT FALSE, "
+            "refresh_token TEXT, "
+            "roles_checked_at TIMESTAMPTZ)"
         )
+        # No migration tool: an existing table is brought up to that shape here, so every
+        # statement must be idempotent. The old `category` is dropped rather than backfilled into
+        # `approver` — a backfilled approver has no refresh token to re-check, so it would stay an
+        # approver forever. Approvers log in again after the cutover, which they must anyway to
+        # seed a refresh token.
+        await cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS archon_uid TEXT UNIQUE")
+        await cursor.execute(
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS approver BOOLEAN NOT NULL DEFAULT FALSE"
+        )
+        await cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS refresh_token TEXT")
+        await cursor.execute(
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS roles_checked_at TIMESTAMPTZ"
+        )
+        await cursor.execute("ALTER TABLE users DROP COLUMN IF EXISTS category")
         await cursor.execute(
             "CREATE TABLE IF NOT EXISTS proposals("
             "uid TEXT PRIMARY KEY, "
@@ -71,22 +87,51 @@ def reset():
         cursor.execute("DROP TABLE users")
 
 
-async def get_or_create_user(vekn: str) -> User:
+async def login_user(archon_uid: str, vekn: str, approver: bool, refresh_token: str | None) -> User:
+    """Resolve an archon login: by archon uid, else adopt the legacy row holding that VEKN id.
+
+    Legacy rows keyed on a vekn.net *username* rather than an id are not adopted — they get a
+    fresh row and their in-flight proposals go with the old one. Hand-mapped before the cutover.
+
+    `roles_checked_at` is stamped only when a refresh token comes with it: a row that has never
+    been checked (a TESTING mint, a hand-written legacy row) must not read as one whose token
+    archon later killed. See `api.get_current_user`.
+    """
+    checked = datetime.datetime.now(datetime.UTC) if refresh_token else None
     async with (
         POOL.connection() as conn,
         conn.cursor(row_factory=psycopg.rows.class_row(User)) as cursor,
     ):
-        ret = await cursor.execute("SELECT * FROM users WHERE vekn=%s FOR UPDATE", [vekn])
-        ret = await ret.fetchone()
-        if ret:
-            return ret
         ret = await cursor.execute(
-            "INSERT INTO users VALUES (DEFAULT, %s, %s) RETURNING *",
-            [vekn, UserCategory.BASIC],
+            "UPDATE users SET vekn=%s, approver=%s, refresh_token=%s, roles_checked_at=%s "
+            "WHERE archon_uid=%s RETURNING *",
+            [vekn, approver, refresh_token, checked, archon_uid],
         )
-        ret = await ret.fetchone()
-        assert ret is not None  # INSERT ... RETURNING * always yields a row
-        return ret
+        user = await ret.fetchone()
+        if user:
+            return user
+        ret = await cursor.execute(
+            "UPDATE users SET archon_uid=%s, approver=%s, refresh_token=%s, roles_checked_at=%s "
+            "WHERE archon_uid IS NULL AND vekn=%s RETURNING *",
+            [archon_uid, approver, refresh_token, checked, vekn],
+        )
+        user = await ret.fetchone()
+        if user:
+            return user
+        # ON CONFLICT rather than a plain INSERT: two first logins of the same account can race
+        # here, and the loser must get the row, not a 500. A `vekn` already linked to another
+        # archon account still raises — login_callback turns that into a message.
+        ret = await cursor.execute(
+            "INSERT INTO users (archon_uid, vekn, approver, refresh_token, roles_checked_at) "
+            "VALUES (%s, %s, %s, %s, %s) ON CONFLICT (archon_uid) DO UPDATE SET "
+            "vekn=EXCLUDED.vekn, approver=EXCLUDED.approver, "
+            "refresh_token=EXCLUDED.refresh_token, roles_checked_at=EXCLUDED.roles_checked_at "
+            "RETURNING *",
+            [archon_uid, vekn, approver, refresh_token, checked],
+        )
+        user = await ret.fetchone()
+        assert user is not None  # INSERT ... RETURNING * always yields a row
+        return user
 
 
 async def get_user(uid: uuid.UUID) -> User | None:
@@ -98,49 +143,36 @@ async def get_user(uid: uuid.UUID) -> User | None:
         return await ret.fetchone()
 
 
-async def get_50_users() -> list[User]:
-    async with (
-        POOL.connection() as conn,
-        conn.cursor(row_factory=psycopg.rows.class_row(User)) as cursor,
-    ):
-        ret = await cursor.execute("SELECT * FROM users LIMIT 50")
-        return await ret.fetchall()
+async def claim_roles_check(user: User) -> bool:
+    """Stamp the row as checked *before* asking archon, and report whether we got the claim.
+
+    Archon revokes the whole refresh-token chain when a rotated token is reused, so exactly one
+    request may spend the stored token. Claiming with a conditional UPDATE rather than holding
+    the row locked keeps a pool connection (of ten) out of an HTTP round-trip. The stamp lands
+    either way, so a failed check retries in an hour rather than on the next request.
+    """
+    async with POOL.connection() as conn, conn.cursor() as cursor:
+        ret = await cursor.execute(
+            "UPDATE users SET roles_checked_at=now() "
+            "WHERE uid=%s AND roles_checked_at IS NOT DISTINCT FROM %s",
+            [user.uid, user.roles_checked_at],
+        )
+        return ret.rowcount > 0
 
 
-async def complete_user_vekn(vekn: str) -> list[User]:
-    vekn = vekn.strip().replace("%", "")
+async def set_user_roles(
+    uid: uuid.UUID, vekn: str, approver: bool, refresh_token: str | None
+) -> User | None:
     async with (
         POOL.connection() as conn,
         conn.cursor(row_factory=psycopg.rows.class_row(User)) as cursor,
     ):
         ret = await cursor.execute(
-            "SELECT * FROM users WHERE vekn ILIKE %s LIMIT 10", [f"%{vekn}%"]
+            "UPDATE users SET vekn=%s, approver=%s, refresh_token=%s, roles_checked_at=now() "
+            "WHERE uid=%s RETURNING *",
+            [vekn, approver, refresh_token, uid],
         )
-        return await ret.fetchall()
-
-
-async def make_user(uid: uuid.UUID, category: UserCategory) -> None:
-    async with (
-        POOL.connection() as conn,
-        conn.cursor(row_factory=psycopg.rows.class_row(User)) as cursor,
-    ):
-        ret = await cursor.execute(
-            "UPDATE users SET category=%s WHERE uid=%s AND category <> 'ADMIN'",
-            [category, uid],
-        )
-        if ret.rowcount < 1:
-            raise ValueError(f"User '{uid}' not found")
-
-
-def make_admin(username: str):
-    with psycopg.connect(CONNINFO) as conn, conn.cursor() as cursor:
-        ret = cursor.execute(
-            "UPDATE users SET category=%s WHERE vekn=%s",
-            [UserCategory.ADMIN, username],
-        )
-        if ret.rowcount < 1:
-            raise ValueError(f"User '{username}' not found")
-        logger.warning("%s is now admin", username)
+        return await ret.fetchone()
 
 
 async def all_proposal_ids() -> set[str]:
