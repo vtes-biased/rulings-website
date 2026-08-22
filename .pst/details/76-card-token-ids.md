@@ -50,6 +50,18 @@ That is the whole argument: the fix is already in the file, applied to keys only
 So 1 must change in the same commit as the serializer, or the next approval
 pushes a stale header back over the migrated file. 3 follows 1.
 
+## Deploy: drain the proposals first
+
+Renumbering strands anything already editing one of those 606 rulings. A proposal
+is an overlay keyed on the uid the ruling had when it was edited, and the base it
+merges against reloads with a new one — `Manager.update_ruling` looks up
+`self.base.rulings[target_uid][uid]`, so a `MODIFIED` or `DELETED` entry on a
+token-bearing ruling has nothing to resolve against.
+
+Proposals are transient by design — nothing permanent lives outside the YAML — so
+draining them is the fix, not migrating the payloads. Approve or discard what is
+open before the deploy, and check the count in prod first.
+
 ## DECIDED — the uid hashes tokens reduced to their id
 
 `uid = utils.stable_hash(text)` over the normalized text, so rewriting tokens
