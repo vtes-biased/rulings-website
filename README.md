@@ -58,10 +58,11 @@ DISCORD_SERVER_ID=<your Discord server id>
 ```
 
 Other vars the app reads (all optional locally):
-`SESSION_SECRET_KEY`, `SITE_URL_BASE`, `DATABASE_URL` (and `DB_NAME`/`DB_USER`/`DB_PWD`),
+`SESSION_SECRET_KEY`, `SITE_URL_BASE`, `ARCHON_URL`, `ARCHON_CLIENT_ID`, `ARCHON_CLIENT_SECRET`
+(the OAuth client login runs through), `DATABASE_URL` (and `DB_NAME`/`DB_USER`/`DB_PWD`),
 `RULINGS_GIT`, `RULINGS_GITHUB_{APP_ID,INSTALLATION_ID,PRIVATE_KEY}` (the GitHub App used to push
 approvals), `KRCG_STATIC_{REPO,INSTALLATION_ID}`, `GIT_AUTHOR_{NAME,EMAIL}`, and `GIT_SSH_COMMAND`.
-`TESTING=1` bypasses real VEKN login validation.
+`TESTING=1` turns `POST /login` into a direct session mint, bypassing archon.
 
 > On startup the app needs network access: it clones the rulings repo to a temp dir and loads the
 > full VEKN card database via `krcg`.

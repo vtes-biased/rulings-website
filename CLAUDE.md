@@ -42,7 +42,7 @@ Frontend build only: `npm run build` (or `npm run front` to watch).
 - Network access: on startup the app clones the rulings repo to a temp dir and loads the full VEKN card database via `krcg` (`load_local`).
 - **Tests are hermetic** (no SSH/network): `conftest.py` serves a vendored rulings snapshot (`tests/fixtures/rulings/`, pinned commit in `SOURCE`) as a local bare git remote via `RULINGS_GIT`, and runs against a throwaway `vtes-rulings-test` database it creates/drops per session — so the role needs `CREATEDB` and access to the `postgres` maintenance DB. Card data is pinned by the locked `krcg` version (`load_local` reads krcg-packaged CSVs, no network).
 
-Key env vars (`.env`): `DISCORD_WEBHOOK`, `DISCORD_SERVER_ID`. Also read: `SESSION_SECRET_KEY`, `SITE_URL_BASE`, `DATABASE_URL`, `RULINGS_GIT`, `RULINGS_GITHUB_{APP_ID,INSTALLATION_ID,PRIVATE_KEY}`, `KRCG_STATIC_{REPO,INSTALLATION_ID}` (approval→krcg-static rebuild dispatch), `GIT_AUTHOR_{NAME,EMAIL}` (bot identity), and `GIT_SSH_COMMAND` (only if `RULINGS_GIT` is an ssh remote). Vars are read directly via `os.getenv` — notably `TESTING=1` bypasses real VEKN login validation. Deploy to gravelines lives in `ansible/` (see `ansible/README.md`).
+Key env vars (`.env`): `DISCORD_WEBHOOK`, `DISCORD_SERVER_ID`, `ARCHON_URL`, `ARCHON_CLIENT_ID`, `ARCHON_CLIENT_SECRET` (the OAuth client registered on archon; `SITE_URL_BASE` builds the redirect URI archon matches **exactly**). Also read: `SESSION_SECRET_KEY`, `SITE_URL_BASE`, `DATABASE_URL`, `RULINGS_GIT`, `RULINGS_GITHUB_{APP_ID,INSTALLATION_ID,PRIVATE_KEY}`, `KRCG_STATIC_{REPO,INSTALLATION_ID}` (approval→krcg-static rebuild dispatch), `GIT_AUTHOR_{NAME,EMAIL}` (bot identity), and `GIT_SSH_COMMAND` (only if `RULINGS_GIT` is an ssh remote). Vars are read directly via `os.getenv` — notably `TESTING=1` turns `POST /login` into a direct session mint, bypassing archon. Deploy to gravelines lives in `ansible/` (see `ansible/README.md`).
 
 ## Architecture
 
@@ -65,7 +65,7 @@ Request lifecycle for edits: `api.py` FastAPI dependencies `proposal_update` (a 
 - Ruling text embeds: discipline/type **symbols** in brackets `[pot]`, **card names** in braces `{Abbot}`, and **reference ids** in brackets `[LSJ 20040518]`. `utils.py` holds the regexes, the `ANKHA_SYMBOLS` map (text→font glyph), and reference validation (`RULING_AUTHORS` date windows + allowed `RULING_DOMAINS`).
 
 ### Users & auth
-Login proxies to the VEKN site API (`/login`), stores `user_id` in session. `db.UserCategory` is `BASIC` / `RULEMONGER` / `ADMIN`; rulemongers+admins can approve, admins manage users (`admin.html`, `/user/*` routes). CLI (click group `main`, wired to the `rulings-web` script): `rulings-web resetdb`, `rulings-web makeadmin <vekn>`.
+Login is an OAuth2 authorization-code + PKCE handshake against **archon** (`archon.py`): `GET /login` parks a state and a verifier in the session and sends the user to archon's *frontend* consent page (which forwards its query to `/oauth/authorize` verbatim, so `response_type` and `code_challenge_method` ride in that URL); `GET /login/callback` — declared above the `/{page:path}` catch-all, which would otherwise swallow it — exchanges the code (**JSON body**, archon's divergence from form encoding), reads `/oauth/userinfo` for `{sub, roles, vekn_id, capabilities}` and stores `user_id` in session. No VEKN password ever reaches us; a user with no `vekn_id` is refused. `POST /login` survives as a `TESTING`-only session mint. `db.UserCategory` is `BASIC` / `RULEMONGER` / `ADMIN`; rulemongers+admins can approve, admins manage users (`admin.html`, `/user/*` routes). CLI (click group `main`, wired to the `rulings-web` script): `rulings-web resetdb`, `rulings-web makeadmin <vekn>`.
 
 ## Module map (`src/vtesrulings/`)
 - `__init__.py` — FastAPI app, ASGI lifespan (loads cards + clones rulings repo onto `app.state`), page routes, `SessionMiddleware`, StaticFiles mount, Jinja template filters (`symbolreplace`, `cardreplace`, `newlines`), login/admin routes, CLI commands.
@@ -75,6 +75,7 @@ Login proxies to the VEKN site API (`/login`), stores `user_id` in session. `db.
 - `models.py` — pydantic dataclasses for the domain (`Index`, `Ruling`, `Group`, `Reference`, `Card`, `State`, …).
 - `db.py` — psycopg async pool; users & proposals persistence.
 - `utils.py` — hashing, symbol/card/reference parsing, reference building & validation.
+- `archon.py` — the archon OAuth2 client: consent URL + PKCE, token exchange/refresh, userinfo.
 - `discord.py` — webhook posts (submit creates a thread, approve posts to it).
 - `scraper.py` — scrapes VEKN forum pages to auto-derive a reference id from a URL.
 

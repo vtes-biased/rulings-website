@@ -1,10 +1,14 @@
+import base64
+import hashlib
 import typing
+import urllib.parse
 
 import krcg.collections
 import markupsafe
 import pytest
 
 import vtesrulings
+import vtesrulings.archon
 import vtesrulings.discord
 from vtesrulings import models, repository, utils
 
@@ -1613,3 +1617,55 @@ async def test_card_page_links_named_cards(client):
         in body
     )
     assert "&lt;" not in body
+
+
+@pytest.mark.asyncio
+async def test_login_redirects_to_the_archon_consent_page(client):
+    """The consent page hands its query to GET /oauth/authorize verbatim, which 400s without
+    response_type and code_challenge_method — so the redirect must carry them itself."""
+    response = await client.get("/login?next=/groups.html")
+    assert response.status_code == 302
+    url = urllib.parse.urlparse(response.headers["location"])
+    assert f"{url.scheme}://{url.netloc}{url.path}" == f"{vtesrulings.archon.ARCHON_URL}/consent"
+    params = dict(urllib.parse.parse_qsl(url.query))
+    assert params["response_type"] == "code"
+    assert params["code_challenge_method"] == "S256"
+    assert params["scope"] == "profile:read"
+    assert params["redirect_uri"] == vtesrulings.archon.REDIRECT_URI
+    assert params["state"]
+    assert params["code_challenge"]
+
+
+def test_authorization_url_challenges_with_the_verifier_digest():
+    verifier = "the-verifier"
+    params = dict(
+        urllib.parse.parse_qsl(
+            urllib.parse.urlparse(vtesrulings.archon.authorization_url("the-state", verifier)).query
+        )
+    )
+    digest = hashlib.sha256(verifier.encode("ascii")).digest()
+    expected = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
+    assert params["code_challenge"] == expected
+
+
+@pytest.mark.asyncio
+async def test_login_callback_refuses_a_state_it_did_not_issue(client):
+    """No pending handshake in session (or a mismatched state) must not reach archon at all —
+    the test would hang on a real HTTP call if it did."""
+    response = await client.get("/login/callback?code=whatever&state=forged")
+    assert response.status_code == 302
+    assert response.headers["location"] == "/index.html"
+    page = await client.get("/index.html")
+    assert "Login was cancelled or timed out" in page.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("hostile", ["https://evil.tld/", "//evil.tld/", "/\\evil.tld"])
+async def test_login_refuses_an_offsite_next(client, hostile):
+    """`next` rides a link anyone can craft, and login is a plain GET — an absolute or
+    protocol-relative value would land the user offsite after a genuine login."""
+    response = await client.post(
+        f"/login?next={urllib.parse.quote(hostile)}", data={"username": "test-user"}
+    )
+    assert response.status_code == 302
+    assert response.headers["location"] == "/index.html"

@@ -2,12 +2,12 @@ import contextlib
 import importlib.metadata
 import logging
 import os
+import secrets
 import urllib.parse
 import uuid
 from dataclasses import asdict
 
 import aiofiles
-import aiohttp
 import asgiref.sync
 import click
 import jinja2.exceptions
@@ -19,7 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import api, db, discord, proposal, repository, utils
+from . import api, archon, db, discord, proposal, repository, utils
 
 logger = logging.getLogger()
 version = importlib.metadata.version("vtes-rulings")
@@ -245,31 +245,68 @@ async def user_demote(request: Request, user: db.User = Depends(api.require_admi
     return RedirectResponse("/admin.html", status_code=302)
 
 
-@app.post("/login")
-async def login(request: Request):
+def local_next(request: Request) -> str:
+    """`next` comes back from a link anyone can craft, and /login is a plain GET: an absolute or
+    protocol-relative value would walk the user through a real archon login and land them offsite."""
     next = request.query_params.get("next", "/index.html")
-    params = await api.get_params(request)
+    if not next.startswith("/") or next.startswith(("//", "/\\")):
+        return "/index.html"
+    return next
+
+
+@app.get("/login")
+async def login(request: Request):
+    state = secrets.token_urlsafe(32)
+    verifier = secrets.token_urlsafe(64)
+    request.session["oauth"] = {"state": state, "verifier": verifier, "next": local_next(request)}
+    return RedirectResponse(archon.authorization_url(state, verifier), status_code=302)
+
+
+@app.get("/login/callback")
+async def login_callback(request: Request):
+    """Declared above the `/{page:path}` catch-all, which would otherwise swallow it."""
+    pending = request.session.pop("oauth", None)
+    code = request.query_params.get("code", "")
+    if not pending or not code or request.query_params.get("state", "") != pending["state"]:
+        # Also the path a denied consent takes: archon comes back with ?error=access_denied.
+        return login_failed(request, "Login was cancelled or timed out, please try again.")
+    try:
+        tokens = await archon.exchange_code(code, pending["verifier"])
+        info = await archon.userinfo(tokens["access_token"])
+    except archon.Error:
+        logger.exception("archon login failed")
+        return login_failed(request, "Archon refused the login, please try again.")
+    if not info.get("vekn_id"):
+        return login_failed(
+            request, "You need a VEKN ID to contribute — claim yours on archon, then log in again."
+        )
+    user = await db.get_or_create_user(info["vekn_id"])
+    request.session["user_id"] = str(user.uid)
+    return RedirectResponse(pending["next"], status_code=302)
+
+
+def login_failed(request: Request, message: str) -> RedirectResponse:
+    """Browser navigation, so the reason rides the session to the next page's alert."""
+    request.session["alert"] = message
+    return RedirectResponse("/index.html", status_code=302)
+
+
+@app.post("/login")
+async def login_testing(request: Request):
+    """Session mint for the test suite — the real flow is GET /login through archon."""
     if not TESTING:
-        async with aiohttp.ClientSession() as session:
-            async with session.post("https://www.vekn.net/api/vekn/login", data=params) as response:
-                result = await response.json()
-                try:
-                    token = result["data"]["auth"]
-                except:  # noqa: E722
-                    token = None
-            if not token:
-                raise HTTPException(401)
+        raise HTTPException(404)
+    params = await api.get_params(request)
     user = await db.get_or_create_user(params["username"])
     request.session["user_id"] = str(user.uid)
-    return RedirectResponse(next, status_code=302)
+    return RedirectResponse(local_next(request), status_code=302)
 
 
 @app.post("/logout")
 async def logout(request: Request):
-    next = request.query_params.get("next", "index.html")
     request.session.pop("user_id", None)
     request.session.pop("proposal", None)
-    return RedirectResponse(next, status_code=302)
+    return RedirectResponse(local_next(request), status_code=302)
 
 
 @app.get("/")
@@ -280,6 +317,9 @@ async def root():
 @app.get("/{page:path}")
 async def index(request: Request, page: str, user: db.User | None = Depends(api.get_current_user)):
     context = {}
+    alert = request.session.pop("alert", None)
+    if alert:
+        context["alert"] = {"text": alert}
     prop_uid = request.query_params.get("prop", None)
     current_prop = None
     if prop_uid and user:
@@ -360,7 +400,7 @@ async def index(request: Request, page: str, user: db.User | None = Depends(api.
                 context["og"] = {
                     "title": name,
                     "description": f"Official V:TES rulings for {name} — {len(current['cards'])} cards.",
-                    "url": f"{discord.SITE_URL_BASE.rstrip('/')}/groups.html?uid={uid}",
+                    "url": f"{discord.SITE_URL_BASE}/groups.html?uid={uid}",
                 }
             except KeyError:
                 raise HTTPException(404)
@@ -378,7 +418,7 @@ async def index(request: Request, page: str, user: db.User | None = Depends(api.
                     "title": name,
                     "description": f"Rulings and official clarifications for the V:TES card {name}.",
                     "image": current["img"],
-                    "url": f"{discord.SITE_URL_BASE.rstrip('/')}/index.html?uid={uid}",
+                    "url": f"{discord.SITE_URL_BASE}/index.html?uid={uid}",
                 }
             except KeyError:
                 raise HTTPException(404)

@@ -9,7 +9,7 @@ from . import models, proposal
 logger = logging.getLogger()
 DISCORD_WEBHOOK = os.getenv("DISCORD_WEBHOOK")
 DISCORD_SERVER_ID = os.getenv("DISCORD_SERVER_ID")
-SITE_URL_BASE = os.getenv("SITE_URL_BASE", "http://127.0.0.1:5000")
+SITE_URL_BASE = os.getenv("SITE_URL_BASE", "http://127.0.0.1:5000").rstrip("/")
 
 #: Discord's hard cap on an embed description.
 EMBED_LIMIT = 4096
