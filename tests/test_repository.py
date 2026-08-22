@@ -105,9 +105,43 @@ async def test_load_base_normalizes_card_tokens(app, tmp_path):
 
     index = await repository.load_base(repo, vtesrulings.app.state.cards_map)
     (ruling,) = index.rulings["100015"].values()
-    assert ruling.text == "Merge with {Theo Bell (G2 ADV)} or {Louhi}. [RTR 20070707]"
-    assert ruling.uid == utils.stable_hash(ruling.text)
+    assert ruling.text == (
+        "Merge with {201363|Theo Bell (G2 ADV)} or {200860|Louhi}. [RTR 20070707]"
+    )
+    assert ruling.uid == utils.hash_text(ruling.text)
     assert [c.uid for c in ruling.cards] == ["201363", "200860"]
+    # the uid follows the ids, not the names beside them: a card restyled upstream keeps it
+    assert (
+        utils.hash_text(
+            "Merge with {201363|Theo Bell, the Advanced} or {200860|Louhï}. [RTR 20070707]"
+        )
+        == ruling.uid
+    )
+
+
+async def test_build_ruling_stores_the_card_id_and_refreshes_the_name(app):
+    """The editor sends a bare name; what gets stored names the id, and the name follows the id.
+
+    A name in the file is display only — an id beside it means a stale one is simply rewritten,
+    where before it had to keep fuzzy-matching for the token to resolve at all.
+    """
+    cards = vtesrulings.app.state.cards_map
+    ruling = utils.build_ruling(cards, {}, "See {Abbot}.", models.NID(uid="100015", name="x"))
+    assert ruling.text == "See {100006|Abbot}."
+    # idempotent: the stored form is what the next save reads back
+    assert (
+        utils.build_ruling(cards, {}, ruling.text, models.NID(uid="100015", name="x")).text
+        == ruling.text
+    )
+    # a stale name is corrected from the id, not fuzzy-matched
+    stale = utils.build_ruling(cards, {}, "See {100006|Abbott}.", models.NID(uid="1", name="x"))
+    assert stale.text == "See {100006|Abbot}."
+    assert stale.uid == ruling.uid
+
+
+async def test_plain_text_drops_the_card_id(app):
+    """Search and snippets read the name; the id is structure, and would match on digits."""
+    assert utils.plain_text("See {100006|Abbot} and {Abbot}.") == "See Abbot and Abbot."
 
 
 async def test_build_ruling_dedupes_pasted_reference(app):

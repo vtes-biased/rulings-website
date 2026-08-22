@@ -170,9 +170,9 @@ async def test_get_card(client):
                 "overrides": {},
             },
             {
-                "uid": "WSPIAKSG",
+                "uid": "B4AFOOMF",
                 "target": {"uid": "G00110", "name": "Put card in play ignoring requirements"},
-                "text": "Requirements do not apply. If the cost is X (e.g. {Reanimated Corpse}), X is zero. If the effect puts/moves a minion into the ready region, that minion can act this turn. [LSJ 20100204] [LSJ 20040518-2] [LSJ 20100302-1]",
+                "text": "Requirements do not apply. If the cost is X (e.g. {101563|Reanimated Corpse}), X is zero. If the effect puts/moves a minion into the ready region, that minion can act this turn. [LSJ 20100204] [LSJ 20040518-2] [LSJ 20100302-1]",
                 "state": "ORIGINAL",
                 "kind": "RULING",
                 "symbols": [],
@@ -208,7 +208,7 @@ async def test_get_card(client):
                         "name": "Reanimated Corpse",
                         "printed_name": "Reanimated Corpse",
                         "img": "https://static.krcg.org/card/reanimatedcorpse.jpg",
-                        "text": "{Reanimated Corpse}",
+                        "text": "{101563|Reanimated Corpse}",
                     }
                 ],
                 "overrides": {},

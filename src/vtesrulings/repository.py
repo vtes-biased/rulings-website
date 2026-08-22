@@ -83,7 +83,8 @@ RULINGS_COMMENT = """# ## Design notes
 # ### Design details
 #
 # 1. The rulings can contain disciplines and card types symbols in brackets (eg. `[pot]`), see the list below
-# 2. The rulings can contain card names in braces (eg. `{Abbot}`)
+# 2. The rulings can contain cards in braces, in the same `<card_id>|<card_name>` form as the keys
+#    (eg. `{100006|Abbot}`), using the VEKN CSV cards IDs
 # 3. Each ruling ends with one or more rulings reference IDs in brackets.
 #    References URLs are listed in the [references.yaml](rulings/references.yaml) file
 # 4. Rulings are attached to a card, the format of the key is `<card_id>|<card_name>`, using the VEKN CSV cards IDs,
@@ -114,10 +115,12 @@ RULINGS_COMMENT = """# ## Design notes
 #
 # 2. We could have used **cards IDs only** and not bother with the cards name, but this would make this reference file
 #    unusable out of the box without the proper tooling. Such as it is, the file can be opened and a card searched for
-#    by name with just a text editor.
+#    by name with just a text editor. This is why both the keys and the braces carry the two together.
 #
-# 3. The **cards names** are the ones used in the VEKN CSV reference file. We could have opted for other alternatives,
-#    but we believe consistency with the existing reference is the stronger argument.
+# 3. The **cards names** were the ones used in the VEKN CSV reference file, for consistency with the existing
+#    reference. They are now the names as printed on the cards: the CSV files the article to the end, `Ankou, The`,
+#    and the cards do not. The ID beside each name is what identifies the card, so a name here is free to read the
+#    way the card does, and to be rewritten whenever the card data restyles it.
 #    Note different versions of the same vampires share the same name with different IDs (advanced, higher group).
 """
 

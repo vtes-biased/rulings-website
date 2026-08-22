@@ -24,8 +24,18 @@ type Tok =
 const symTok = (marker: string): Tok =>
     ({ t: "sym", marker, glyph: ANKHA_SYMBOLS[marker.slice(1, -1)] })
 
+// A stored marker names the card id ahead of the name, {101563|Reanimated Corpse}. Resolved chips
+// take their label from the ruling's card list; this is the fallback for a marker with nothing to
+// resolve against — pasted text — which must still read as a name, and be one for the lookup that
+// resolveCardChip runs on it.
+const markerName = (marker: string): string => {
+    const inner = marker.slice(1, -1)
+    const pipe = inner.indexOf("|")
+    return pipe > 0 && /^\d+$/.test(inner.slice(0, pipe)) ? inner.slice(pipe + 1) : inner
+}
+
 const cardTok = (marker: string, c?: CardSub): Tok => {
-    const fb = marker.slice(1, -1)
+    const fb = markerName(marker)
     return { t: "card", marker, label: c?.printed_name ?? fb, name: c?.name ?? fb, uid: c?.uid ?? "" }
 }
 

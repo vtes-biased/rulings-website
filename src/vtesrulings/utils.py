@@ -228,12 +228,27 @@ def parse_symbols(text: str) -> typing.Generator[models.SymbolSubstitution]:
         )
 
 
+def card_key(token: str) -> int | str:
+    """The CardDict key a {…} token resolves through: the card id it names, else the bare name.
+
+    An id is an exact key. A name resolves only through krcg's fuzzy matching, and since krcg 5.3
+    stores names as printed it may not even be the VEKN CSV's — which is why tokens carry the id."""
+    uid, pipe, _ = token[1:-1].partition("|")
+    return int(uid) if pipe and uid.isdigit() else token[1:-1]
+
+
+def card_name(token: str) -> str:
+    """The name part of a {…} token, for text meant to be read rather than resolved."""
+    uid, pipe, name = token[1:-1].partition("|")
+    return name if pipe and uid.isdigit() else token[1:-1]
+
+
 def parse_cards(
     card_map: krcg.collections.CardDict, text: str
 ) -> typing.Generator[models.CardSubstitution]:
     """Yield all cards in the given text."""
     for token in RE_CARD.findall(text):
-        card = card_map[token[1:-1]]
+        card = card_map[card_key(token)]
         yield models.CardSubstitution(
             text=token,
             uid=str(card.id),
@@ -244,10 +259,17 @@ def parse_cards(
 
 
 def normalize_cards(card_map: krcg.collections.CardDict, text: str) -> str:
-    """Tokens are hand-typed and only resolve through krcg's fuzzy matching, so a near-miss like
+    """Rewrite every token to the stored form, `{<card id>|<unique name>}`, the shape the ruling keys
+    use. Tokens are hand-typed and a bare name resolves only fuzzily, so a near-miss like
     {Theo Bell (ADV)} — which scores close against two different Theo Bells — could silently switch
-    printing on a card-data update. unique_name is always an exact key, so this is idempotent."""
-    return RE_CARD.sub(lambda m: "{" + card_map[m.group(0)[1:-1]].unique_name + "}", text)
+    printing on a card-data update. Resolving on the id instead settles it for good; the name rides
+    along so the file stays readable, and is refreshed here whenever krcg restyles it."""
+
+    def stored(match: re.Match) -> str:
+        card = card_map[card_key(match.group(0))]
+        return "{" + str(card.id) + "|" + card.unique_name + "}"
+
+    return RE_CARD.sub(stored, text)
 
 
 def normalize_emphasis(text: str) -> str:
@@ -297,11 +319,12 @@ def parse_references(
 
 def plain_text(text: str) -> str:
     """Ruling/card text stripped of markup for search and snippets: drop [symbol] and [REF]
-    tokens, unwrap {Card} braces and emphasis delimiters, collapse whitespace."""
+    tokens, reduce a {Card} token to the name it shows, unwrap emphasis delimiters, collapse
+    whitespace. The id a token carries is never searchable text."""
     text = RE_RULING_REFERENCE.sub("", text)
     text = RE_EMPHASIS.sub(r"\2", text)  # after the refs, as in ruling_body
     text = RE_SYMBOL.sub("", text)
-    text = RE_CARD.sub(lambda m: m.group(0)[1:-1], text)
+    text = RE_CARD.sub(lambda m: card_name(m.group(0)), text)
     return " ".join(text.split())
 
 
@@ -311,6 +334,15 @@ def stable_hash(s: str) -> str:
     """
     h = hashlib.shake_128(s.encode("utf-8")).digest(5)
     return base64.b32encode(h).decode("utf-8")
+
+
+def hash_text(text: str) -> str:
+    """The ruling uid: the text hashed with every card token cut down to the id it names.
+
+    The name beside the id is display, and krcg restyles names — 5.3 moved every article, `The
+    Ankou` for `Ankou, The`. Hashing the name would renumber each ruling naming a restyled card and
+    break its permalinks; hashing the id alone leaves the uid alone however the name is written."""
+    return stable_hash(RE_CARD.sub(lambda m: "{" + str(card_key(m.group(0))) + "}", text))
 
 
 def random_uid8() -> str:
@@ -329,7 +361,7 @@ def build_ruling(
     The uid is the stable_hash() of the text, or random if the text is empty.
     """
     text = dedupe_references(normalize_emphasis(normalize_cards(card_map, text)))
-    uid = stable_hash(text) if text else random_uid8()
+    uid = hash_text(text) if text else random_uid8()
     ruling = models.Ruling(target=target, uid=uid, text=text, state=state, kind=kind)
     ruling.symbols.extend(parse_symbols(text))
     ruling.cards.extend(parse_cards(card_map, text))
