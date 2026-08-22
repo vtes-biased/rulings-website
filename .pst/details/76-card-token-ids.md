@@ -58,7 +58,7 @@ any Discord thread linking them. That one-off churn is unavoidable — the store
 text changes, so the hash does.
 
 **What is avoidable is it happening again**, and that is the call: before hashing,
-reduce each token to its id (`{100807|Rebirth}` -> `{100807}`); the stored text
+reduce each token to its id (`{101565|Rebirth}` -> `{101565}`); the stored text
 keeps the name. Names can then drift forever — the next krcg rename, another
 printed-name correction — without renumbering a single ruling. The uid stops
 being derivable from the stored text by eye, which is the price.
