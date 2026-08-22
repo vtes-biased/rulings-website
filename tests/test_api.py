@@ -824,6 +824,27 @@ async def test_update_card_ruling(client):
 
 
 @pytest.mark.asyncio
+async def test_mistyped_reference_source_is_refused(client):
+    """A source that is not one — [KOT 20081119] sat in the repo for years — matches no reference
+    and would read as prose, dropping out of the ruling. The editor is told instead. Markers that
+    only look the part are left alone, and the base index still loads whatever the file holds."""
+    await login_and_proposal(client)
+    response = await client.put(
+        "/api/ruling/100002/KRO5H6MD",
+        json={"text": "New wording! [KOT 20081119]"},
+    )
+    assert response.status_code == 400
+    assert "names no ruling source" in response.json()[0]
+    response = await client.put(
+        "/api/ruling/100002/KRO5H6MD",
+        json={"text": "[ACTION MODIFIER] [1 CONVICTION] Fine. [REVERSAL] [ANK 20221011-3]"},
+    )
+    assert response.status_code == 200
+    # loading the base index never validates: a past commit's typo must not stop the app starting
+    assert utils.build_ruling({}, {}, "x [KOT 20081119]", target=models.NID(uid="1", name="x"))
+
+
+@pytest.mark.asyncio
 async def test_delete_card_ruling(client):
     # Let's remove the ruling on 419 Operation
     await login_and_proposal(client)

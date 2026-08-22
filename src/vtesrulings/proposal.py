@@ -369,6 +369,7 @@ class Manager:
         target: models.NID,
         kind: models.RulingKind = models.RulingKind.RULING,
     ) -> models.Ruling:
+        utils.check_reference_tokens(text)
         return utils.build_ruling(
             self.card_map,
             ModifiedDict(self.base.references, self.prop.references),
@@ -441,6 +442,7 @@ class Manager:
         if not target_uid.startswith(("G", "P")):
             raise ValueError("Overrides only apply to group rulings")
         text = utils.normalize_cards(self.card_map, (text or "").strip())
+        utils.check_reference_tokens(text)
         if text and not self._card_in_group(card_uid, target_uid):
             raise ValueError(f"Card {card_uid} is not a member of group {target_uid}")
         prop = self.prop.rulings.setdefault(target_uid, {})

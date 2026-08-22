@@ -30,6 +30,11 @@ RE_DUP_RULING_REFERENCE = re.compile(r"\s*(" + RE_RULING_REFERENCE.pattern + r")
 #: A cost marker carries its count inside the brackets, `[1 CONVICTION]` — the CSV's own form
 #: for an imbued power's cost. The count is captured apart: the ankha font maps digits to
 #: other icons, so it can never be rendered as part of the glyph. Mirrored in island/tokens.ts.
+#: A reference-shaped token with any three-letter prefix, not just the known sources: a mistyped
+#: source ([KOT 20081119] for [RTR 20081119], which sat in the repo for years) matches no reference
+#: and would otherwise read as prose, dropping out of the ruling unnoticed. The lookahead keeps an
+#: all-caps two-word marker ([NOT PLAYED]) from being read as one.
+RE_LOOSE_REFERENCE = re.compile(r"\[([A-Z]{3})\s(?![A-Z])[\w-]+\]")
 RE_SYMBOL = re.compile(r"\[(?:(\d+) )?(" + r"|".join(ANKHA_SYMBOLS) + r")\]")
 RE_CARD = re.compile(r"{[^}]+}")
 #: Markdown-like emphasis in ruling text: **bold**/__bold__, *italic*/_italic_. The delimiter must
@@ -206,6 +211,16 @@ def parse_references(
             date=reference.date,
             text=token,
         )
+
+
+def check_reference_tokens(text: str) -> None:
+    """Raise on a reference token whose source is not one. Edit-time only — the base index loads
+    whatever a past commit left in the file, and must not fail to start over it."""
+    for match in RE_LOOSE_REFERENCE.finditer(text):
+        if match.group(1) not in RULING_AUTHORS:
+            raise ValueError(
+                f"{match.group(0)} names no ruling source: use one of {', '.join(RULING_AUTHORS)}"
+            )
 
 
 def plain_text(text: str) -> str:
