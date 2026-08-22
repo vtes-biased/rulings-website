@@ -18,6 +18,8 @@ RULING_AUTHORS = krcg.rulings.RULING_AUTHORS
 RE_RULING_REFERENCE = krcg.rulings.RE_RULING_REFERENCE
 RE_CARD = krcg.rulings.RE_CARD
 RE_REMINDER = krcg.rulings.RE_REMINDER
+#: Two groups, the count a cost marker carries and the key beside it. See parse_symbols.
+RE_SYMBOL = krcg.rulings.RE_SYMBOL
 
 RULING_DOMAINS = {
     "boardgamegeek.com",
@@ -30,10 +32,6 @@ RULING_DOMAINS = {
 #: Same reference token, plus the whitespace ahead of it, so dedupe_references drops the gap with
 #: the marker.
 RE_DUP_RULING_REFERENCE = re.compile(r"\s*(" + RE_RULING_REFERENCE.pattern + r")")
-#: The one regex krcg does not own: a cost marker carries its count inside the brackets,
-#: `[1 CONVICTION]` — the CSV's own form for an imbued power's cost — and the count is captured
-#: apart, the ankha font drawing digits as other icons. Mirrored in island/tokens.ts.
-RE_SYMBOL = re.compile(r"\[(?:(\d+) )?(" + r"|".join(ANKHA_SYMBOLS) + r")\]")
 #: A bracket token reading as a reference id — a source, then something long and numeric enough to
 #: be a date. What check_reference_tokens measures against the references that resolve.
 RE_REFERENCE_SHAPED = re.compile(r"\[[^\]\n]*\s\d{6,}[\w-]*\]")
@@ -111,13 +109,8 @@ def check_reference(reference: models.Reference) -> None:
 
 def parse_symbols(text: str) -> typing.Generator[models.SymbolSubstitution]:
     """Yield all symbols in the given text. See ANKHA_SYMBOLS."""
-    for match in RE_SYMBOL.finditer(text):
-        count, key = match.groups()
-        yield models.SymbolSubstitution(
-            text=match.group(0),
-            symbol=ANKHA_SYMBOLS[key],
-            count=count or "",
-        )
+    for token, symbol, count in krcg.rulings.parse_symbols(text):
+        yield models.SymbolSubstitution(text=token, symbol=symbol, count=count)
 
 
 def card_key(token: str) -> int | str:

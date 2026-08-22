@@ -807,7 +807,7 @@ wheels = [
 
 [[package]]
 name = "krcg"
-version = "5.10"
+version = "5.11"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
@@ -817,9 +817,9 @@ dependencies = [
     { name = "pyyaml" },
     { name = "unidecode" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/0e/8b/a724472cc3a5119209e0b52403aee73a4d38bd360f4fade76333724f3a1f/krcg-5.10.tar.gz", hash = "sha256:3c29ca4c13103330be16149b3a632c8632badacca3ff1dcb55a0b7206f30ba44", size = 1932095, upload-time = "2026-08-22T17:54:52.985Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/09/bc/dd7260be5e60222cb7738312b89ecb714d5af4e38f3813f97dad6ca15105/krcg-5.11.tar.gz", hash = "sha256:b3dc21f64d778a2412438d6687f0aff4844d20a0f3b52e89b9099ef80473638e", size = 1932741, upload-time = "2026-08-22T21:13:08.226Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c2/3e/9249ac054b8bb5380594d2f085faf75c1e952191c9a4b7af6e8a37d367c9/krcg-5.10-py3-none-any.whl", hash = "sha256:852011c7864f79e985bb264ed20ef2e34829871d1d13717bcf5a209e36ff29e4", size = 1884094, upload-time = "2026-08-22T17:54:51.285Z" },
+    { url = "https://files.pythonhosted.org/packages/65/eb/7107bbb0dc6a5b662ba98b1616bb4875bf017b9cfd6a0cc8b29baaca38ae/krcg-5.11-py3-none-any.whl", hash = "sha256:ee689886f018ef9225891ed39f56c7028f147b5d47d0140fa8461840a503a261", size = 1884285, upload-time = "2026-08-22T21:13:06.649Z" },
 ]
 
 [[package]]
@@ -1999,7 +1999,7 @@ requires-dist = [
     { name = "hypercorn", specifier = ">=0.17" },
     { name = "itsdangerous", specifier = ">=2" },
     { name = "jinja2", specifier = ">=3" },
-    { name = "krcg", specifier = ">=5.10" },
+    { name = "krcg", specifier = ">=5.11" },
     { name = "orjson", specifier = ">=3" },
     { name = "psycopg", extras = ["pool"], specifier = ">=3" },
     { name = "pydantic", specifier = ">=2" },
