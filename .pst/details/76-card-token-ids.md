@@ -50,22 +50,24 @@ That is the whole argument: the fix is already in the file, applied to keys only
 So 1 must change in the same commit as the serializer, or the next approval
 pushes a stale header back over the migrated file. 3 follows 1.
 
-## OPEN Q — decide before starting: what does the ruling uid hash?
+## DECIDED — the uid hashes tokens reduced to their id
 
 `uid = utils.stable_hash(text)` over the normalized text, so rewriting tokens
 renumbers **606 of 2302 rulings** (26%), breaking their `#r-<uid>` permalinks and
-any Discord thread linking them. That churn is unavoidable; the question is
-whether it can happen *again*.
+any Discord thread linking them. That one-off churn is unavoidable — the stored
+text changes, so the hash does.
 
-1. **Accept the churn, keep hashing the raw text.** Simplest. But the next
-   printed-name change — exactly what krcg 5.3 just did — renumbers rulings all
-   over again.
-2. **Hash the text with each token reduced to its id.** Same one-off churn now,
-   then names can drift freely forever without touching a uid. Costs a second
-   normalization step in front of `stable_hash`, and the uid stops being derivable
-   from the stored text by eye.
-3. **Normalize on edit only.** No churn, but the file holds both forms
-   indefinitely and every consumer must accept both forever.
+**What is avoidable is it happening again**, and that is the call: before hashing,
+reduce each token to its id (`{100807|Rebirth}` -> `{100807}`); the stored text
+keeps the name. Names can then drift forever — the next krcg rename, another
+printed-name correction — without renumbering a single ruling. The uid stops
+being derivable from the stored text by eye, which is the price.
 
-Option 2 is what the format change is *for* — 1 fixes today's mismatch and leaves
-the mechanism that caused it intact. Not decided here.
+Implemented in #78, in front of `stable_hash` in `build_ruling`. #79's migration
+pass must run against that, or every ruling it rewrites gets a uid that the app
+then disagrees with.
+
+Rejected: hashing the raw text (pays the permalink cost and leaves the coupling
+that caused the problem, making this a patch rather than a fix), and normalizing
+on edit only (no churn, but the file carries both forms indefinitely and every
+consumer must accept both forever — against the forever-format principle).
