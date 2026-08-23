@@ -4,7 +4,7 @@ Tooling is `just` + `uv`, npm for the frontend. `just` with no recipe lists them
 
 | | |
 |---|---|
-| `just update` | `npm install` + `uv sync --upgrade --group dev` |
+| `just update` | `npm install --include=dev` + `uv sync --upgrade --group dev` |
 | `just serve` | Vite watcher (via pm2) + hypercorn `--reload --workers 1` on `127.0.0.1:5000`; sources `.env` |
 | `just stop` | stop the pm2 frontend process |
 | `just lint` / `just fmt` | ruff check + format (line length 100, py313) |
@@ -55,16 +55,5 @@ is pinned by the locked krcg version.
 
 ## Deploy
 
-`gravelines`, provisioned by **server-setup** (base packages, Postgres, nginx, certbot, ufw, backups,
-Alloy). This repo's `ansible/` play only ships the app: a hardened systemd unit running
-single-worker hypercorn, behind an nginx/TLS vhost at `rulings.krcg.org`, on a managed Postgres DB
-via server-setup's `postgres_db` / `nginx_site` roles.
-
-**Deploy is manual**, from `ansible/`: `just dry-deploy` then `just deploy` (fetches the latest
-GitHub Release; `RELEASE_TAG=` pins one, `SOURCE=local` builds a local wheel, `QUICK=1` ships
-artifacts only). `ansible/README.md` holds the operator's runbook: the age-encrypted vault password
-and how to add a recipient, where the GitHub App PEM and the client ids go, and how to register the
-archon OAuth clients.
-
-Prod's `ARCHON_URL` points at `archon.vekn.net`; the code default is the beta `archon.krcg.org` that
-dev uses.
+Manual, and its own page: [deploy.md](deploy.md). Nothing in this repo deploys on a tag — the release
+workflow publishes artifacts, and `cd ansible && just deploy` ships them.

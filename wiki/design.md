@@ -1,0 +1,50 @@
+# Design system
+
+Approved by the human on a design preview, and standing. The concrete values live in
+`src/front/css/app.css` as Tailwind v4 `@theme` tokens — one home per fact. This page holds the
+decisions an agent cannot recover from reading hex.
+
+## Direction
+
+**Cold, modern, VTM-V5** — drawn from Black Chantry's current cards: near-black cold grounds,
+desaturated blue / purple / teal / green, crimson only as the tiny capacity badge.
+
+**Excluded, deliberately: no red, no gilt, no warm parchment, no amber or orange.** A restyle that
+reaches for any of them is reversing a decision, not exercising taste.
+
+Light is the default theme, a cool quasi-white document; dark flips the semantic tokens via
+`prefers-color-scheme` and a `[data-theme]` override. Chrome (navbar, footer) stays dark in both.
+
+Accents: dusk amethyst `--primary`, petrol `--secondary`, orchid. Discipline glyphs render in petrol.
+
+## Overlay states are a functional colour set
+
+`ORIGINAL`, `NEW`, `MODIFIED`, `DELETED` (see [proposals.md](proposals.md)) have their own
+`--color-state-*` tokens, kept cold and deliberately distinct from the accents: steel-grey, faded
+green, periwinkle, mauve-rose. **No amber, no fire-red** — the usual diff palette is exactly what
+this rejects.
+
+## Type
+
+Four faces, by role:
+
+- **Bricolage Grotesque** (700/800) — display: wordmark, headings, card names.
+- **Hanken Grotesk** (400–700, italic 400) — reading and UI: body, labels, ruling text.
+- **JetBrains Mono** (500) — codes: reference citations, VEKN and group ids, dates.
+- **Ankha VTES** (the existing krcg webfont) — discipline and card-type glyphs, via `.krcg-icon`.
+
+**Self-hosted `woff2` through `@font-face`. No Google Fonts CDN in production** — adding one is a
+reversal, not an optimisation.
+
+## Signature component
+
+A ruling renders as a **record card**: a thin left state-spine plus a state chip (mono, uppercase),
+inline petrol discipline glyphs, accent-coloured `{card}` references, and a monospace citation tag
+(a small dot, then `SRC YYYYMMDD`). Modern and restrained — no wax seal, no illuminated ornament.
+
+## Icon
+
+A "warded crest": petrol shield outline with an amethyst fang on a near-black tile. Assets in
+`src/vtesrulings/static/img/` (`favicon.svg`, `favicon.ico`, `apple-touch-icon.png`, `icon-192.png`,
+`icon-512.png` maskable), plus `static/site.webmanifest` and the `theme-color` meta, wired in
+`layout.html`.

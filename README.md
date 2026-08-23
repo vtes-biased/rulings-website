@@ -42,7 +42,7 @@ is mutated in place, the app **must run as a single worker**.
 
 ```shell
 touch .env       # local config; see wiki/operations.md for every var the app reads
-just update      # npm install + uv sync --group dev
+just update      # npm install --include=dev + uv sync --upgrade --group dev
 ```
 
 For a working local instance you want at least `DISCORD_WEBHOOK` and `DISCORD_SERVER_ID`, plus an
@@ -80,7 +80,8 @@ just release [minor|major]   # bump version (major.minor only), commit, tag, pus
 Pushing the `v*` tag runs the suite as a gate and, if green, attaches the wheel, sdist and pinned
 `requirements.txt` to a GitHub Release. **Deploy is a separate, manual step** — `cd ansible && just
 deploy` fetches that Release and ships it to gravelines (systemd, nginx, managed Postgres, GitHub
-App secrets). See [`ansible/README.md`](ansible/README.md).
+App secrets). The operator runbook — vault password, secrets layout, OAuth client registration — is
+[`wiki/deploy.md`](wiki/deploy.md).
 
 ## Working in this repository
 

@@ -62,5 +62,4 @@ never checked. Any other failure keeps the roles and defers the retry an hour.
 - **`POST /login` survives as a `TESTING=1`-only session mint**, taking an `approver` flag. It is the
   only seam for testing approval, and the only way into a dev server with no registered archon
   client.
-- Registering an OAuth client is per-archon-deployment; see [vtes-ecosystem.md](vtes-ecosystem.md)
-  and `ansible/README.md`.
+- Registering an OAuth client is per-archon-deployment; see [deploy.md](deploy.md).

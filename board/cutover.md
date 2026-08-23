@@ -46,8 +46,8 @@ again. Fixed in archon-vibe `105bdbf` — both remaining redirects answer `{"red
 the approval path already did.
 
 That fix is **not pushed**: as re-checked 2026-08-23, archon-vibe `main` is **25 commits ahead of
-`origin/main`** (tree clean), and the newest tag `v1.0.7` does not contain `105bdbf`. Tagging a
-release there ships 24 other unpushed commits — what it carries is @lip's call. Releases are
+`origin/main`** and the newest tag `v1.0.7` does not contain `105bdbf`. Tagging a release there ships
+24 other unpushed commits — what it carries is @lip's call. Releases are
 tag-triggered (`v*`) there. Beta first, to unblock dev; prod because that is where the site's users
 are.
 
@@ -87,10 +87,27 @@ asks, keys on `uid`:
 | Sergio | `09dfee84-aec4-43e8-b679-98fea840af87` | RULEMONGER | 0 | 0 | 3120101 |
 | lip | `fff5b489-f823-4ea1-818c-def524189e30` | ADMIN | 0 | 0 | 3200340 |
 
+Re-measure exposure before the window with the audit query — the `channel_id` predicate is what
+separates a submitted proposal from an unsubmitted draft:
+
+```shell
+sudo -u postgres psql -d vtes-rulings -c "
+SELECT u.uid, u.vekn, u.category,
+       count(p.uid)                                                        AS proposals,
+       count(p.uid) FILTER (WHERE coalesce(p.data->>'channel_id','') <> '') AS submitted
+  FROM users u LEFT JOIN proposals p ON p.usr = u.uid
+ GROUP BY u.uid, u.vekn, u.category
+ ORDER BY u.vekn ~ '^[0-9]+\$', count(p.uid) DESC;"
+```
+
 The audit (42 rows, 2026-08-22) found **not one numeric VEKN id** — every row holds a vekn.net login
 handle, because v1.3.0 stored `params["username"]` verbatim. 11 rows owned 17 proposals, 9 of them
-submitted; the 8 unsubmitted drafts are what step 2 is for. Four people held two rows apiece, which
-proves the production table never enforced the `vekn UNIQUE` its `CREATE TABLE` declares.
+submitted; the 8 unsubmitted drafts are what step 2 is for, and they sat with `Oracle.kid` (2) plus
+one each for `trydeflectingthisgrapple`, `squidalot`, `zavierazo`, `Gr33n`, `dvorax` and
+`marciohiroyuki` — name them in the ask rather than posting generically. Four people held two rows
+apiece (`Artemis`/`artemis`, `Oracle.kid`/`oracle.kid`,
+`Trydeflectingthisgrapple`/`trydeflectingthisgrapple`, and `Hobbesgoblin` twice over), which proves
+the production table never enforced the `vekn UNIQUE` its `CREATE TABLE` declares.
 
 ### 3 — the drain
 
@@ -121,7 +138,7 @@ file and serves it.
 - **krcg** — released as 5.11, on PyPI. Nothing pending.
 - **krcg-static** — done and pushed (`d52c2035`), off the critical path.
 - **vtes-rulings** — 4 commits ahead, listed under step 6.
-- **archon-vibe** — 25 commits ahead, no release. Step 1b.
+- **archon-vibe** — 25 commits ahead of `origin/main`, newest tag `v1.0.7`. Step 1b.
 
 ## Rollback
 

@@ -8,7 +8,9 @@ Plans, findings and reasoning journeys do not live here — they die with their 
 - [product.md](product.md) — scope and capabilities; what the site does and deliberately does not.
 - [proposals.md](proposals.md) — the proposal overlay model, the edit lifecycle, approval.
 - [auth.md](auth.md) — archon OAuth2 login, the `users` row, approver roles.
-- [operations.md](operations.md) — local dev, the test harness, CI, release, deploy on gravelines.
+- [design.md](design.md) — the approved visual direction, its exclusions, and the type roles.
+- [operations.md](operations.md) — local dev, the test harness, CI and release.
+- [deploy.md](deploy.md) — gravelines: the ansible play, the secrets, the operator runbook.
 
 ## Dogmas
 

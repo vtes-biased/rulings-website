@@ -83,9 +83,11 @@ async def exchange_code(code: str, verifier: str) -> dict:
 async def refresh(refresh_token: str) -> dict:
     """Rotates: the returned refresh token replaces the one passed in, which archon revokes.
 
-    Reusing a revoked token makes archon kill the whole chain, so only ever call this holding
-    the user row locked. The one hole left is a rotation archon commits but whose response we
-    lose — the next try then reads as reuse and the user has to log in again.
+    Reusing a revoked token makes archon kill the whole chain, so only the request that won
+    db.claim_roles_check may call this — deliberately a conditional UPDATE, not a row lock, so
+    no pool connection is held across this round-trip. The one hole left is a rotation archon
+    commits but whose response we lose — the next try then reads as reuse and the user has to
+    log in again.
     """
     return await _request(
         "post",

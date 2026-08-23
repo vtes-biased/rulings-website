@@ -71,12 +71,18 @@ Known limitation: a `{Card}` mentioned only inside an override body produces no 
 
 ## References
 
-`references.yaml` maps a reference id to a URL. The id is `SRC YYYYMMDD` (`LSJ 20040518`), except
-`RBK` rulebook references which carry no date. Two validations, both in `utils.check_reference`:
+`references.yaml` maps a reference id to a URL. The id is `SRC YYYYMMDD` (`LSJ 20040518`); the
+source prefix is one of `krcg.rulings.RULING_AUTHORS`. Two validations, both in
+`utils.check_reference`:
 
-- the URL host must be in `RULING_DOMAINS` (vekn.net, groups.google.com, boardgamegeek.com,
-  blackchantry.com);
-- the date must fall inside that author's Rules Director window (`krcg.rulings.RULING_AUTHORS`).
+- the URL host must be in `utils.RULING_DOMAINS` — exactly `www.vekn.net`, `groups.google.com`,
+  `boardgamegeek.com`, `www.boardgamegeek.com`, `www.blackchantry.com`. The bare `vekn.net` and
+  `blackchantry.com` are **not** accepted;
+- the date must fall inside that author's Rules Director window. `RBK` (Rulebook) and `RTR` (Rules
+  Team Ruling) have no window and carry no date; every other source does.
+
+**New `RBK` references cannot be created** — the rulebooks are a closed set, all already listed, so
+`Manager.add_reference` refuses one and the editor offers them from a select instead.
 
 `scraper.py` derives a reference id from a pasted VEKN forum URL.
 

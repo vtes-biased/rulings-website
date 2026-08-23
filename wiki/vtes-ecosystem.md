@@ -36,8 +36,8 @@ why we match role strings rather than a capability. (Source: `archon-vibe` audit
 
 **Two archon deployments, two separate databases, therefore two OAuth client registrations**:
 `archon.vekn.net` is production, `archon.krcg.org` is beta and is what dev uses (`archon.py`'s
-default). A client registered on one is unknown to the other. (Source: `ansible/README.md`;
-confirmed 2026-08-23.)
+default). A client registered on one is unknown to the other. (Confirmed 2026-08-23; the registration
+procedure is in [deploy.md](deploy.md).)
 
 **krcg-static reads rulings live** — `krcg.rulings.load_online` against `vtes-rulings`, not the
 snapshot baked into the installed krcg — so an approved ruling reaches players on the next rebuild
