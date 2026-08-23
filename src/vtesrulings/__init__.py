@@ -12,7 +12,6 @@ import click
 import jinja2.exceptions
 import krcg.loader
 import markupsafe
-import psycopg.errors
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -255,16 +254,12 @@ async def login_callback(request: Request):
         return login_failed(
             request, "You need a VEKN ID to contribute — claim yours on archon, then log in again."
         )
-    try:
-        user = await db.login_user(
-            info["sub"],
-            info["vekn_id"],
-            archon.is_approver(info.get("roles", [])),
-            tokens["refresh_token"],
-        )
-    except psycopg.errors.UniqueViolation:
-        logger.exception("archon login collided on vekn %s", info["vekn_id"])
-        return login_failed(request, "That VEKN ID is already linked to another archon account.")
+    user = await db.login_user(
+        info["sub"],
+        info["vekn_id"],
+        archon.is_approver(info.get("roles", [])),
+        tokens["refresh_token"],
+    )
     request.session["user_id"] = str(user.uid)
     return RedirectResponse(pending["next"], status_code=302)
 

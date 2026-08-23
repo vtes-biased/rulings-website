@@ -1821,22 +1821,9 @@ async def test_approval_needs_the_approver_flag_and_publishes(client, monkeypatc
 
 
 @pytest.mark.asyncio
-async def test_login_adopts_the_legacy_row_holding_that_vekn_id(client):
-    """Cutover: a user who logged in through vekn.net keeps their row — and the in-flight
-    proposals hanging off it — as long as that row was keyed on the VEKN id itself."""
-    legacy_uid = await sql("INSERT INTO users (vekn) VALUES ('9999999') RETURNING uid")
-    adopted = await db.login_user("archon-uid-1", "9999999", True, "refresh-1")
-    assert adopted.uid == legacy_uid
-    assert adopted.approver is True
-    again = await db.login_user("archon-uid-1", "9999999", False, "refresh-2")
-    assert again.uid == legacy_uid
-    assert again.approver is False  # a demotion on archon lands on the next login
-
-
-@pytest.mark.asyncio
 async def test_init_retrofits_the_vekn_unique_onto_a_legacy_table(client):
-    """The cutover's table was created before the inline UNIQUE existed, and adoption keys on
-    `vekn`: with duplicates that UPDATE hits several rows and returns an arbitrary one."""
+    """The cutover empties the production table rather than dropping it, so the inline UNIQUE in
+    `CREATE TABLE` never reaches it — `db.init` is what puts the constraint on."""
     await run("ALTER TABLE users DROP CONSTRAINT IF EXISTS users_vekn_key")
     await run("DROP INDEX IF EXISTS users_vekn_key")
     await run("INSERT INTO users (vekn) VALUES ('9999999'), ('9999999'), (NULL), (NULL)")
@@ -1848,6 +1835,38 @@ async def test_init_retrofits_the_vekn_unique_onto_a_legacy_table(client):
     await sql("INSERT INTO users (vekn) VALUES ('9999999') RETURNING uid")
     with pytest.raises(psycopg.errors.UniqueViolation):
         await sql("INSERT INTO users (vekn) VALUES ('9999999') RETURNING uid")
+
+
+@pytest.mark.asyncio
+async def test_a_returning_login_rewrites_its_row(client):
+    """Archon owns identity, so every login overwrites what it told us last time."""
+    first = await db.login_user("archon-uid-1", "9999999", True, "refresh-1")
+    again = await db.login_user("archon-uid-1", "9999999", False, "refresh-2")
+    assert again.uid == first.uid  # the same row, not a second one
+    assert again.approver is False  # a demotion on archon lands on the next login
+    assert again.refresh_token == "refresh-2"
+
+
+@pytest.mark.asyncio
+async def test_a_rotated_token_lands_even_when_userinfo_fails(client, monkeypatch):
+    """The refresh revoked the token we spent, so losing the new one to a later failure would
+    make the next hour read as chain reuse and end every session of that user."""
+    await client.post("/login", data={"username": "test-user", "approver": "1"})
+    uid = await sql("SELECT uid FROM users WHERE vekn='test-user'")
+    await stale(uid, "refresh-1")
+
+    async def refreshed(refresh_token):
+        return {"access_token": "access-2", "refresh_token": "refresh-2"}
+
+    async def unreachable(access_token):
+        raise vtesrulings.archon.Error("archon is down", 503)
+
+    monkeypatch.setattr(vtesrulings.archon, "refresh", refreshed)
+    monkeypatch.setattr(vtesrulings.archon, "userinfo", unreachable)
+    assert (await client.get("/index.html")).status_code == 200
+    user = await db.get_user(uid)
+    assert user.refresh_token == "refresh-2"  # the spent token is gone from the row
+    assert user.approver is True  # an outage is not a refusal: the roles stand until next hour
 
 
 @pytest.mark.asyncio
@@ -1871,31 +1890,6 @@ async def test_stale_roles_are_rechecked_against_archon(client, monkeypatch):
     user = await db.get_user(uid)
     assert user.approver is False
     assert user.refresh_token == "refresh-2"  # the rotated token replaced the spent one
-
-
-@pytest.mark.asyncio
-async def test_a_recheck_landing_on_someone_elses_vekn_refuses(client, monkeypatch):
-    """`vekn` is UNIQUE, so a re-check can now collide — with a legacy row hand-mapped to that id
-    at the cutover. Refuse like login does; get_current_user runs on every page, so a raise here
-    would 500 the whole site for that user."""
-    await client.post("/login", data={"username": "test-user", "approver": "1"})
-    uid = await sql("SELECT uid FROM users WHERE vekn='test-user'")
-    await stale(uid, "refresh-1")
-    await sql("INSERT INTO users (vekn) VALUES ('9999999') RETURNING uid")
-
-    async def refreshed(refresh_token):
-        return {"access_token": "access-2", "refresh_token": "refresh-2"}
-
-    async def collides(access_token):
-        return {"sub": "archon-uid", "vekn_id": "9999999", "roles": ["IC"]}
-
-    monkeypatch.setattr(vtesrulings.archon, "refresh", refreshed)
-    monkeypatch.setattr(vtesrulings.archon, "userinfo", collides)
-    assert (await client.get("/index.html")).status_code == 200
-    user = await db.get_user(uid)
-    assert user.vekn == "test-user"  # kept its own id, the other row still owns 9999999
-    assert user.approver is False
-    assert user.refresh_token is None  # refused for good, so every session of theirs ends
 
 
 @pytest.mark.asyncio

@@ -59,10 +59,8 @@ async def init():
             "roles_checked_at TIMESTAMPTZ)"
         )
         # No migration tool: an existing table is brought up to that shape here, so every
-        # statement must be idempotent. The old `category` is dropped rather than backfilled into
-        # `approver` — a backfilled approver has no refresh token to re-check, so it would stay an
-        # approver forever. Approvers log in again after the cutover, which they must anyway to
-        # seed a refresh token.
+        # statement must be idempotent. `category` is dropped, not backfilled into `approver`:
+        # approver is archon's answer now, seeded at the next login.
         await cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS archon_uid TEXT UNIQUE")
         await cursor.execute(
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS approver BOOLEAN NOT NULL DEFAULT FALSE"
@@ -72,8 +70,8 @@ async def init():
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS roles_checked_at TIMESTAMPTZ"
         )
         await cursor.execute("ALTER TABLE users DROP COLUMN IF EXISTS category")
-        # Same name the inline UNIQUE gets, so this is a no-op on a fresh table. It raises on a
-        # legacy table that still holds duplicates, deliberately: they must be resolved before boot.
+        # The cutover empties the prod table rather than dropping it, so the inline UNIQUE above
+        # never reaches it — this does. Same name, so it is a no-op on a table created fresh.
         await cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS users_vekn_key ON users (vekn)")
         await cursor.execute(
             "CREATE TABLE IF NOT EXISTS proposals("
@@ -91,39 +89,20 @@ def reset():
 
 
 async def login_user(archon_uid: str, vekn: str, approver: bool, refresh_token: str | None) -> User:
-    """Resolve an archon login: by archon uid, else adopt the legacy row holding that VEKN id.
-
-    Legacy rows keyed on a vekn.net *username* rather than an id are not adopted — they get a
-    fresh row and their in-flight proposals go with the old one. Hand-mapped before the cutover.
+    """Resolve an archon login. Archon owns identity: `archon_uid` keys the row, and everything
+    else on it is archon's answer, rewritten here on every login.
 
     `roles_checked_at` is stamped only when a refresh token comes with it: a row that has never
-    been checked (a TESTING mint, a hand-written legacy row) must not read as one whose token
-    archon later killed. See `api.get_current_user`.
+    been checked (a TESTING mint) must not read as one whose token archon later killed. See
+    `api.get_current_user`.
     """
     checked = datetime.datetime.now(datetime.UTC) if refresh_token else None
     async with (
         POOL.connection() as conn,
         conn.cursor(row_factory=psycopg.rows.class_row(User)) as cursor,
     ):
-        ret = await cursor.execute(
-            "UPDATE users SET vekn=%s, approver=%s, refresh_token=%s, roles_checked_at=%s "
-            "WHERE archon_uid=%s RETURNING *",
-            [vekn, approver, refresh_token, checked, archon_uid],
-        )
-        user = await ret.fetchone()
-        if user:
-            return user
-        ret = await cursor.execute(
-            "UPDATE users SET archon_uid=%s, approver=%s, refresh_token=%s, roles_checked_at=%s "
-            "WHERE archon_uid IS NULL AND vekn=%s RETURNING *",
-            [archon_uid, approver, refresh_token, checked, vekn],
-        )
-        user = await ret.fetchone()
-        if user:
-            return user
-        # ON CONFLICT rather than a plain INSERT: two first logins of the same account can race
-        # here, and the loser must get the row, not a 500. A `vekn` already linked to another
-        # archon account still raises — login_callback turns that into a message.
+        # One upsert covers all three: a returning login rewrites its row, a first login creates
+        # one, and two racing first logins both get the row rather than a 500.
         ret = await cursor.execute(
             "INSERT INTO users (archon_uid, vekn, approver, refresh_token, roles_checked_at) "
             "VALUES (%s, %s, %s, %s, %s) ON CONFLICT (archon_uid) DO UPDATE SET "

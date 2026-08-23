@@ -24,11 +24,11 @@ immediately before it, inside the same window. Everything else is a prerequisite
 | 0 | ~~krcg 5.11 + bind the last regex~~ | done | #97 #98 |
 | 1 | ~~Confirm the prod archon client; register the beta one~~ | done | #81 |
 | 1b | Deploy archon with the consent-loop fix, prod **and** beta | you | archon `105bdbf` |
-| 2 | Ask people to submit drafts (the VEKN ids now land at 5b, below) | you | #86 |
+| 2 | Ask people to submit any draft they care about | you | #86 |
 | 3 | Drain the in-flight proposals on live v1 | you | #76 |
 | 4 | ~~krcg-static to `krcg>=5.10`~~ | done | #89 |
 | 5 | Stop v1 | you | #93 |
-| 5b | Apply the seven VEKN ids, then run the two `vekn` probes | you | #86 |
+| 5b | Wipe `users` — every legacy row is deprecated | you | #86 |
 | 6 | Push `vtes-rulings` (4 commits) | me | #79 |
 | 7 | Tag and deploy the website | you/me | #2 |
 
@@ -47,15 +47,14 @@ resolves the user before validating `redirect_uri` — so the residual risk is a
 would surface as a 400 on the consent page with v1 already stopped. A real login through prod after
 step 1b's deploy is the only thing that retires it.
 
-**2 and 5b — #86.** Split, 2026-08-23. The Discord ask (submit your drafts) is step 2, alongside the
-drain. The eight `UPDATE users SET vekn = …` moved **into the window, after step 5** — `db.init()`
-leaves `vekn` alone, so the statement is schema-agnostic, and its only real deadline is before those
-people's first archon login on v2. With both engines down nothing else can write `users`. The filled
-script and its read-back live in #86's detail file. Key on `uid`, never on `vekn` — duplicate handles.
-Seven ids, not eight: `inm8`'s is not known and it owns no proposal. **Then probe for a duplicate
-`vekn` before booting v2** — `db.init()` now retrofits the UNIQUE the legacy table never got, and it
-raises on duplicates, which at that point means v2 refuses to boot with v1 already stopped. The
-probe, a second one against the index name, and the fix are in #86's detail file.
+**2 and 5b — #86.** Step 2 is the Discord ask: submit any draft you care about, so it reaches the
+queue and is judged on its merits during the drain. Step 5b is then one statement — `DELETE FROM
+users`, every legacy row deprecated. Decided 2026-08-23: archon owns identity, the drain removes the
+only thing a legacy row carried, and `category`/`approver` are archon's now, so nothing survives
+worth migrating. This replaced a hand-mapped eight-row VEKN id block whose mistyped id would have
+handed someone else's row to the real owner of that id. `login_user`'s adoption path went with it.
+Probe `SELECT count(*) FROM proposals` first — it must be 0, or the FK blocks the DELETE and the
+drain was not finished.
 
 **3 — the drain.** A proposal is an overlay keyed on the uid a ruling had when it was edited, and
 the base it merges against reloads renumbered: 606 of 2302 rulings change uid. Approve or discard

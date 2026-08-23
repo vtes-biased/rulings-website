@@ -1,6 +1,53 @@
 # Production users at the archon cutover
 
-## The audit (run 2026-08-22, 42 rows)
+## Decision (2026-08-23): deprecate every legacy row
+
+Archon owns identity. Only an archon member holding a `vekn_id` may log in, and
+everything on our row — the VEKN id, the approver flag — is archon's answer,
+rewritten on every login. So a legacy row is worth keeping only for what hangs
+off it, and the drain (#99 step 3) takes that away: every in-flight proposal is
+approved or discarded before the window, because a proposal is an overlay keyed
+on ruling uids and 606 of 2302 change at the migration. `category` is dropped by
+`db.init()` and `approver` comes from archon's roles.
+
+Nothing is left. So the whole table goes, at **#99 step 5b**, between stopping v1
+and booting v2:
+
+```sql
+SELECT count(*) FROM proposals;  -- must be 0: the drain is step 3, and the FK would block the DELETE
+DELETE FROM users;
+```
+
+`rulings-web resetdb` would do it too, but that CLI ships with v2 and v2 is not
+deployed yet at 5b — hence plain SQL. The table survives, so `db.init()`'s
+`CREATE UNIQUE INDEX IF NOT EXISTS users_vekn_key` is what puts the declared
+UNIQUE on it; a `DROP TABLE` would get it from `CREATE TABLE` instead. Either
+works.
+
+**What this replaced.** An earlier plan hand-mapped the eight rows carrying a
+tier to their VEKN ids so `login_user` would adopt them at first archon login.
+That bought back only their proposals, which the drain removes anyway, and it
+carried a real hazard: a mistyped id that happens to be another member's real one
+hands that person the wrong row. Dropped, along with the adoption path itself
+(`UPDATE … WHERE archon_uid IS NULL AND vekn=%s`) — with no legacy rows left it
+was dead code. `login_user` is now: match on `archon_uid`, else insert.
+
+The ids were collected by hand. No procedure consumes them any more — recovery,
+if anyone ever asks, keys on `uid` — so the table below is kept as the record of
+who held a tier on v1, nothing more.
+
+| handle | row uid | tier | proposals | submitted | VEKN id |
+|---|---|---|---|---|---|
+| the1andonlime | `30e1b2a3-92f9-487c-9f25-999373a411e7` | RULEMONGER | 4 | 4 | 5360022 |
+| Hobbesgoblin | `07c05586-6583-4746-b6b7-6fd993595a35` | RULEMONGER | 3 | 3 | 4720002 |
+| squidalot | `964ac13e-1c45-49eb-b738-7a4ab61a40a1` | RULEMONGER | 1 | 0 | 8180022 |
+| Ankha | `5c41d803-5499-433d-9bdf-530a4b94f2db` | ADMIN | 1 | 1 | 3200188 |
+| kschaefer | `4b3e09ec-25c5-49c8-8365-baa7e7f1811c` | RULEMONGER | 0 | 0 | 1003455 |
+| inm8 | `781aad7c-08a9-4a33-9f98-c4da8a23e166` | RULEMONGER | 0 | 0 | — not supplied |
+| Sergio | `09dfee84-aec4-43e8-b679-98fea840af87` | RULEMONGER | 0 | 0 | 3120101 |
+| lip | `fff5b489-f823-4ea1-818c-def524189e30` | ADMIN | 0 | 0 | 3200340 |
+
+## The audit behind it (run 2026-08-22, 42 rows)
 
 ```shell
 sudo -u postgres psql -d vtes-rulings -c "
@@ -18,16 +65,12 @@ handle** (`the1andonlime`, `Hobbesgoblin`, `Ankha`, …). v1.3.0 stored
 password and never asked for the member id. The `9999999` row in the dev database
 was simply someone typing their id into the login box.
 
-So `db.login_user`'s adoption path (`archon_uid IS NULL AND vekn = <the userinfo
-vekn_id>`) fires for **nobody** in production. It stays in the code because it is
-correct and cheap, not because it will do any work here.
+Handle → VEKN id cannot be automated: vekn.net's member API exposes id, name and
+city, and archon's own member sync (`vekn_api.py`, `vekn_push.py`) keys on exactly
+those. Nothing anywhere stores the login handle. Mapping a handle to a person is
+human recognition — which is why the eight above were supplied by hand.
 
-Handle → VEKN id cannot be automated either: vekn.net's member API exposes id,
-name and city, and archon's own member sync (`vekn_api.py`, `vekn_push.py`) keys
-on exactly those. Nothing anywhere stores the login handle. Mapping a handle to a
-person is human recognition.
-
-## What is actually at risk
+What the rows carried at audit time:
 
 | | rows | proposals |
 |---|---|---|
@@ -35,158 +78,30 @@ person is human recognition.
 | of which **submitted** | 4 | 9 |
 | of which **unsubmitted drafts** | 7 | 8 |
 
-A submitted proposal is in the approver queue — `db.get_submitted_proposals`
-filters on `channel_id`, not on owner, and `api.proposal_update` lets an approver
-edit someone else's — so all 9 stay fully actionable after the cutover. Their
-authors lose only their own handle on them.
-
-That leaves **8 drafts across 7 people**: `Oracle.kid` (2), plus one each for
+The 8 drafts sat with `Oracle.kid` (2), plus one each for
 `trydeflectingthisgrapple`, `squidalot`, `zavierazo`, `Gr33n`, `dvorax` and
-`marciohiroyuki`.
+`marciohiroyuki`. Hence step 2 of the runbook: ask on Discord that anyone submit
+a draft they care about, so it reaches the queue and gets approved on its merits
+during the drain rather than discarded with its owner's row.
 
-## Therefore: no pre-cutover hand-mapping
+## Why `vekn` is UNIQUE and why that is now inert
 
-Mapping 42 handles by hand to save 8 drafts is not worth it, and mapping is not
-time-critical anyway: **the legacy rows and their proposals are not destroyed by
-the cutover**, they are merely unreachable by their author. Recovery works just as
-well a month later.
+`db.init()` enforces `vekn` UNIQUE globally. It mirrors an invariant archon
+already owns — `idx_objects_user_vekn_id` in `archon-vibe/backend/src/schema.sql`
+is a unique index on `full->>'vekn_id'` over user objects, and a VEKN id is never
+moved between archon accounts. So once every row's `vekn` comes from archon, no
+two rows can collide and no login path can raise a unique violation. That is why
+neither `login_callback` nor `recheck_roles` carries a handler for one: the state
+is unreachable, and if archon's invariant were ever broken a loud 500 is the
+failure we would want.
 
-1. Before the switch, ask people to **submit** any draft they care about. That is
-   one click and it moves the proposal into the queue, where ownership stops
-   mattering.
-2. After the switch, recover on demand. The person logs in through archon, which
-   gives them a fresh row; then move the old row's proposals onto it:
+It was *not* inert before this decision: the legacy rows held vekn.net handles
+and hand-typed ids, values archon never issued, and those could collide with a
+real one. Wiping them is what makes the constraint a faithful mirror.
 
-```sql
--- both uids come from the audit query above; never key this on vekn, see below
-UPDATE proposals SET usr = '<fresh-row-uid>' WHERE usr = '<legacy-row-uid>';
-DELETE FROM users WHERE uid = '<legacy-row-uid>';
-```
-
-Note this moves the proposals rather than writing `archon_uid` onto the legacy
-row: by then the fresh row already holds that uid, and `archon_uid` is UNIQUE.
-
-## Matching the rulemongers by hand
-
-The eight rows carrying a tier today. Their VEKN ids were supplied by hand on
-2026-08-23 — nothing in the data can derive them. Seven of eight: `inm8`'s id is
-not known and will not be looked for, which costs nothing (0 proposals).
-
-| handle | row uid | tier | proposals | submitted | VEKN id |
-|---|---|---|---|---|---|
-| the1andonlime | `30e1b2a3-92f9-487c-9f25-999373a411e7` | RULEMONGER | 4 | 4 | 5360022 |
-| Hobbesgoblin | `07c05586-6583-4746-b6b7-6fd993595a35` | RULEMONGER | 3 | 3 | 4720002 |
-| squidalot | `964ac13e-1c45-49eb-b738-7a4ab61a40a1` | RULEMONGER | 1 | 0 | 8180022 |
-| Ankha | `5c41d803-5499-433d-9bdf-530a4b94f2db` | ADMIN | 1 | 1 | 3200188 |
-| kschaefer | `4b3e09ec-25c5-49c8-8365-baa7e7f1811c` | RULEMONGER | 0 | 0 | 1003455 |
-| inm8 | `781aad7c-08a9-4a33-9f98-c4da8a23e166` | RULEMONGER | 0 | 0 | — *not supplied* |
-| Sergio | `09dfee84-aec4-43e8-b679-98fea840af87` | RULEMONGER | 0 | 0 | 3120101 |
-| lip | `fff5b489-f823-4ea1-818c-def524189e30` | ADMIN | 0 | 0 | 3200340 |
-
-### When it runs — inside the cutover window
-
-Decided 2026-08-23: **between stopping v1 and booting v2** (#99 step 5→7), not
-before. The statement only rewrites `vekn`, and `db.init()` leaves that column
-alone — it adds `archon_uid`/`approver`/`refresh_token`/`roles_checked_at` and
-drops `category` (`db.py:66-74`) — so it is schema-agnostic and runs identically
-either side of the migration. The only real deadline is **before that person's
-first archon login on v2**; afterwards they hold a fresh row and the fix is the
-move-proposals recipe above. The window is the cleanest slot because nothing else
-can write `users` while both engines are down.
-
-No collision risk: every existing `vekn` is a handle, so a numeric id can never
-duplicate one — and `db.init()` does not retrofit the `vekn UNIQUE` the current
-table lacks anyway.
-
-### The script
-
-Run on gravelines as one transaction. Every statement keys on `uid`; **never** on
-`vekn` (the duplicate `Hobbesgoblin` below). `inm8` is deliberately absent — id
-unknown, 0 proposals, so it forfeits row continuity and nothing else.
-
-```sql
--- sudo -u postgres psql -d vtes-rulings -1 -f match_vekn_ids.sql
-BEGIN;
-UPDATE users SET vekn = '5360022' WHERE uid = '30e1b2a3-92f9-487c-9f25-999373a411e7';  -- the1andonlime
-UPDATE users SET vekn = '4720002' WHERE uid = '07c05586-6583-4746-b6b7-6fd993595a35';  -- Hobbesgoblin
-UPDATE users SET vekn = '8180022' WHERE uid = '964ac13e-1c45-49eb-b738-7a4ab61a40a1';  -- squidalot
-UPDATE users SET vekn = '3200188' WHERE uid = '5c41d803-5499-433d-9bdf-530a4b94f2db';  -- Ankha
-UPDATE users SET vekn = '1003455' WHERE uid = '4b3e09ec-25c5-49c8-8365-baa7e7f1811c';  -- kschaefer
-UPDATE users SET vekn = '3120101' WHERE uid = '09dfee84-aec4-43e8-b679-98fea840af87';  -- Sergio
-UPDATE users SET vekn = '3200340' WHERE uid = 'fff5b489-f823-4ea1-818c-def524189e30';  -- lip
-COMMIT;
-```
-
-### Pre-flight: `vekn` becomes UNIQUE at boot
-
-`db.init()` now retrofits the UNIQUE the legacy table never got
-(`CREATE UNIQUE INDEX IF NOT EXISTS users_vekn_key`), because adoption keys on
-`vekn` and a duplicate makes that UPDATE hit several rows and return an arbitrary
-one. It **raises** on a table that still holds duplicates — which during the
-cutover means v2 refuses to boot, with v1 already stopped. So probe first, after
-the block above and before starting v2; it must return zero rows:
-
-```sql
-SELECT vekn, count(*) FROM users WHERE vekn IS NOT NULL GROUP BY vekn HAVING count(*) > 1;
-```
-
-And confirm nothing already squats the index name — `CREATE UNIQUE INDEX IF NOT
-EXISTS` matches on relation *name* alone, so a legacy relation called
-`users_vekn_key` that is not unique-on-`vekn` would make init silently skip and
-enforce nothing. Expect either no row, or one whose def is `UNIQUE ... (vekn)`:
-
-```sql
-SELECT indexdef FROM pg_indexes WHERE indexname = 'users_vekn_key';
-```
-
-The known duplicate pair should already be gone by then: the block rewrites `07c05586…` to
-`4720002`, leaving `5b00b1b0…` alone on `Hobbesgoblin`. The three case-differing
-pairs (`Artemis`/`artemis`, …) were never duplicates — the index is
-case-sensitive. NULL is exempt, as Postgres UNIQUE always is. If the probe does
-return something, rename the row that owns no proposal (`UPDATE users SET vekn =
-vekn || '-dup' WHERE uid = '<the-empty-row>'`) rather than deleting it.
-
-Read back before booting v2 — seven rows, each `vekn` the id below:
-
-```sql
-SELECT uid, vekn FROM users WHERE uid IN (
-  '30e1b2a3-92f9-487c-9f25-999373a411e7',
-  '07c05586-6583-4746-b6b7-6fd993595a35',
-  '964ac13e-1c45-49eb-b738-7a4ab61a40a1',
-  '5c41d803-5499-433d-9bdf-530a4b94f2db',
-  '4b3e09ec-25c5-49c8-8365-baa7e7f1811c',
-  '09dfee84-aec4-43e8-b679-98fea840af87',
-  'fff5b489-f823-4ea1-818c-def524189e30');
-```
-
-Only `07c05586…` carries the `Hobbesgoblin` proposals; the second row of that name
-(`5b00b1b0…`, no proposals) must be left alone.
-
-**A wrong id is worse than a missing one, on four rows.** Adoption matches
-`archon_uid IS NULL AND vekn = <the id archon reports>` (`db.py:113-116`), so a
-typo that happens to be some *other* member's real id hands that person the
-legacy row and its proposals at their first login. That only bites where the row
-owns something — `the1andonlime` (4), `Hobbesgoblin` (3), `squidalot` (1),
-`Ankha` (1). On the empty rows a typo just parks an unreachable blank row. The
-ids were transcribed by hand and nothing here can check them against vekn.net
-(its member API needs `VEKN_API_USERNAME`/`PASSWORD`, which we do not hold), so
-re-read those four against archon's member records before running the block.
-
-## Duplicate rows — why the recipe keys on uid
-
-Four people already hold two rows apiece: `Artemis`/`artemis`,
-`Oracle.kid`/`oracle.kid`, `Trydeflectingthisgrapple`/`trydeflectingthisgrapple`
-— and **`Hobbesgoblin` twice over, the two indistinguishable in the dump**
-(`07c05586…`, 3 proposals, and `5b00b1b0…`, none). They lose a proposal to a
-mistyped capital today, the same failure the cutover generalizes.
-
-The identical pair means the production table does not enforce the `vekn UNIQUE`
-that v1.3.0's `CREATE TABLE` declares — `CREATE TABLE IF NOT EXISTS` never
-retrofits a constraint onto a table an older version created — or that one value
-carries invisible whitespace. Either way, **never key a recovery statement on
-`vekn`**: the subquery form errors on two rows and the DELETE takes both. Use the
-uids the audit prints.
-
-Nothing in the new code depends on that constraint here, since the adoption path
-fires for nobody in production; and `login_callback` already turns the unique
-violation an adopted duplicate would raise into a message rather than a 500.
+Four people held two rows apiece — `Artemis`/`artemis`, `Oracle.kid`/`oracle.kid`,
+`Trydeflectingthisgrapple`/`trydeflectingthisgrapple` and `Hobbesgoblin` twice
+over, the last pair indistinguishable in the dump. That last one proves the
+production table never enforced the `vekn UNIQUE` its `CREATE TABLE` declares
+(`CREATE TABLE IF NOT EXISTS` never retrofits a constraint). The `DELETE` takes
+them all, so none of it needs resolving by hand.

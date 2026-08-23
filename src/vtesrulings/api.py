@@ -27,9 +27,9 @@ async def get_current_user(request: Request) -> db.User | None:
     if not user:
         return None
     if not user.refresh_token:
-        # No token to ask with. Never checked (a TESTING mint, a hand-written legacy row) means
-        # carry on; checked once and now tokenless means archon refused for good, and every
-        # session of that user has to go, not just the one that saw the refusal.
+        # No token to ask with. Never checked (a TESTING mint) means carry on; checked once and
+        # now tokenless means archon refused for good, and every session of that user has to
+        # go, not just the one that saw the refusal.
         return None if user.roles_checked_at else user
     if user.roles_checked_at and datetime.datetime.now(datetime.UTC) - user.roles_checked_at < (
         ROLES_MAX_AGE
@@ -42,35 +42,35 @@ async def get_current_user(request: Request) -> db.User | None:
 
 async def recheck_roles(request: Request, user: db.User) -> db.User | None:
     """Ask archon what this user is now. Only ever called by whoever claimed the check."""
+    info, rotated = {}, None
     try:
         tokens = await archon.refresh(user.refresh_token)
+        rotated = tokens["refresh_token"]
         info = await archon.userinfo(tokens["access_token"])
     except archon.Error as exc:
         logger.exception("archon roles re-check failed")
-        if exc.status != 400:
+        if exc.status == 400:
+            info = {}  # a refusal, final — fall through and strip the row
+        elif rotated:
+            # The refresh got through, so archon already revoked the token we spent: the new one
+            # has to land even though userinfo did not, or the next hour reads as chain reuse and
+            # kills every session. Roles keep their current value until then.
+            return await db.set_user_roles(user.uid, user.vekn, user.approver, rotated)
+        else:
             return user  # unreachable, not refusing: keep the roles we have until the next hour
-        info = {}
-    alert = "Your archon session expired, please log in again."
-    if info.get("vekn_id"):
-        try:
-            return await db.set_user_roles(
-                user.uid,
-                info["vekn_id"],
-                archon.is_approver(info.get("roles", [])),
-                tokens["refresh_token"],
-            )
-        except psycopg.errors.UniqueViolation:
-            # Another row holds that id — typically a legacy one hand-mapped to it at the cutover.
-            # `get_current_user` runs on every page, so refusing beats 500ing until the next claim.
-            logger.exception("roles re-check collided on vekn %s", info["vekn_id"])
-            alert = "That VEKN ID is already linked to another archon account."
-    # A refusal is final — dead token chain, revoked consent, the 30d expiry — and losing the
-    # VEKN id is the same answer login gives: not a member any more. Writing the row's own `vekn`
-    # back cannot collide.
-    await db.set_user_roles(user.uid, user.vekn, False, None)
-    request.session.pop("user_id", None)
-    request.session["alert"] = alert
-    return None
+    if not info.get("vekn_id"):
+        # A refusal is final — dead token chain, revoked consent, the 30d expiry — and losing the
+        # VEKN id is the same answer login gives: not a member any more.
+        await db.set_user_roles(user.uid, user.vekn, False, None)
+        request.session.pop("user_id", None)
+        request.session["alert"] = "Your archon session expired, please log in again."
+        return None
+    return await db.set_user_roles(
+        user.uid,
+        info["vekn_id"],
+        archon.is_approver(info.get("roles", [])),
+        rotated,
+    )
 
 
 async def require_user(user: db.User | None = Depends(get_current_user)) -> db.User:
