@@ -51,8 +51,8 @@ handling. `tests/conftest.py` provides them all:
 - **archon** and the **Discord webhook** as two `aiohttp` servers on ephemeral local ports, with
   `archon.ARCHON_URL` and `discord.DISCORD_WEBHOOK` rebound at them. The `client` fixture takes both
   and resets them per test, so no test can reach the real services whether it names them or not.
-  Tests script an answer (`archon.info`, `archon.token_status`) and read back what was sent
-  (`archon.spent`, `discord_hook.posts`).
+  Tests script an answer (`fake_archon.info`, `fake_archon.token_status`) and read back what
+  was sent (`fake_archon.spent`, `fake_discord.posts`).
 
 Card data is pinned by the locked krcg version.
 

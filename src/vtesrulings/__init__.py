@@ -220,8 +220,8 @@ async def data_error(request: Request, error: Exception):
 
 
 def local_next(request: Request) -> str:
-    """Site-local paths only — see auth.md. Both /login and the TESTING /login seam go through
-    here, and the sanitised value is what the callback reads back out of the session."""
+    """Site-local paths only — see auth.md. The sanitised value is what the callback reads back
+    out of the session."""
     next = request.query_params.get("next", "/index.html")
     if not next.startswith("/") or next.startswith(("//", "/\\")):
         return "/index.html"
