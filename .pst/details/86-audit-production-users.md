@@ -117,6 +117,35 @@ UPDATE users SET vekn = '3200340' WHERE uid = 'fff5b489-f823-4ea1-818c-def524189
 COMMIT;
 ```
 
+### Pre-flight: `vekn` becomes UNIQUE at boot
+
+`db.init()` now retrofits the UNIQUE the legacy table never got
+(`CREATE UNIQUE INDEX IF NOT EXISTS users_vekn_key`), because adoption keys on
+`vekn` and a duplicate makes that UPDATE hit several rows and return an arbitrary
+one. It **raises** on a table that still holds duplicates — which during the
+cutover means v2 refuses to boot, with v1 already stopped. So probe first, after
+the block above and before starting v2; it must return zero rows:
+
+```sql
+SELECT vekn, count(*) FROM users WHERE vekn IS NOT NULL GROUP BY vekn HAVING count(*) > 1;
+```
+
+And confirm nothing already squats the index name — `CREATE UNIQUE INDEX IF NOT
+EXISTS` matches on relation *name* alone, so a legacy relation called
+`users_vekn_key` that is not unique-on-`vekn` would make init silently skip and
+enforce nothing. Expect either no row, or one whose def is `UNIQUE ... (vekn)`:
+
+```sql
+SELECT indexdef FROM pg_indexes WHERE indexname = 'users_vekn_key';
+```
+
+The known duplicate pair should already be gone by then: the block rewrites `07c05586…` to
+`4720002`, leaving `5b00b1b0…` alone on `Hobbesgoblin`. The three case-differing
+pairs (`Artemis`/`artemis`, …) were never duplicates — the index is
+case-sensitive. NULL is exempt, as Postgres UNIQUE always is. If the probe does
+return something, rename the row that owns no proposal (`UPDATE users SET vekn =
+vekn || '-dup' WHERE uid = '<the-empty-row>'`) rather than deleting it.
+
 Read back before booting v2 — seven rows, each `vekn` the id below:
 
 ```sql

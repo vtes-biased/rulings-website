@@ -50,19 +50,27 @@ async def recheck_roles(request: Request, user: db.User) -> db.User | None:
         if exc.status != 400:
             return user  # unreachable, not refusing: keep the roles we have until the next hour
         info = {}
-    if not info.get("vekn_id"):
-        # A refusal is final — dead token chain, revoked consent, the 30d expiry — and losing the
-        # VEKN id is the same answer login gives: not a member any more.
-        await db.set_user_roles(user.uid, user.vekn, False, None)
-        request.session.pop("user_id", None)
-        request.session["alert"] = "Your archon session expired, please log in again."
-        return None
-    return await db.set_user_roles(
-        user.uid,
-        info["vekn_id"],
-        archon.is_approver(info.get("roles", [])),
-        tokens["refresh_token"],
-    )
+    alert = "Your archon session expired, please log in again."
+    if info.get("vekn_id"):
+        try:
+            return await db.set_user_roles(
+                user.uid,
+                info["vekn_id"],
+                archon.is_approver(info.get("roles", [])),
+                tokens["refresh_token"],
+            )
+        except psycopg.errors.UniqueViolation:
+            # Another row holds that id — typically a legacy one hand-mapped to it at the cutover.
+            # `get_current_user` runs on every page, so refusing beats 500ing until the next claim.
+            logger.exception("roles re-check collided on vekn %s", info["vekn_id"])
+            alert = "That VEKN ID is already linked to another archon account."
+    # A refusal is final — dead token chain, revoked consent, the 30d expiry — and losing the
+    # VEKN id is the same answer login gives: not a member any more. Writing the row's own `vekn`
+    # back cannot collide.
+    await db.set_user_roles(user.uid, user.vekn, False, None)
+    request.session.pop("user_id", None)
+    request.session["alert"] = alert
+    return None
 
 
 async def require_user(user: db.User | None = Depends(get_current_user)) -> db.User:

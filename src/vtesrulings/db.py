@@ -72,6 +72,9 @@ async def init():
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS roles_checked_at TIMESTAMPTZ"
         )
         await cursor.execute("ALTER TABLE users DROP COLUMN IF EXISTS category")
+        # Same name the inline UNIQUE gets, so this is a no-op on a fresh table. It raises on a
+        # legacy table that still holds duplicates, deliberately: they must be resolved before boot.
+        await cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS users_vekn_key ON users (vekn)")
         await cursor.execute(
             "CREATE TABLE IF NOT EXISTS proposals("
             "uid TEXT PRIMARY KEY, "

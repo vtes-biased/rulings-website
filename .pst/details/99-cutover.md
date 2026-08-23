@@ -28,7 +28,7 @@ immediately before it, inside the same window. Everything else is a prerequisite
 | 3 | Drain the in-flight proposals on live v1 | you | #76 |
 | 4 | ~~krcg-static to `krcg>=5.10`~~ | done | #89 |
 | 5 | Stop v1 | you | #93 |
-| 5b | Apply the eight rulemonger VEKN ids | you | #86 |
+| 5b | Apply the seven VEKN ids, then run the two `vekn` probes | you | #86 |
 | 6 | Push `vtes-rulings` (4 commits) | me | #79 |
 | 7 | Tag and deploy the website | you/me | #2 |
 
@@ -52,6 +52,10 @@ drain. The eight `UPDATE users SET vekn = …` moved **into the window, after st
 leaves `vekn` alone, so the statement is schema-agnostic, and its only real deadline is before those
 people's first archon login on v2. With both engines down nothing else can write `users`. The filled
 script and its read-back live in #86's detail file. Key on `uid`, never on `vekn` — duplicate handles.
+Seven ids, not eight: `inm8`'s is not known and it owns no proposal. **Then probe for a duplicate
+`vekn` before booting v2** — `db.init()` now retrofits the UNIQUE the legacy table never got, and it
+raises on duplicates, which at that point means v2 refuses to boot with v1 already stopped. The
+probe, a second one against the index name, and the fix are in #86's detail file.
 
 **3 — the drain.** A proposal is an overlay keyed on the uid a ruling had when it was edited, and
 the base it merges against reloads renumbered: 606 of 2302 rulings change uid. Approve or discard

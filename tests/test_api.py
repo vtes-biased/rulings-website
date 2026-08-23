@@ -10,6 +10,7 @@ import urllib.parse
 import krcg.collections
 import krcg.rulings
 import markupsafe
+import psycopg.errors
 import pytest
 
 import vtesrulings
@@ -1768,6 +1769,12 @@ async def sql(query: str, *params):
         return ret[0] if ret else None
 
 
+async def run(query: str):
+    """`sql` above fetches, so it cannot carry DDL or a bare DELETE."""
+    async with db.POOL.connection() as conn:
+        await conn.execute(query)  # ty: ignore[invalid-argument-type]
+
+
 async def stale(uid, refresh_token: str):
     """Age a user's roles past the re-check window."""
     await sql(
@@ -1827,6 +1834,23 @@ async def test_login_adopts_the_legacy_row_holding_that_vekn_id(client):
 
 
 @pytest.mark.asyncio
+async def test_init_retrofits_the_vekn_unique_onto_a_legacy_table(client):
+    """The cutover's table was created before the inline UNIQUE existed, and adoption keys on
+    `vekn`: with duplicates that UPDATE hits several rows and returns an arbitrary one."""
+    await run("ALTER TABLE users DROP CONSTRAINT IF EXISTS users_vekn_key")
+    await run("DROP INDEX IF EXISTS users_vekn_key")
+    await run("INSERT INTO users (vekn) VALUES ('9999999'), ('9999999'), (NULL), (NULL)")
+    with pytest.raises(psycopg.errors.UniqueViolation):
+        await db.init()  # duplicates block the boot rather than passing unenforced
+    await run("DELETE FROM users WHERE vekn='9999999'")
+    await db.init()  # the two NULL rows do not block the retrofit
+    await db.init()
+    await sql("INSERT INTO users (vekn) VALUES ('9999999') RETURNING uid")
+    with pytest.raises(psycopg.errors.UniqueViolation):
+        await sql("INSERT INTO users (vekn) VALUES ('9999999') RETURNING uid")
+
+
+@pytest.mark.asyncio
 async def test_stale_roles_are_rechecked_against_archon(client, monkeypatch):
     """An hour on, the flag is archon's answer again, not the one cached at login."""
     await client.post("/login", data={"username": "test-user", "approver": "1"})
@@ -1847,6 +1871,31 @@ async def test_stale_roles_are_rechecked_against_archon(client, monkeypatch):
     user = await db.get_user(uid)
     assert user.approver is False
     assert user.refresh_token == "refresh-2"  # the rotated token replaced the spent one
+
+
+@pytest.mark.asyncio
+async def test_a_recheck_landing_on_someone_elses_vekn_refuses(client, monkeypatch):
+    """`vekn` is UNIQUE, so a re-check can now collide — with a legacy row hand-mapped to that id
+    at the cutover. Refuse like login does; get_current_user runs on every page, so a raise here
+    would 500 the whole site for that user."""
+    await client.post("/login", data={"username": "test-user", "approver": "1"})
+    uid = await sql("SELECT uid FROM users WHERE vekn='test-user'")
+    await stale(uid, "refresh-1")
+    await sql("INSERT INTO users (vekn) VALUES ('9999999') RETURNING uid")
+
+    async def refreshed(refresh_token):
+        return {"access_token": "access-2", "refresh_token": "refresh-2"}
+
+    async def collides(access_token):
+        return {"sub": "archon-uid", "vekn_id": "9999999", "roles": ["IC"]}
+
+    monkeypatch.setattr(vtesrulings.archon, "refresh", refreshed)
+    monkeypatch.setattr(vtesrulings.archon, "userinfo", collides)
+    assert (await client.get("/index.html")).status_code == 200
+    user = await db.get_user(uid)
+    assert user.vekn == "test-user"  # kept its own id, the other row still owns 9999999
+    assert user.approver is False
+    assert user.refresh_token is None  # refused for good, so every session of theirs ends
 
 
 @pytest.mark.asyncio
