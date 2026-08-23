@@ -66,21 +66,22 @@ DELETE FROM users WHERE uid = '<legacy-row-uid>';
 Note this moves the proposals rather than writing `archon_uid` onto the legacy
 row: by then the fresh row already holds that uid, and `archon_uid` is UNIQUE.
 
-## Matching the rulemongers by hand (VEKN ids pending)
+## Matching the rulemongers by hand
 
-The eight rows carrying a tier today. Their VEKN ids are being supplied by hand —
-nothing in the data can derive them.
+The eight rows carrying a tier today. Their VEKN ids were supplied by hand on
+2026-08-23 — nothing in the data can derive them. Seven of eight: `inm8`'s id is
+not known and will not be looked for, which costs nothing (0 proposals).
 
 | handle | row uid | tier | proposals | submitted | VEKN id |
 |---|---|---|---|---|---|
-| the1andonlime | `30e1b2a3-92f9-487c-9f25-999373a411e7` | RULEMONGER | 4 | 4 | |
-| Hobbesgoblin | `07c05586-6583-4746-b6b7-6fd993595a35` | RULEMONGER | 3 | 3 | |
-| squidalot | `964ac13e-1c45-49eb-b738-7a4ab61a40a1` | RULEMONGER | 1 | 0 | |
-| Ankha | `5c41d803-5499-433d-9bdf-530a4b94f2db` | ADMIN | 1 | 1 | |
-| kschaefer | `4b3e09ec-25c5-49c8-8365-baa7e7f1811c` | RULEMONGER | 0 | 0 | |
-| inm8 | `781aad7c-08a9-4a33-9f98-c4da8a23e166` | RULEMONGER | 0 | 0 | |
-| Sergio | `09dfee84-aec4-43e8-b679-98fea840af87` | RULEMONGER | 0 | 0 | |
-| lip | `fff5b489-f823-4ea1-818c-def524189e30` | ADMIN | 0 | 0 | |
+| the1andonlime | `30e1b2a3-92f9-487c-9f25-999373a411e7` | RULEMONGER | 4 | 4 | 5360022 |
+| Hobbesgoblin | `07c05586-6583-4746-b6b7-6fd993595a35` | RULEMONGER | 3 | 3 | 4720002 |
+| squidalot | `964ac13e-1c45-49eb-b738-7a4ab61a40a1` | RULEMONGER | 1 | 0 | 8180022 |
+| Ankha | `5c41d803-5499-433d-9bdf-530a4b94f2db` | ADMIN | 1 | 1 | 3200188 |
+| kschaefer | `4b3e09ec-25c5-49c8-8365-baa7e7f1811c` | RULEMONGER | 0 | 0 | 1003455 |
+| inm8 | `781aad7c-08a9-4a33-9f98-c4da8a23e166` | RULEMONGER | 0 | 0 | — *not supplied* |
+| Sergio | `09dfee84-aec4-43e8-b679-98fea840af87` | RULEMONGER | 0 | 0 | 3120101 |
+| lip | `fff5b489-f823-4ea1-818c-def524189e30` | ADMIN | 0 | 0 | 3200340 |
 
 ### When it runs — inside the cutover window
 
@@ -97,39 +98,50 @@ No collision risk: every existing `vekn` is a handle, so a numeric id can never
 duplicate one — and `db.init()` does not retrofit the `vekn UNIQUE` the current
 table lacks anyway.
 
-### The script — ids pending
+### The script
 
-Fill the eight ids, run on gravelines as one transaction. Every statement keys on
-`uid`; **never** on `vekn` (the duplicate `Hobbesgoblin` below). Skip any line
-whose person cannot be identified — rows 5-8 own no proposal, so a skip costs
-nothing but row continuity.
+Run on gravelines as one transaction. Every statement keys on `uid`; **never** on
+`vekn` (the duplicate `Hobbesgoblin` below). `inm8` is deliberately absent — id
+unknown, 0 proposals, so it forfeits row continuity and nothing else.
 
 ```sql
 -- sudo -u postgres psql -d vtes-rulings -1 -f match_vekn_ids.sql
 BEGIN;
-UPDATE users SET vekn = '<the1andonlime>' WHERE uid = '30e1b2a3-92f9-487c-9f25-999373a411e7';
-UPDATE users SET vekn = '<Hobbesgoblin>'  WHERE uid = '07c05586-6583-4746-b6b7-6fd993595a35';
-UPDATE users SET vekn = '<squidalot>'     WHERE uid = '964ac13e-1c45-49eb-b738-7a4ab61a40a1';
-UPDATE users SET vekn = '<Ankha>'         WHERE uid = '5c41d803-5499-433d-9bdf-530a4b94f2db';
-UPDATE users SET vekn = '<kschaefer>'     WHERE uid = '4b3e09ec-25c5-49c8-8365-baa7e7f1811c';
-UPDATE users SET vekn = '<inm8>'          WHERE uid = '781aad7c-08a9-4a33-9f98-c4da8a23e166';
-UPDATE users SET vekn = '<Sergio>'        WHERE uid = '09dfee84-aec4-43e8-b679-98fea840af87';
-UPDATE users SET vekn = '<lip>'           WHERE uid = 'fff5b489-f823-4ea1-818c-def524189e30';
+UPDATE users SET vekn = '5360022' WHERE uid = '30e1b2a3-92f9-487c-9f25-999373a411e7';  -- the1andonlime
+UPDATE users SET vekn = '4720002' WHERE uid = '07c05586-6583-4746-b6b7-6fd993595a35';  -- Hobbesgoblin
+UPDATE users SET vekn = '8180022' WHERE uid = '964ac13e-1c45-49eb-b738-7a4ab61a40a1';  -- squidalot
+UPDATE users SET vekn = '3200188' WHERE uid = '5c41d803-5499-433d-9bdf-530a4b94f2db';  -- Ankha
+UPDATE users SET vekn = '1003455' WHERE uid = '4b3e09ec-25c5-49c8-8365-baa7e7f1811c';  -- kschaefer
+UPDATE users SET vekn = '3120101' WHERE uid = '09dfee84-aec4-43e8-b679-98fea840af87';  -- Sergio
+UPDATE users SET vekn = '3200340' WHERE uid = 'fff5b489-f823-4ea1-818c-def524189e30';  -- lip
 COMMIT;
 ```
 
-Read back before booting v2 — eight rows, each `vekn` numeric:
+Read back before booting v2 — seven rows, each `vekn` the id below:
 
 ```sql
 SELECT uid, vekn FROM users WHERE uid IN (
-  '30e1b2a3-92f9-487c-9f25-999373a411e7','07c05586-6583-4746-b6b7-6fd993595a35',
-  '964ac13e-1c45-49eb-b738-7a4ab61a40a1','5c41d803-5499-433d-9bdf-530a4b94f2db',
-  '4b3e09ec-25c5-49c8-8365-baa7e7f1811c','781aad7c-08a9-4a33-9f98-c4da8a23e166',
-  '09dfee84-aec4-43e8-b679-98fea840af87','fff5b489-f823-4ea1-818c-def524189e30');
+  '30e1b2a3-92f9-487c-9f25-999373a411e7',
+  '07c05586-6583-4746-b6b7-6fd993595a35',
+  '964ac13e-1c45-49eb-b738-7a4ab61a40a1',
+  '5c41d803-5499-433d-9bdf-530a4b94f2db',
+  '4b3e09ec-25c5-49c8-8365-baa7e7f1811c',
+  '09dfee84-aec4-43e8-b679-98fea840af87',
+  'fff5b489-f823-4ea1-818c-def524189e30');
 ```
 
 Only `07c05586…` carries the `Hobbesgoblin` proposals; the second row of that name
 (`5b00b1b0…`, no proposals) must be left alone.
+
+**A wrong id is worse than a missing one, on four rows.** Adoption matches
+`archon_uid IS NULL AND vekn = <the id archon reports>` (`db.py:113-116`), so a
+typo that happens to be some *other* member's real id hands that person the
+legacy row and its proposals at their first login. That only bites where the row
+owns something — `the1andonlime` (4), `Hobbesgoblin` (3), `squidalot` (1),
+`Ankha` (1). On the empty rows a typo just parks an unreachable blank row. The
+ids were transcribed by hand and nothing here can check them against vekn.net
+(its member API needs `VEKN_API_USERNAME`/`PASSWORD`, which we do not hold), so
+re-read those four against archon's member records before running the block.
 
 ## Duplicate rows — why the recipe keys on uid
 
