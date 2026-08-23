@@ -115,7 +115,7 @@ class Ruling(UID):
     references: list[ReferencesSubstitution] = dataclasses.field(default_factory=list)
     cards: list[CardSubstitution] = dataclasses.field(default_factory=list)
     # Per-card body-text overrides on a group ruling: card_uid -> adapted text (references shared
-    # from this ruling). Empty for card rulings. See pst #27.
+    # from this ruling). Empty for card rulings. See wiki/rulings-format.md.
     overrides: dict[str, str] = dataclasses.field(default_factory=dict)
 
     def __hash__(self):

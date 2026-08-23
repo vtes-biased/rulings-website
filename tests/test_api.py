@@ -1219,7 +1219,7 @@ async def test_proposal_workflow(client):
 
 
 def test_format_diff():
-    """The Discord diff text renders each change kind and truncates by size (pst #26)."""
+    """The Discord diff text renders each change kind and truncates by size."""
     target = models.NID(uid="100015", name="Academic Hunting Ground")
 
     def ruling(uid, text, state, **kw):
@@ -1328,7 +1328,7 @@ def test_diff_override_only_modified():
 
 
 async def test_proposal_diff_page(client):
-    """The proposal page SSR-renders the overlay diff: NEW/MODIFIED rulings, refs (pst #25)."""
+    """The proposal page SSR-renders the overlay diff: NEW/MODIFIED rulings, refs."""
     prop_uid = await login_and_proposal(client)
     response = await client.post("/api/ruling/100015", json={"text": "Fresh ruling [RTR 20070707]"})
     assert response.status_code == 200

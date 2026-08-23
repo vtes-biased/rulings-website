@@ -394,7 +394,7 @@ async def delete_ruling(
 async def put_override(
     target_id: str, ruling_id: str, card_id: str, ctx: ProposalCtx = Depends(proposal_update)
 ):
-    """Set (empty text clears) a per-card text override on a group ruling. See pst #27."""
+    """Set (empty text clears) a per-card text override on a group ruling."""
     params = await get_params(ctx.request)
     return asdict(
         ctx.manager.override_ruling(target_id, ruling_id, card_id, params.get("text", ""))

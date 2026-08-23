@@ -74,9 +74,9 @@ deps-check:
     printf '%s\n' "$npmrep" | grep '^INFO ' | sed 's/^INFO /      /' || true
     exit "$stale"
 
-# Cut a release: bump version, commit, tag, push. The `v*` tag push is the deploy
-# trigger — CI builds the frontend, ships, and restarts the service (see deploy epic).
-# This is an app, not a published library: no wheel is built or attached here.
+# Cut a release: bump version, commit, tag, push. The `v*` tag push runs the suite as a
+# gate and, if green, attaches the wheel/sdist/requirements to a GitHub Release.
+# Deploy is a separate manual step: `cd ansible && just deploy` fetches that Release.
 # Default bump is minor (project versioning is major.minor only); pass `just release major` for a major bump.
 release bump="minor":
     #!/usr/bin/env bash

@@ -20,7 +20,7 @@
     const groupCards = $derived(groupStore.group?.cards ?? [])
 
     // Rulings inherited from a group (target ≠ current source) are edited on the group page, not here
-    // — but a card may *adapt* one for itself (a per-card text override, pst #27), edited right here.
+    // — but a card may *adapt* one for itself (a per-card text override), edited right here.
     const editable = $derived(ruling.target.uid === source)
     const editRefs = $derived(editable && ruling.state !== "DELETED")
     const overridden = $derived(!!ruling.overrides?.[source])

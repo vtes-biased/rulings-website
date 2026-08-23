@@ -1,0 +1,136 @@
+# The v2 cutover
+
+Ephemeral. Dies with the last cutover line on the board.
+
+`rulings.krcg.org` runs **v1.3.0**. `main` carries two landed epics — card tokens carrying the card
+id, and archon OAuth login — and one deploy ships both. The switch is **hard and one-way**.
+
+## Why the order is not interchangeable
+
+1. **The data push cannot come early.** v1.3.0 resolves a card token with
+   `card_map[token[1:-1]]` (`v1.3.0:src/vtesrulings/utils.py:236`). Against the migrated file that
+   raises `KeyError: '101565|rebirth'` (checked). `load_base` runs it over every ruling at startup,
+   so once the migrated file is on `main`, **v1 cannot boot** — it survives only on its in-memory
+   index until something restarts it.
+2. **It cannot come late either.** `load_base` normalises bare tokens in memory, so the first
+   approval after v2 deploys serialises all 606 rewritten rulings plus the new header anyway, as a
+   side effect of whatever unrelated proposal it was. And an approval pushing from an index cloned
+   before the data push hits a non-fast-forward.
+3. Therefore the push goes **after v1 is stopped, before v2 boots** — which is the hard switch the
+   schema move requires anyway: v2's `db.init()` drops `category` and appends the archon columns,
+   and v1.3.0's positional INSERT then writes into the wrong ones. The two versions must never share
+   the database.
+
+## Steps
+
+| # | What | Who |
+|---|---|---|
+| 0 | ~~krcg 5.11 released, website pinned, every format regex bound to krcg~~ | done |
+| 1 | ~~Register the archon OAuth clients, prod and beta~~ | done 2026-08-23 |
+| **1b** | **Deploy archon-vibe with the consent fix, prod and beta** | @lip |
+| **2** | **Ask on Discord: submit any draft you care about** | @lip |
+| **3** | **Drain the in-flight proposals on live v1** | @lip |
+| 4 | ~~krcg-static to `krcg>=5.10`~~ | done, and never a gate |
+| **5** | **Stop v1** | @lip |
+| **5b** | **`DELETE FROM users`** — every legacy row is deprecated | @lip |
+| **6** | **Push `vtes-rulings` (4 commits)** | agent |
+| **7** | **Tag and deploy the website** | @lip |
+
+### 1b — the gate found by testing the login
+
+First login worked; the second looped on archon's consent screen forever. With consent already on
+file `GET /oauth/authorize` answers a 302, but the consent page reaches it through `fetch` with a
+Bearer token, and a fetch cannot read `Location` off a redirect (`redirect: "manual"` → opaque
+response, empty header list), so the page navigated to the empty string and called `/authorize`
+again. Fixed in archon-vibe `105bdbf` — both remaining redirects answer `{"redirect_url": …}` like
+the approval path already did.
+
+That fix is **not pushed**: as re-checked 2026-08-23, archon-vibe `main` is **25 commits ahead of
+`origin/main`** (tree clean), and the newest tag `v1.0.7` does not contain `105bdbf`. Tagging a
+release there ships 24 other unpushed commits — what it carries is @lip's call. Releases are
+tag-triggered (`v*`) there. Beta first, to unblock dev; prod because that is where the site's users
+are.
+
+### 2 and 5b — the users
+
+Step 2 is the Discord ask. Step 5b is one statement:
+
+```sql
+SELECT count(*) FROM proposals;  -- must be 0: step 3 is the drain, and the FK blocks the DELETE
+DELETE FROM users;
+```
+
+**Every legacy row is deprecated** (decided 2026-08-23). Archon owns identity; a legacy row is worth
+keeping only for what hangs off it, and the drain takes that away. `category` is dropped by
+`db.init()` and `approver` is archon's answer now.
+
+This replaced a plan to hand-map the eight rows carrying a tier to their VEKN ids so `login_user`
+would adopt them — it bought back only their proposals, which the drain removes anyway, and carried
+a real hazard: a mistyped id that happens to be another member's real one hands that person the
+wrong row. The adoption path itself (`UPDATE … WHERE archon_uid IS NULL AND vekn=%s`) went with it.
+
+Do **not** use `rulings-web resetdb`: that CLI ships with v2, and v2 is not deployed yet at 5b.
+The table survives the DELETE, so `db.init()`'s `CREATE UNIQUE INDEX IF NOT EXISTS users_vekn_key`
+is what puts the declared UNIQUE on it.
+
+Kept as the record of who held a tier on v1 — no procedure consumes it; recovery, if anyone ever
+asks, keys on `uid`:
+
+| handle | row uid | tier | proposals | submitted | VEKN id |
+|---|---|---|---|---|---|
+| the1andonlime | `30e1b2a3-92f9-487c-9f25-999373a411e7` | RULEMONGER | 4 | 4 | 5360022 |
+| Hobbesgoblin | `07c05586-6583-4746-b6b7-6fd993595a35` | RULEMONGER | 3 | 3 | 4720002 |
+| squidalot | `964ac13e-1c45-49eb-b738-7a4ab61a40a1` | RULEMONGER | 1 | 0 | 8180022 |
+| Ankha | `5c41d803-5499-433d-9bdf-530a4b94f2db` | ADMIN | 1 | 1 | 3200188 |
+| kschaefer | `4b3e09ec-25c5-49c8-8365-baa7e7f1811c` | RULEMONGER | 0 | 0 | 1003455 |
+| inm8 | `781aad7c-08a9-4a33-9f98-c4da8a23e166` | RULEMONGER | 0 | 0 | — |
+| Sergio | `09dfee84-aec4-43e8-b679-98fea840af87` | RULEMONGER | 0 | 0 | 3120101 |
+| lip | `fff5b489-f823-4ea1-818c-def524189e30` | ADMIN | 0 | 0 | 3200340 |
+
+The audit (42 rows, 2026-08-22) found **not one numeric VEKN id** — every row holds a vekn.net login
+handle, because v1.3.0 stored `params["username"]` verbatim. 11 rows owned 17 proposals, 9 of them
+submitted; the 8 unsubmitted drafts are what step 2 is for. Four people held two rows apiece, which
+proves the production table never enforced the `vekn UNIQUE` its `CREATE TABLE` declares.
+
+### 3 — the drain
+
+A proposal is an overlay keyed on the uid a ruling had when it was edited, and the base it merges
+against reloads renumbered: **606 of 2302 rulings change uid** at the migration. Anything open on one
+of those has nothing to resolve against. Proposals are transient by design, so draining is the fix,
+not migrating payloads. Same ask as step 2 — do them together.
+
+### 6 — the push
+
+`vtes-rulings` is 4 commits ahead of `origin/main`: the migration (`68d5a6c`), the krcg-3 script
+deletion (`1c8dd7d`), the reference-source check (`b316272`), the symbol list (`ad7b0b5`). The
+migration rewrote 831 token occurrences / 395 distinct tokens across 606 rulings, produced through
+`commit_index` so it is byte-identical with what an approval writes.
+
+Re-verify before pushing: a fresh serializer pass over the tree must be a **byte-for-byte no-op**,
+and `check_rulings` (offline half) must report **0 warnings**.
+
+### 7 — the release
+
+`just release` bumps the version, tags and pushes; CI builds the wheel and attaches it to a GitHub
+Release. **Deploy is then manual** — `cd ansible && just deploy`. The app boots, clones the migrated
+file and serves it.
+
+## State of the other repos (re-checked 2026-08-23)
+
+- **rulings-website** — `main` is level with `origin/main`. Nothing unpushed here.
+- **krcg** — released as 5.11, on PyPI. Nothing pending.
+- **krcg-static** — done and pushed (`d52c2035`), off the critical path.
+- **vtes-rulings** — 4 commits ahead, listed under step 6.
+- **archon-vibe** — 25 commits ahead, no release. Step 1b.
+
+## Rollback
+
+Steps 1–4 are reversible on their own terms. From step 5 it is one-way in practice: v1 cannot read
+the migrated data, so a rollback means reverting the four `vtes-rulings` commits and pushing that
+before restarting v1.
+
+## Residual risk
+
+No local check can reach archon's client record — `GET /oauth/authorize` resolves the user before
+validating `redirect_uri` — so a redirect-URI typo would surface as a 400 on the consent page with
+v1 already stopped. A real login through prod after 1b is the only thing that retires it.

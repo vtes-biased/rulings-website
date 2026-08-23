@@ -5,7 +5,7 @@
     import { renderPrefix } from "./tokens"
     import type { Ruling } from "./types"
 
-    // Per-card body-text overrides of one group ruling, authored from the group page (pst #27/#64).
+    // Per-card body-text overrides of one group ruling, authored from the group page.
     // The list is sparse: only cards that are (or are being) adapted get an editor. `ruling.overrides`
     // is the group ruling's full {card_uid → text} map; the PUT returns the *effective* ruling for one
     // card, so we merge back only its overrides map + the group ruling's state.

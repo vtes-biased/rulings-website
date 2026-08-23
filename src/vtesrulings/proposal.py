@@ -144,7 +144,7 @@ class Manager:
     ) -> models.Ruling:
         """The ruling a card effectively sees for one of its groups' rulings: the per-card text
         override when present (references still shared from the base ruling), else prefix + base
-        text. An override subsumes the prefix for that one ruling. See pst #27."""
+        text. An override subsumes the prefix for that one ruling. See wiki/rulings-format.md."""
         override = ruling.overrides.get(card_uid)
         if override is not None:
             text = override
@@ -438,7 +438,7 @@ class Manager:
 
     def override_ruling(self, target_uid: str, uid: str, card_uid: str, text: str) -> models.Ruling:
         """Set (or clear, when text is empty) a per-card body-text override on a group ruling.
-        Returns the effective ruling that card now sees. See pst #27."""
+        Returns the effective ruling that card now sees."""
         if not target_uid.startswith(("G", "P")):
             raise ValueError("Overrides only apply to group rulings")
         utils.check_reference_tokens(text or "")
@@ -728,7 +728,7 @@ class Manager:
 
     def diff(self) -> models.ProposalDiff:
         """A structured view of everything the overlay changes, grouped by kind then target.
-        Consumed by the on-site proposal page and the Discord message (see pst #25/#26)."""
+        Consumed by the on-site proposal page and the Discord message."""
         ret = models.ProposalDiff()
         for uid, ref in sorted(self.prop.references.items()):
             base = self.base.references.get(uid)

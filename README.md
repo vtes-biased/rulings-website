@@ -41,66 +41,34 @@ is mutated in place, the app **must run as a single worker**.
 ### Setup
 
 ```shell
-touch .env              # create an env file (see below)
-uv sync --group dev     # Python deps incl. the dev group (tests, ruff, ty, ansible)
-just update             # same, plus the frontend: npm install + uv sync --group dev
+touch .env       # local config; see wiki/operations.md for every var the app reads
+just update      # npm install + uv sync --group dev
 ```
 
-`just update` installs both the frontend (`npm`) and Python (`uv`) dependencies.
-
-### Environment
-
-Put local config in `.env`. The two you'll usually want for a working local instance:
-
-```shell
-DISCORD_WEBHOOK=<your Discord community server webhook URL>
-DISCORD_SERVER_ID=<your Discord server id>
-```
-
-Other vars the app reads (all optional locally):
-`SESSION_SECRET_KEY`, `SITE_URL_BASE`, `ARCHON_URL`, `ARCHON_CLIENT_ID`, `ARCHON_CLIENT_SECRET`
-(the OAuth client login runs through), `DATABASE_URL` (and `DB_NAME`/`DB_USER`/`DB_PWD`),
-`RULINGS_GIT`, `RULINGS_GITHUB_{APP_ID,INSTALLATION_ID,PRIVATE_KEY}` (the GitHub App used to push
-approvals), `KRCG_STATIC_{REPO,INSTALLATION_ID}`, `GIT_AUTHOR_{NAME,EMAIL}`, and `GIT_SSH_COMMAND`.
-`TESTING=1` turns `POST /login` into a direct session mint, bypassing archon.
+For a working local instance you want at least `DISCORD_WEBHOOK` and `DISCORD_SERVER_ID`, plus an
+archon OAuth client (`ARCHON_CLIENT_ID` / `ARCHON_CLIENT_SECRET`) — without one there is no way in
+but `TESTING=1`, which turns `POST /login` into a direct session mint.
 
 > On startup the app needs network access: it clones the rulings repo to a temp dir and loads the
-> full VEKN card database via `krcg`.
+> full VEKN card database via `krcg`. It also needs a local PostgreSQL — database `vtes-rulings`,
+> role `vtes-rulings`, with `CREATEDB` for the test harness.
 
 ### Run locally
 
 ```shell
-just serve   # Vite build watcher (via pm2) + hypercorn ASGI dev server on 127.0.0.1:5000, --reload --workers 1
+just serve   # Vite watcher (pm2) + hypercorn on 127.0.0.1:5000, --reload --workers 1
 just stop    # stop the pm2 frontend process
 ```
 
-Frontend only: `npm run build` (one-shot) or `npm run front` (watch).
+`just` with no recipe lists the rest: `lint`, `fmt`, `typecheck`, `test`, `clean`, `deps-check`.
+Single test: `TESTING=1 uv run pytest tests/test_api.py::test_get_card`. Frontend only:
+`npm run build`, or `npm run front` to watch.
 
-### Tasks
+Tests are hermetic: a vendored rulings snapshot served as a local bare git remote, card data pinned
+by the locked `krcg` version, and a throwaway database created and dropped per session — no SSH, no
+network.
 
-```shell
-just lint        # ruff check + format --check
-just fmt         # ruff check --fix + format
-just typecheck   # ty (warnings are errors)
-just test        # TESTING=1 pytest (excludes the `discord` marker)
-just clean       # remove build artifacts and caches
-just deps-check  # report whether newer deps are available (read-only)
-```
-
-Run a single test: `TESTING=1 uv run pytest tests/test_api.py::test_get_card`
-
-Tests are hermetic: a vendored rulings snapshot is served as a local bare git remote, card data is
-pinned by the locked `krcg` version, and the DB is a throwaway created and dropped per session — no
-SSH or network required.
-
-### CLI
-
-The `rulings-web` script (installed by `uv sync`) exposes admin commands, e.g.:
-
-```shell
-uv run rulings-web resetdb
-```
-
+The `rulings-web` script installed by `uv sync` carries the admin commands (`rulings-web resetdb`).
 Who may approve is archon's call, not a local one: hold the `IC` or `Rulemonger` role there.
 
 ## Release & deploy
@@ -109,7 +77,18 @@ Who may approve is archon's call, not a local one: hold the `IC` or `Rulemonger`
 just release [minor|major]   # bump version (major.minor only), commit, tag, push
 ```
 
-Pushing the `v*` tag is the deploy trigger: CI builds the frontend, ships, and restarts the service.
-This is an app, not a published library — no wheel is built or attached. Deployment (gravelines,
-systemd, nginx, managed Postgres, GitHub App secrets) is handled by Ansible; see
-[`ansible/README.md`](ansible/README.md).
+Pushing the `v*` tag runs the suite as a gate and, if green, attaches the wheel, sdist and pinned
+`requirements.txt` to a GitHub Release. **Deploy is a separate, manual step** — `cd ansible && just
+deploy` fetches that Release and ships it to gravelines (systemd, nginx, managed Postgres, GitHub
+App secrets). See [`ansible/README.md`](ansible/README.md).
+
+## Working in this repository
+
+The repo runs a documentation-first harness. Three lifespans, and every artifact has exactly one:
+code is permanent, [`wiki/`](wiki/index.md) is the standing source of truth for *what is* and *what
+was decided*, and task context is ephemeral. [`BOARD.md`](BOARD.md) holds what must change — the goal
+is zero, and completion is deletion.
+
+Read [`wiki/index.md`](wiki/index.md) before changing anything, and
+[`wiki/dogmas.md`](wiki/dogmas.md) before arguing with it. `CLAUDE.md` points agents at the same
+places.
