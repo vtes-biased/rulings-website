@@ -74,7 +74,7 @@ gravelines. The app boots, clones the migrated file and serves it.
 
 - **krcg** — pushed and released, 5.11. Nothing pending.
 - **vtes-rulings** — 4 commits ahead of `origin/main`, listed above. Nothing else.
-- **rulings-website** — 28 commits ahead of `origin/main`, carrying **both** epics interleaved: the
+- **rulings-website** — 37 commits ahead of `origin/main`, carrying **both** epics interleaved: the
   card-token change (#76) and the archon login switch (#80). One deploy ships both. That is why the
   auth prerequisites gate a release whose headline feature is the token change.
 - **krcg-static** — done and pushed (`d52c2035`), step 4 off the critical path.
@@ -85,7 +85,10 @@ consent page reaches it through `fetch` with a Bearer token and a fetch cannot r
 redirect (`redirect: "manual"` → opaque response, empty header list), so the page navigated to the
 empty string, reloading itself, calling `/authorize` again. Fixed in archon-vibe `105bdbf` — both
 remaining redirects answer `{"redirect_url": …}` like the approval path already did — but **that fix
-is not deployed**. Until archon prod is redeployed, every returning user's login loops: it hits
+is not even pushed**: archon-vibe `main` is 10 commits ahead of `origin/main`, the newest tag
+`v1.0.7` predates it, and the tree is dirty (7 modified files, work in flight as of 2026-08-23).
+Tagging a release there therefore ships nine other unpushed commits with it — what that release
+carries is a call only you can make. Until archon prod is redeployed, every returning user's login loops: it hits
 `archon.vekn.net` for the site's users and beta for local testing, so both need the deploy, beta
 first to unblock dev. Tag-triggered (`v*`) in archon-vibe, so it is a release, not a push.
 
