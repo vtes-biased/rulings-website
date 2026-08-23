@@ -20,7 +20,7 @@ fmt:
 typecheck:
     uv run ty check --error-on-warning
 
-# Run tests (testing mode bypasses VEKN login, excludes discord marker)
+# Run tests (testing mode bypasses VEKN login; the whole suite, no opt-outs)
 test:
     TESTING=1 uv run pytest
 

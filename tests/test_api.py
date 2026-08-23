@@ -526,13 +526,13 @@ async def test_reminder_can_have_overrides(client):
     assert eff["overrides"] == {"100015": "Adapted"}
 
 
-async def test_proposal_submits_to_discord_and_updates_its_thread(client, discord_hook):
+async def test_proposal_submits_to_discord_and_updates_its_thread(client, fake_discord):
     """Submitting opens the discussion thread, carrying the diff; submitting again posts an
     update into that same thread."""
     await login_and_proposal(client)
     await client.post("/api/ruling/100015", json={"text": "Fresh ruling [RTR 20070707]"})
     assert (await client.post("/api/proposal/submit")).status_code == 200
-    (opened,) = discord_hook.posts
+    (opened,) = fake_discord.posts
     assert opened["payload"]["thread_name"] == "Proposal: Test"
     assert "thread_id" not in opened["query"]
     embed = opened["payload"]["embeds"][0]
@@ -544,7 +544,7 @@ async def test_proposal_submits_to_discord_and_updates_its_thread(client, discor
     # a second submit updates the thread the first one opened
     await client.post("/api/ruling/100015", json={"text": "Second ruling [RTR 20070707]"})
     assert (await client.post("/api/proposal/submit")).status_code == 200
-    update = discord_hook.posts[1]
+    update = fake_discord.posts[1]
     assert update["query"]["thread_id"] == "42"
     assert "Second ruling" in update["payload"]["embeds"][0]["description"]
 
@@ -970,23 +970,27 @@ def test_authorization_url_challenges_with_the_verifier_digest():
     assert params["code_challenge"] == expected
 
 
-async def test_login_callback_refuses_a_state_it_did_not_issue(client, archon):
+async def test_login_callback_refuses_a_state_it_did_not_issue(client, fake_archon):
     """No pending handshake in session (or a mismatched state) must not reach archon at all."""
     response = await client.get("/login/callback?code=whatever&state=forged")
     assert response.status_code == 302
     assert response.headers["location"] == "/index.html"
-    assert not archon.spent
+    assert not fake_archon.spent
     page = await client.get("/index.html")
     assert "Login was cancelled or timed out" in page.text
 
 
 @pytest.mark.parametrize("hostile", ["https://evil.tld/", "//evil.tld/", "/\\evil.tld"])
-async def test_login_refuses_an_offsite_next(client, hostile):
-    """`next` rides a link anyone can craft, and login is a plain GET — an absolute or
-    protocol-relative value would land the user offsite after a genuine login."""
-    response = await client.post(
-        f"/login?next={urllib.parse.quote(hostile)}", data={"username": "test-user"}
+async def test_login_refuses_an_offsite_next(client, fake_archon, hostile):
+    """`next` rides a link anyone can craft, and `/login` is a plain GET — an absolute or
+    protocol-relative value would walk the user through a genuine archon consent and land them
+    offsite on the way back. Driven through the real flow: the value is sanitised where it enters
+    the session, and the callback can only send the user where that left it."""
+    redirect = await client.get(f"/login?next={urllib.parse.quote(hostile)}")
+    pending = dict(
+        urllib.parse.parse_qsl(urllib.parse.urlparse(redirect.headers["location"]).query)
     )
+    response = await client.get(f"/login/callback?code=the-code&state={pending['state']}")
     assert response.status_code == 302
     assert response.headers["location"] == "/index.html"
 
@@ -1021,19 +1025,19 @@ async def stale(uid, refresh_token: str):
     )
 
 
-async def test_login_callback_signs_the_user_in(client, archon):
+async def test_login_callback_signs_the_user_in(client, fake_archon):
     """The whole handshake against archon: the code buys the tokens, userinfo says who the user is
     and what they may do, and `next` takes them back where they were."""
     redirect = await client.get("/login?next=/groups.html")
     pending = dict(
         urllib.parse.parse_qsl(urllib.parse.urlparse(redirect.headers["location"]).query)
     )
-    archon.info = {"sub": "archon-uid-7", "vekn_id": "1234567", "roles": ["Rulemonger"]}
+    fake_archon.info = {"sub": "archon-uid-7", "vekn_id": "1234567", "roles": ["Rulemonger"]}
     response = await client.get(f"/login/callback?code=the-code&state={pending['state']}")
     assert response.status_code == 302
     assert response.headers["location"] == "/groups.html"
-    assert archon.spent == ["the-code"]
-    assert archon.access == ["access-1"]
+    assert fake_archon.spent == ["the-code"]
+    assert fake_archon.access == ["access-1"]
     user = await user_row(await sql("SELECT uid FROM users WHERE archon_uid='archon-uid-7'"))
     assert user.vekn == "1234567"
     assert user.approver is True  # Rulemonger
@@ -1042,13 +1046,13 @@ async def test_login_callback_signs_the_user_in(client, archon):
     assert (await client.post("/api/proposal", json={"name": "Mine"})).status_code == 200
 
 
-async def test_login_refuses_a_member_with_no_vekn_id(client, archon):
+async def test_login_refuses_a_member_with_no_vekn_id(client, fake_archon):
     """Archon accounts exist without a VEKN id, and there is nothing to attribute a ruling to."""
     redirect = await client.get("/login")
     pending = dict(
         urllib.parse.parse_qsl(urllib.parse.urlparse(redirect.headers["location"]).query)
     )
-    archon.info = {"sub": "archon-uid-8", "roles": []}
+    fake_archon.info = {"sub": "archon-uid-8", "roles": []}
     response = await client.get(f"/login/callback?code=the-code&state={pending['state']}")
     assert response.status_code == 302
     page = await client.get("/index.html")
@@ -1081,40 +1085,40 @@ async def test_a_returning_login_rewrites_its_row(client):
     assert again.refresh_token == "refresh-2"
 
 
-async def test_stale_roles_are_rechecked_against_archon(client, archon):
+async def test_stale_roles_are_rechecked_against_archon(client, fake_archon):
     """An hour on, the flag is archon's answer again, not the one cached at login."""
     await client.post("/login", data={"username": "test-user", "approver": "1"})
     uid = await sql("SELECT uid FROM users WHERE vekn='test-user'")
     await stale(uid, "refresh-1")
-    archon.tokens = {"access_token": "access-2", "refresh_token": "refresh-2"}
-    archon.info = {"sub": "archon-uid", "vekn_id": "9999999", "roles": ["PT"]}
+    fake_archon.tokens = {"access_token": "access-2", "refresh_token": "refresh-2"}
+    fake_archon.info = {"sub": "archon-uid", "vekn_id": "9999999", "roles": ["PT"]}
     assert (await client.get("/index.html")).status_code == 200
-    assert (archon.spent, archon.access) == (["refresh-1"], ["access-2"])
+    assert (fake_archon.spent, fake_archon.access) == (["refresh-1"], ["access-2"])
     user = await user_row(uid)
     assert user.approver is False
     assert user.refresh_token == "refresh-2"  # the rotated token replaced the spent one
 
 
-async def test_a_rotated_token_lands_even_when_userinfo_fails(client, archon):
+async def test_a_rotated_token_lands_even_when_userinfo_fails(client, fake_archon):
     """The refresh revoked the token we spent, so losing the new one to a later failure would
     make the next hour read as chain reuse and end every session of that user."""
     await client.post("/login", data={"username": "test-user", "approver": "1"})
     uid = await sql("SELECT uid FROM users WHERE vekn='test-user'")
     await stale(uid, "refresh-1")
-    archon.tokens = {"access_token": "access-2", "refresh_token": "refresh-2"}
-    archon.userinfo_status = 503
+    fake_archon.tokens = {"access_token": "access-2", "refresh_token": "refresh-2"}
+    fake_archon.userinfo_status = 503
     assert (await client.get("/index.html")).status_code == 200
     user = await user_row(uid)
     assert user.refresh_token == "refresh-2"  # the spent token is gone from the row
     assert user.approver is True  # an outage is not a refusal: the roles stand until next hour
 
 
-async def test_an_archon_outage_keeps_the_session(client, archon):
+async def test_an_archon_outage_keeps_the_session(client, fake_archon):
     """A timeout is not a refusal: keep the roles we have, and do not retry on the next request."""
     await client.post("/login", data={"username": "test-user", "approver": "1"})
     uid = await sql("SELECT uid FROM users WHERE vekn='test-user'")
     await stale(uid, "refresh-1")
-    archon.token_status = 503
+    fake_archon.token_status = 503
     assert (await client.get("/index.html")).status_code == 200
     user = await user_row(uid)
     assert user.approver is True
@@ -1126,13 +1130,13 @@ async def test_an_archon_outage_keeps_the_session(client, archon):
     )
 
 
-async def test_a_dead_token_chain_logs_the_user_out(client, archon):
+async def test_a_dead_token_chain_logs_the_user_out(client, fake_archon):
     """Archon refusing for good (revoked consent, reused chain, 30d expiry) ends the session
     rather than 500ing, and strips the flag so the user's other sessions lose it too."""
     await client.post("/login", data={"username": "test-user", "approver": "1"})
     uid = await sql("SELECT uid FROM users WHERE vekn='test-user'")
     await stale(uid, "refresh-1")
-    archon.token_status = 400
+    fake_archon.token_status = 400
     elsewhere = client.cookies.get("session")  # a second browser, still holding a live cookie
     page = await client.get("/index.html")
     assert page.status_code == 200
@@ -1145,7 +1149,7 @@ async def test_a_dead_token_chain_logs_the_user_out(client, archon):
     assert (await client.post("/api/proposal", json={"name": "Nope"})).status_code == 401
 
 
-async def test_approval_needs_the_approver_flag_and_publishes(client, discord_hook):
+async def test_approval_needs_the_approver_flag_and_publishes(client, fake_discord):
     """Approval is the one gated action left: a plain member is refused, an archon approver
     merges the overlay into the YAML, pushes it, announces it and drops the proposal row.
 
@@ -1169,6 +1173,6 @@ async def test_approval_needs_the_approver_flag_and_publishes(client, discord_ho
     # ORIGINAL, not NEW: the ruling is in the base index now, not in an overlay
     assert any(r["text"] == text and r["state"] == "ORIGINAL" for r in card["rulings"])
     # the approval is announced in the proposal's own thread
-    announced = discord_hook.posts[-1]
+    announced = fake_discord.posts[-1]
     assert announced["query"]["thread_id"] == "42"
     assert announced["payload"]["embeds"][0]["title"] == "Test APPROVED ✅"

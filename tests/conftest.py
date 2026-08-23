@@ -70,7 +70,7 @@ async def _app(_test_database, rulings_remote):
 
 
 @pytest_asyncio.fixture(name="client")
-async def _client(app, archon, discord_hook):
+async def _client(app, fake_archon, fake_discord):
     """A fresh client (fresh cookie jar) per test, sharing the session-wide app. Truncates the DB
     on teardown so a test's users/proposals never leak into the next, and takes the two fake
     services so no test can reach the real archon or Discord, named or not."""
@@ -95,7 +95,7 @@ class FakeArchon:
         self.access: list[str] = []  # every access token it presented to /oauth/userinfo
         self.tokens = {"access_token": "access-1", "refresh_token": "refresh-1"}
         self.info = {"sub": "archon-uid", "vekn_id": "9999999", "roles": ["IC"]}
-        self.token_status = 200  # 400 is a refusal (dead chain), anything else an outage
+        self.token_status = 200
         self.userinfo_status = 200
 
     async def token(self, request):
@@ -164,13 +164,13 @@ async def _discord_server():
     await runner.cleanup()
 
 
-@pytest.fixture(name="archon")
-def _archon(_archon_server):
+@pytest.fixture(name="fake_archon")
+def _fake_archon(_archon_server):
     _archon_server.reset()
     return _archon_server
 
 
-@pytest.fixture(name="discord_hook")
-def _discord_hook(_discord_server):
+@pytest.fixture(name="fake_discord")
+def _fake_discord(_discord_server):
     _discord_server.reset()
     return _discord_server

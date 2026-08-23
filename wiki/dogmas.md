@@ -67,9 +67,7 @@ refactors.
   same spots KISS flags.
 - **Weakening or deleting a test is an egress rejection** unless the wiki-declared behaviour changed.
 
-*(Adopted 2026-08-23, and the suite was audited against it the same day: every test traces to a
-claim on one of these pages, and the external services it needs are local stand-ins rather than
-substituted functions — see [operations.md](operations.md#the-test-harness).)*
+*(Adopted 2026-08-23.)*
 
 ## Dependencies
 

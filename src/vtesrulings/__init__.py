@@ -220,8 +220,8 @@ async def data_error(request: Request, error: Exception):
 
 
 def local_next(request: Request) -> str:
-    """`next` comes back from a link anyone can craft, and /login is a plain GET: an absolute or
-    protocol-relative value would walk the user through a real archon login and land them offsite."""
+    """Site-local paths only — see auth.md. Both /login and the TESTING /login seam go through
+    here, and the sanitised value is what the callback reads back out of the session."""
     next = request.query_params.get("next", "/index.html")
     if not next.startswith("/") or next.startswith(("//", "/\\")):
         return "/index.html"
