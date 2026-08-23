@@ -22,7 +22,7 @@ immediately before it, inside the same window. Everything else is a prerequisite
 | # | What | Who | Ticket |
 |---|---|---|---|
 | 0 | ~~krcg 5.11 + bind the last regex~~ | done | #97 #98 |
-| 1 | ~~Register the OAuth client on archon, secrets into vault~~ | done | #81 |
+| 1 | Confirm the prod archon client; register the beta one for dev | you | #81 |
 | 2 | Apply the eight rulemonger VEKN ids by hand; ask people to submit drafts | you | #86 |
 | 3 | Drain the in-flight proposals on live v1 | you | #76 |
 | 4 | ~~krcg-static to `krcg>=5.10`~~ | done | #89 |
@@ -34,12 +34,16 @@ immediately before it, inside the same window. Everything else is a prerequisite
 format regex now binds krcg's (`4e268eb`). Not a gate for anything below — recorded so nobody
 re-derives it.
 
-**1 — done.** One archon client serves prod and dev: the id is plaintext in `vars.yml`, the secret is
-`vault_archon_client_secret` and matches the local `.env` byte for byte, and `authorization_url`
-emits exactly the two redirect URIs that had to be registered, scope `profile:read`, S256. What no
-local check can reach is archon's own client record — its `GET /oauth/authorize` resolves the user
-before validating `redirect_uri`, so only a real browser login proves the registration. Worth doing
-before step 5, since a typo there surfaces as a 400 on the consent page and nobody could log in.
+**1 — mostly done, one confirmation open.** Two archon deployments, separate databases, therefore
+two client registrations: **`archon.vekn.net` is prod**, `archon.krcg.org` is beta. `ARCHON_URL` now
+points prod at vekn.net and the code default stays beta for dev (`362f551`). The pair in `vars.yml` +
+vault is wired and internally consistent, and `authorization_url` emits exactly
+`https://rulings.krcg.org/login/callback`, scope `profile:read`, S256. What no local check can reach
+is archon's own client record — `GET /oauth/authorize` resolves the user before validating
+`redirect_uri`, so only a logged-in look proves the registration. **Confirm before step 5**: that the
+prod pair lives on vekn.net and lists that redirect verbatim. A typo surfaces as a 400 on the consent
+page and nobody could log in — with v1 already stopped. The beta client for dev is separate and
+blocks only local testing.
 
 **2 — #86.** `UPDATE users SET vekn = '<vekn-id>' WHERE uid = '<row-uid>'` for the eight rows in the
 detail file's table. It only rewrites `vekn`, so it **must run on the current schema**, before those
