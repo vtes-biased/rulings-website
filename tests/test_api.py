@@ -861,7 +861,9 @@ async def test_mistyped_reference_source_is_refused(client):
     assert response.status_code == 400
     assert "resolves to no reference" in response.json()[0]
     # loading the base index never validates: a past commit's typo must not stop the app starting
-    utils.build_ruling({}, {}, "x [KOT 20081119]", target=models.NID(uid="1", name="x"))
+    utils.build_ruling(
+        krcg.collections.CardDict(), {}, "x [KOT 20081119]", target=models.NID(uid="1", name="x")
+    )
 
 
 @pytest.mark.asyncio
@@ -1762,17 +1764,24 @@ async def test_login_refuses_an_offsite_next(client, hostile):
     assert response.headers["location"] == "/index.html"
 
 
-async def sql(query: str, *params):
+async def sql(query: typing.LiteralString, *params):
     """One-value SQL for the auth tests, which set up rows the app has no route to write."""
     async with db.POOL.connection() as conn, conn.cursor() as cursor:
-        ret = await (await cursor.execute(query, params)).fetchone()  # ty: ignore[invalid-argument-type]
+        ret = await (await cursor.execute(query, params)).fetchone()
         return ret[0] if ret else None
 
 
-async def run(query: str):
+async def run(query: typing.LiteralString):
     """`sql` above fetches, so it cannot carry DDL or a bare DELETE."""
     async with db.POOL.connection() as conn:
-        await conn.execute(query)  # ty: ignore[invalid-argument-type]
+        await conn.execute(query)
+
+
+async def user_row(uid) -> db.User:
+    """The row as the app left it. `get_user` is Optional; every caller here knows it exists."""
+    user = await db.get_user(uid)
+    assert user
+    return user
 
 
 async def stale(uid, refresh_token: str):
@@ -1864,7 +1873,7 @@ async def test_a_rotated_token_lands_even_when_userinfo_fails(client, monkeypatc
     monkeypatch.setattr(vtesrulings.archon, "refresh", refreshed)
     monkeypatch.setattr(vtesrulings.archon, "userinfo", unreachable)
     assert (await client.get("/index.html")).status_code == 200
-    user = await db.get_user(uid)
+    user = await user_row(uid)
     assert user.refresh_token == "refresh-2"  # the spent token is gone from the row
     assert user.approver is True  # an outage is not a refusal: the roles stand until next hour
 
@@ -1887,7 +1896,7 @@ async def test_stale_roles_are_rechecked_against_archon(client, monkeypatch):
     monkeypatch.setattr(vtesrulings.archon, "refresh", refreshed)
     monkeypatch.setattr(vtesrulings.archon, "userinfo", demoted)
     assert (await client.get("/index.html")).status_code == 200
-    user = await db.get_user(uid)
+    user = await user_row(uid)
     assert user.approver is False
     assert user.refresh_token == "refresh-2"  # the rotated token replaced the spent one
 
@@ -1904,10 +1913,11 @@ async def test_an_archon_outage_keeps_the_session(client, monkeypatch):
 
     monkeypatch.setattr(vtesrulings.archon, "refresh", unreachable)
     assert (await client.get("/index.html")).status_code == 200
-    user = await db.get_user(uid)
+    user = await user_row(uid)
     assert user.approver is True
     assert user.refresh_token == "refresh-1"
     # the check was stamped anyway, so the outage costs one archon call an hour, not one a request
+    assert user.roles_checked_at
     assert datetime.datetime.now(datetime.UTC) - user.roles_checked_at < datetime.timedelta(
         minutes=5
     )
@@ -1930,7 +1940,7 @@ async def test_a_dead_token_chain_logs_the_user_out(client, monkeypatch):
     assert page.status_code == 200
     assert "Your archon session expired" in page.text
     assert (await client.post("/api/proposal", json={"name": "Nope"})).status_code == 401
-    user = await db.get_user(uid)
+    user = await user_row(uid)
     assert user.approver is False
     assert user.refresh_token is None
     client.cookies.set("session", elsewhere)

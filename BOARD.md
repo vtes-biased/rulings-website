@@ -20,11 +20,6 @@ follow-up ("chase @lip, 12 Sep"), owned by whoever wrote it.
   tag `v1.0.7` does not contain `105bdbf`. Decide what that release carries, tag it, deploy beta then
   prod. Until then every returning user's login loops. @lip only. Done: a second login through
   `archon.vekn.net` completes without looping. [[board/cutover.md]] step 1b
-- **`main` is red: `just typecheck` fails with 14 diagnostics** (run 32628036860, 2026-08-23).
-  Mostly `User | None` narrowing in `test_api.py`'s roles-refresh tests, plus `api.py:47` passing
-  `str | None` to `archon.refresh` and a stale `ty: ignore`. `release.yml` runs the same gate, so a
-  tag cannot publish until this is green — it blocks cutover step 7. Done: `just typecheck` exits 0
-  and the next push to `main` is green. [[wiki/operations.md]]
 - **Ask on Discord that people submit any draft they care about**, so it reaches the queue and is
   judged on its merits during the drain. @lip. Done: posted. [[board/cutover.md]] step 2
 - **Drain the in-flight proposals on live v1** — approve or discard every one. @lip. Done:
@@ -37,4 +32,4 @@ follow-up ("chase @lip, 12 Sep"), owned by whoever wrote it.
   policy. Done: every remaining test traces to a claim in `wiki/`, nothing mocks our own code, and
   the ones that don't are gone. [[wiki/dogmas.md#testing]]
 
-<!-- cycles-since-upkeep: 0 -->
+<!-- cycles-since-upkeep: 1 -->

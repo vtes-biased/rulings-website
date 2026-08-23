@@ -26,7 +26,8 @@ async def get_current_user(request: Request) -> db.User | None:
     user = await db.get_user(uuid.UUID(uid))
     if not user:
         return None
-    if not user.refresh_token:
+    token = user.refresh_token
+    if not token:
         # No token to ask with. Never checked (a TESTING mint) means carry on; checked once and
         # now tokenless means archon refused for good, and every session of that user has to
         # go, not just the one that saw the refusal.
@@ -37,14 +38,14 @@ async def get_current_user(request: Request) -> db.User | None:
         return user
     if not await db.claim_roles_check(user):
         return user  # another request is spending the token; its answer lands on the next one
-    return await recheck_roles(request, user)
+    return await recheck_roles(request, user, token)
 
 
-async def recheck_roles(request: Request, user: db.User) -> db.User | None:
+async def recheck_roles(request: Request, user: db.User, token: str) -> db.User | None:
     """Ask archon what this user is now. Only ever called by whoever claimed the check."""
     info, rotated = {}, None
     try:
-        tokens = await archon.refresh(user.refresh_token)
+        tokens = await archon.refresh(token)
         rotated = tokens["refresh_token"]
         info = await archon.userinfo(tokens["access_token"])
     except archon.Error as exc:
