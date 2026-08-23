@@ -23,6 +23,7 @@ immediately before it, inside the same window. Everything else is a prerequisite
 |---|---|---|---|
 | 0 | ~~krcg 5.11 + bind the last regex~~ | done | #97 #98 |
 | 1 | Confirm the prod archon client; register the beta one for dev | you | #81 |
+| 1b | Deploy archon with the consent-loop fix, prod **and** beta | you | archon `105bdbf` |
 | 2 | Apply the eight rulemonger VEKN ids by hand; ask people to submit drafts | you | #86 |
 | 3 | Drain the in-flight proposals on live v1 | you | #76 |
 | 4 | ~~krcg-static to `krcg>=5.10`~~ | done | #89 |
@@ -77,6 +78,16 @@ gravelines. The app boots, clones the migrated file and serves it.
   card-token change (#76) and the archon login switch (#80). One deploy ships both. That is why the
   auth prerequisites gate a release whose headline feature is the token change.
 - **krcg-static** — done and pushed (`d52c2035`), step 4 off the critical path.
+
+**1b — a new gate, found by testing the login.** First login worked, the second looped on archon's
+consent screen forever. With consent already on file `GET /oauth/authorize` answered a 302, but the
+consent page reaches it through `fetch` with a Bearer token and a fetch cannot read `Location` off a
+redirect (`redirect: "manual"` → opaque response, empty header list), so the page navigated to the
+empty string, reloading itself, calling `/authorize` again. Fixed in archon-vibe `105bdbf` — both
+remaining redirects answer `{"redirect_url": …}` like the approval path already did — but **that fix
+is not deployed**. Until archon prod is redeployed, every returning user's login loops: it hits
+`archon.vekn.net` for the site's users and beta for local testing, so both need the deploy, beta
+first to unblock dev. Tag-triggered (`v*`) in archon-vibe, so it is a release, not a push.
 
 ## Rollback
 
