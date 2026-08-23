@@ -9,7 +9,7 @@ Tooling is `just` + `uv`, npm for the frontend. `just` with no recipe lists them
 | `just stop` | stop the pm2 frontend process |
 | `just lint` / `just fmt` | ruff check + format (line length 100, py313) |
 | `just typecheck` | `ty check --error-on-warning` — warnings are errors, so a stale ignore fails |
-| `just test` | `TESTING=1 uv run pytest` (excludes the `discord` marker) |
+| `just test` | `TESTING=1 uv run pytest` — the whole suite, no opt-outs |
 | `just deps-check` | read-only: would `just update` pull anything? Non-zero if so |
 | `just release [minor\|major]` | bump, commit, tag, push. Versioning is `major.minor` only |
 | `just clean` | drop build artifacts and caches |
@@ -41,10 +41,20 @@ Env vars are read directly via `os.getenv`, no settings object: `DISCORD_WEBHOOK
 
 ## The test harness
 
-Hermetic — no SSH, no network. `tests/conftest.py` serves a vendored rulings snapshot
-(`tests/fixtures/rulings/`, commit pinned in `SOURCE`) as a local bare git remote via `RULINGS_GIT`,
-and runs against a throwaway `vtes-rulings-test` database it creates and drops per session. Card data
-is pinned by the locked krcg version.
+Hermetic — no SSH, no network — and **stand-ins, not mocks**: every dependency the suite talks
+to is a real one on localhost, so the client code under test runs its own transport and error
+handling. `tests/conftest.py` provides them all:
+
+- a vendored rulings snapshot (`tests/fixtures/rulings/`, commit pinned in `SOURCE`) served as a
+  local bare git remote via `RULINGS_GIT`;
+- a throwaway `vtes-rulings-test` database, created and dropped per session;
+- **archon** and the **Discord webhook** as two `aiohttp` servers on ephemeral local ports, with
+  `archon.ARCHON_URL` and `discord.DISCORD_WEBHOOK` rebound at them. The `client` fixture takes both
+  and resets them per test, so no test can reach the real services whether it names them or not.
+  Tests script an answer (`archon.info`, `archon.token_status`) and read back what was sent
+  (`archon.spent`, `discord_hook.posts`).
+
+Card data is pinned by the locked krcg version.
 
 ## CI
 

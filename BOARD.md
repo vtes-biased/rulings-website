@@ -28,8 +28,5 @@ follow-up ("chase @lip, 12 Sep"), owned by whoever wrote it.
   `just release` and deploy. One-way. Done: `rulings.krcg.org` serves v2, a real archon login works,
   and `board/cutover.md` is deleted along with the links to it in `wiki/product.md` and `CLAUDE.md`.
   [[board/cutover.md]] steps 5–7
-- **Audit `tests/` against the testing dogma.** 1937 lines in `test_api.py`, written before the
-  policy. Done: every remaining test traces to a claim in `wiki/`, nothing mocks our own code, and
-  the ones that don't are gone. [[wiki/dogmas.md#testing]]
 
-<!-- cycles-since-upkeep: 1 -->
+<!-- cycles-since-upkeep: 2 -->

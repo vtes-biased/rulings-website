@@ -91,6 +91,47 @@ async def test_load_base_reminder_tag_round_trips(app, tmp_path):
     assert adapted.overrides == {"100015": "Per-card wording. [RTR 20070707]"}
 
 
+async def test_serialize_ruling(app):
+    """Inverse of load_base. A ruling with no overrides is a bare string — a REMINDER gets a
+    trailing [REMINDER] tag; per-card overrides force a {text, overrides} map keyed
+    `<id>|<printed_name>`, the tag (if any) staying at the end of text."""
+    cards = vtesrulings.app.state.cards_map
+    target = models.NID(uid="G00008", name="Permanent not replaced")
+
+    def ruling(**kw):
+        return models.Ruling(uid="x", target=target, state=models.State.ORIGINAL, **kw)
+
+    assert repository.serialize_ruling(ruling(text="Body [RTR 20070707]"), cards) == (
+        "Body [RTR 20070707]"
+    )
+    assert (
+        repository.serialize_ruling(ruling(text="Reminder", kind=models.RulingKind.REMINDER), cards)
+        == "Reminder [REMINDER]"
+    )
+    # a reminder may still carry an inline reference — it stays embedded in the text
+    assert (
+        repository.serialize_ruling(
+            ruling(text="Reminder [RTR 20070707]", kind=models.RulingKind.REMINDER), cards
+        )
+        == "Reminder [RTR 20070707] [REMINDER]"
+    )
+    # per-card overrides force a map; no kind key is ever written
+    assert repository.serialize_ruling(
+        ruling(text="Body [RTR 20070707]", overrides={"100015": "Adapted"}), cards
+    ) == {
+        "text": "Body [RTR 20070707]",
+        "overrides": {"100015|Academic Hunting Ground": "Adapted"},
+    }
+    # a reminder may also have overrides — the [REMINDER] tag just stays at the end of `text`
+    assert repository.serialize_ruling(
+        ruling(text="Body", kind=models.RulingKind.REMINDER, overrides={"100015": "Adapted"}),
+        cards,
+    ) == {
+        "text": "Body [REMINDER]",
+        "overrides": {"100015|Academic Hunting Ground": "Adapted"},
+    }
+
+
 async def test_load_base_normalizes_card_tokens(app, tmp_path):
     ref_dir = tmp_path / "repo" / repository.RULINGS_FILES_PATH
     ref_dir.mkdir(parents=True)
@@ -137,11 +178,6 @@ async def test_build_ruling_stores_the_card_id_and_refreshes_the_name(app):
     stale = utils.build_ruling(cards, {}, "See {100006|Abbott}.", models.NID(uid="1", name="x"))
     assert stale.text == "See {100006|Abbot}."
     assert stale.uid == ruling.uid
-
-
-async def test_plain_text_drops_the_card_id(app):
-    """Search and snippets read the name; the id is structure, and would match on digits."""
-    assert utils.plain_text("See {100006|Abbot} and {Abbot}.") == "See Abbot and Abbot."
 
 
 async def test_build_ruling_dedupes_pasted_reference(app):

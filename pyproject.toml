@@ -86,8 +86,7 @@ python-version = "3.13"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]   # don't recurse into ansible/galaxy_collections/ (vendored by `just galaxy`)
-addopts = "-vvs --strict-markers -m 'not discord'"
-markers = ["discord: marks tests as running against Discord Test Server"]
+addopts = "-vvs --strict-markers"
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"

@@ -12,6 +12,9 @@
   it belongs to. Symbols render as glyphs, card names as hoverable links, references as badges.
 - A page per group: the group's rulings and its card membership.
 - A search box completing card names; groups are listed and browsable.
+- The home page lists the latest rulings changes, newest first, each linking to the card or
+  group page. Read off the `vtes-rulings` git history, not stored: a commit that only renames
+  keys is not a change.
 - Backrefs: a card names another card in a ruling, and that ruling shows on both pages.
 
 **Propose, for a logged-in player.** Any archon member holding a VEKN id may open a proposal and

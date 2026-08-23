@@ -62,4 +62,8 @@ never checked. Any other failure keeps the roles and defers the retry an hour.
 - **`POST /login` survives as a `TESTING=1`-only session mint**, taking an `approver` flag. It is the
   only seam for testing approval, and the only way into a dev server with no registered archon
   client.
+- **`next` is honoured only as a site-local path** (`local_next`). It rides a link anyone can
+  craft and `/login` is a plain GET, so an absolute or protocol-relative value would walk the
+  user through a genuine archon consent and land them offsite; anything else falls back to
+  `/index.html`.
 - Registering an OAuth client is per-archon-deployment; see [deploy.md](deploy.md).

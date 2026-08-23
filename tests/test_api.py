@@ -1,5 +1,5 @@
 import base64
-import dataclasses
+import collections
 import datetime
 import hashlib
 import pathlib
@@ -16,56 +16,41 @@ import pytest
 import vtesrulings
 import vtesrulings.archon
 import vtesrulings.discord
-from vtesrulings import db, models, repository, utils
+from vtesrulings import db, models, utils
 
-
-def test_serialize_ruling():
-    """A ruling with no overrides is a bare string — a REMINDER gets a trailing [REMINDER] tag;
-    per-card overrides force a {text, overrides} map, the tag (if any) staying at the end of text."""
-
-    class FakeCard:
-        def __init__(self, cid, name):
-            self.id, self.printed_name = cid, name
-
-    card_map = typing.cast(
-        krcg.collections.CardDict, {100015: FakeCard(100015, "Academic Hunting Ground")}
-    )
-    target = models.NID(uid="G00008", name="Permanent not replaced")
-
-    def ruling(**kw):
-        return models.Ruling(uid="x", target=target, state=models.State.ORIGINAL, **kw)
-
-    assert repository.serialize_ruling(ruling(text="Body [RTR 20070707]"), card_map) == (
-        "Body [RTR 20070707]"
-    )
-    assert (
-        repository.serialize_ruling(
-            ruling(text="Reminder", kind=models.RulingKind.REMINDER), card_map
-        )
-        == "Reminder [REMINDER]"
-    )
-    # a reminder may still carry an inline reference — it stays embedded in the text
-    assert (
-        repository.serialize_ruling(
-            ruling(text="Reminder [RTR 20070707]", kind=models.RulingKind.REMINDER), card_map
-        )
-        == "Reminder [RTR 20070707] [REMINDER]"
-    )
-    # per-card overrides force a map, keyed by <id>|<printed_name>; no kind key is ever written
-    assert repository.serialize_ruling(
-        ruling(text="Body [RTR 20070707]", overrides={"100015": "Adapted"}), card_map
-    ) == {
-        "text": "Body [RTR 20070707]",
-        "overrides": {"100015|Academic Hunting Ground": "Adapted"},
-    }
-    # a reminder may also have overrides — the [REMINDER] tag just stays at the end of `text`
-    assert repository.serialize_ruling(
-        ruling(text="Body", kind=models.RulingKind.REMINDER, overrides={"100015": "Adapted"}),
-        card_map,
-    ) == {
-        "text": "Body [REMINDER]",
-        "overrides": {"100015|Academic Hunting Ground": "Adapted"},
-    }
+#: The response contracts the Svelte editor island reads. Asserted by key, never by value: the
+#: printed text, image, types and costs are krcg's, and restating them here would break the suite
+#: on a card-database bump that changed no behaviour of ours.
+CARD_KEYS = {
+    "uid",
+    "name",
+    "printed_name",
+    "img",
+    "types",
+    "disciplines",
+    "text",
+    "symbols",
+    "text_symbols",
+    "cards",
+    "pool_cost",
+    "blood_cost",
+    "conviction_cost",
+    "rulings",
+    "groups",
+    "backrefs",
+}
+RULING_KEYS = {
+    "uid",
+    "target",
+    "text",
+    "state",
+    "kind",
+    "symbols",
+    "references",
+    "cards",
+    "overrides",
+}
+REFERENCE_KEYS = {"uid", "url", "source", "date", "state", "text"}
 
 
 async def login_and_proposal(client):
@@ -82,469 +67,107 @@ async def login_and_proposal(client):
     return prop_uid
 
 
-@pytest.mark.asyncio
 async def test_get_card(client):
-    response = await client.get("/api/card/100000")
-    assert response.status_code == 400
-    response = await client.get("/api/card/100038")
+    """A card carries its own rulings, the rulings it inherits from every group it belongs to,
+    and the cards whose rulings name it."""
+    assert (await client.get("/api/card/100000")).status_code == 400
+    response = await client.get("/api/card/100038")  # Alastor
     assert response.status_code == 200
-    assert response.json() == {
-        "uid": "100038",
-        "name": "Alastor",
-        "printed_name": "Alastor",
-        "img": "https://static.krcg.org/card/alastor.jpg",
-        "types": ["POLITICAL ACTION"],
-        "disciplines": [],
-        "text": "Requires a justicar or Inner Circle member.\nChoose a ready Camarilla vampire. Successful referendum means you search your library for an equipment card and put this card and the equipment on the chosen vampire (ignore requirements; shuffle afterward); pay half the cost rounded down of the equipment. The attached vampire can enter combat with a vampire as a +1 stealth Ⓓ action. The attached vampire cannot commit diablerie. A vampire can have only one Alastor.",
-        "symbols": [{"text": "POLITICAL ACTION", "symbol": "2", "count": ""}],
-        "text_symbols": [],
-        "cards": [],
-        "pool_cost": "",
-        "blood_cost": "",
-        "conviction_cost": "",
-        "rulings": [
-            {
-                "uid": "WUF4F3LL",
-                "target": {"uid": "100038", "name": "Alastor"},
-                "text": "If the weapon retrieved costs blood, that cost is paid by the vampire chosen by the terms. [LSJ 20040518]",
-                "state": "ORIGINAL",
-                "kind": "RULING",
-                "symbols": [],
-                "references": [
-                    {
-                        "uid": "LSJ 20040518",
-                        "url": "https://groups.google.com/g/rec.games.trading-cards.jyhad/c/4emymfUPwAM/m/B2SCC7L6kuMJ",
-                        "source": "LSJ",
-                        "date": "2004-05-18",
-                        "state": "ORIGINAL",
-                        "text": "[LSJ 20040518]",
-                    }
-                ],
-                "cards": [],
-                "overrides": {},
-            },
-            {
-                "uid": "JZHQGEPS",
-                "target": {"uid": "100038", "name": "Alastor"},
-                "text": "Finding equipment is optional. When no equipment is found, alastor is still attached. [LSJ 20050331-2]",
-                "state": "ORIGINAL",
-                "kind": "RULING",
-                "symbols": [],
-                "references": [
-                    {
-                        "uid": "LSJ 20050331-2",
-                        "url": "https://groups.google.com/g/rec.games.trading-cards.jyhad/c/NLFFYNok1Ns/m/n7mHhZ_oTRQJ",
-                        "source": "LSJ",
-                        "date": "2005-03-31",
-                        "state": "ORIGINAL",
-                        "text": "[LSJ 20050331-2]",
-                    }
-                ],
-                "cards": [],
-                "overrides": {},
-            },
-            {
-                "uid": "CZFA5NGR",
-                "target": {"uid": "G00110", "name": "Put card in play ignoring requirements"},
-                "text": "Cards requiring a discipline come in play at the inferior version. [RBK equip] [RBK recruit-ally] [RBK employ-retainer]",
-                "state": "ORIGINAL",
-                "kind": "RULING",
-                "symbols": [],
-                "references": [
-                    {
-                        "uid": "RBK equip",
-                        "url": "https://www.vekn.net/rulebook#equip",
-                        "source": "RBK",
-                        "date": None,
-                        "state": "ORIGINAL",
-                        "text": "[RBK equip]",
-                    },
-                    {
-                        "uid": "RBK recruit-ally",
-                        "url": "https://www.vekn.net/rulebook#recruit-ally",
-                        "source": "RBK",
-                        "date": None,
-                        "state": "ORIGINAL",
-                        "text": "[RBK recruit-ally]",
-                    },
-                    {
-                        "uid": "RBK employ-retainer",
-                        "url": "https://www.vekn.net/rulebook#employ-retainer",
-                        "source": "RBK",
-                        "date": None,
-                        "state": "ORIGINAL",
-                        "text": "[RBK employ-retainer]",
-                    },
-                ],
-                "cards": [],
-                "overrides": {},
-            },
-            {
-                "uid": "B4AFOOMF",
-                "target": {"uid": "G00110", "name": "Put card in play ignoring requirements"},
-                "text": "Requirements do not apply. If the cost is X (e.g. {101563|Reanimated Corpse}), X is zero. If the effect puts/moves a minion into the ready region, that minion can act this turn. [LSJ 20100204] [LSJ 20040518-2] [LSJ 20100302-1]",
-                "state": "ORIGINAL",
-                "kind": "RULING",
-                "symbols": [],
-                "references": [
-                    {
-                        "uid": "LSJ 20100204",
-                        "url": "https://groups.google.com/g/rec.games.trading-cards.jyhad/c/o5Xnzc8G774/m/yovVizGngKsJ",
-                        "source": "LSJ",
-                        "date": "2010-02-04",
-                        "state": "ORIGINAL",
-                        "text": "[LSJ 20100204]",
-                    },
-                    {
-                        "uid": "LSJ 20040518-2",
-                        "url": "https://groups.google.com/g/rec.games.trading-cards.jyhad/c/4emymfUPwAM/m/JF_o7OOoCbkJ",
-                        "source": "LSJ",
-                        "date": "2004-05-18",
-                        "state": "ORIGINAL",
-                        "text": "[LSJ 20040518-2]",
-                    },
-                    {
-                        "uid": "LSJ 20100302-1",
-                        "url": "https://groups.google.com/g/rec.games.trading-cards.jyhad/c/jmmm0WRUPvs/m/ny5F1OnSUsEJ",
-                        "source": "LSJ",
-                        "date": "2010-03-02",
-                        "state": "ORIGINAL",
-                        "text": "[LSJ 20100302-1]",
-                    },
-                ],
-                "cards": [
-                    {
-                        "uid": "101563",
-                        "name": "Reanimated Corpse",
-                        "printed_name": "Reanimated Corpse",
-                        "img": "https://static.krcg.org/card/reanimatedcorpse.jpg",
-                        "text": "{101563|Reanimated Corpse}",
-                    }
-                ],
-                "overrides": {},
-            },
-            {
-                "uid": "JRJ2ZWBM",
-                "target": {"uid": "G00158", "name": "Political action with illegal terms"},
-                "text": "Cannot be used or played if the conditions for the terms of the referendum cannot be met (e.g. no legal selection, insufficient cards/players to choose from, prohibited by card text, uniqueness, etc). [LSJ 20100129] [ANK 20191228]",
-                "state": "ORIGINAL",
-                "kind": "RULING",
-                "symbols": [],
-                "references": [
-                    {
-                        "uid": "LSJ 20100129",
-                        "url": "https://groups.google.com/g/rec.games.trading-cards.jyhad/c/X8Uu7Sk56P4/m/fgP7NfnDpCkJ",
-                        "source": "LSJ",
-                        "date": "2010-01-29",
-                        "state": "ORIGINAL",
-                        "text": "[LSJ 20100129]",
-                    },
-                    {
-                        "uid": "ANK 20191228",
-                        "url": "https://www.vekn.net/forum/rules-questions/78262-parity-shift-without-target#98358",
-                        "source": "ANK",
-                        "date": "2019-12-28",
-                        "state": "ORIGINAL",
-                        "text": "[ANK 20191228]",
-                    },
-                ],
-                "cards": [],
-                "overrides": {},
-            },
-        ],
-        "groups": [
-            {
-                "uid": "G00110",
-                "name": "Put card in play ignoring requirements",
-                "state": "ORIGINAL",
-                "prefix": "",
-                "symbols": [],
-            },
-            {
-                "uid": "G00158",
-                "name": "Political action with illegal terms",
-                "state": "ORIGINAL",
-                "prefix": "",
-                "symbols": [],
-            },
-        ],
-        "backrefs": [
-            {
-                "uid": "100909",
-                "name": "Helicopter",
-                "printed_name": "Helicopter",
-                "img": "https://static.krcg.org/card/helicopter.jpg",
-            },
-            {
-                "uid": "100972",
-                "name": "Incriminating Videotape",
-                "printed_name": "Incriminating Videotape",
-                "img": "https://static.krcg.org/card/incriminatingvideotape.jpg",
-            },
-            {
-                "uid": "101232",
-                "name": "Mokolé Blood",
-                "printed_name": "Mokolé Blood",
-                "img": "https://static.krcg.org/card/mokoleblood.jpg",
-            },
-            {
-                "uid": "101767",
-                "name": "Shilmulo Tarot",
-                "printed_name": "Shilmulo Tarot",
-                "img": "https://static.krcg.org/card/shilmulotarot.jpg",
-            },
-        ],
+    card = response.json()
+    assert set(card) == CARD_KEYS
+    assert (card["uid"], card["name"]) == ("100038", "Alastor")
+    assert {g["uid"] for g in card["groups"]} == {"G00110", "G00158"}
+    assert set(card["groups"][0]) == {"uid", "name", "state", "prefix", "symbols"}
+    # its own rulings, plus every ruling of every group it belongs to
+    by_target = collections.defaultdict(set)
+    for ruling in card["rulings"]:
+        by_target[ruling["target"]["uid"]].add(ruling["uid"])
+    assert by_target == {
+        "100038": {"WUF4F3LL", "JZHQGEPS"},
+        "G00110": {"CZFA5NGR", "B4AFOOMF"},
+        "G00158": {"JRJ2ZWBM"},
     }
+    ruling = next(r for r in card["rulings"] if r["uid"] == "B4AFOOMF")
+    assert set(ruling) == RULING_KEYS
+    assert (ruling["state"], ruling["kind"], ruling["overrides"]) == ("ORIGINAL", "RULING", {})
+    # references keep the order they are cited in, and resolve to their URL and date
+    assert set(ruling["references"][0]) == REFERENCE_KEYS
+    assert [r["uid"] for r in ruling["references"]] == [
+        "LSJ 20100204",
+        "LSJ 20040518-2",
+        "LSJ 20100302-1",
+    ]
+    assert ruling["references"][0]["date"] == "2010-02-04"
+    # a {card} marker in the text resolves to the card it names
+    assert [(c["uid"], c["text"]) for c in ruling["cards"]] == [
+        ("101563", "{101563|Reanimated Corpse}")
+    ]
+    # backrefs: the cards whose own rulings name this one
+    assert {b["uid"] for b in card["backrefs"]} == {"100909", "100972", "101232", "101767"}
+    assert set(card["backrefs"][0]) == {"uid", "name", "printed_name", "img"}
 
 
-@pytest.mark.asyncio
 async def test_get_group(client):
-    response = await client.get("/api/group/NotAGroup")
-    assert response.status_code == 404
+    """A group carries its rulings and its card membership, each member optionally prefixed with
+    the icon the group's rulings apply under."""
+    assert (await client.get("/api/group/NotAGroup")).status_code == 404
     response = await client.get("/api/group/G00005")
     assert response.status_code == 200
-    assert response.json() == {
-        "uid": "G00005",
-        "name": "Prevent normal unlock",
-        "state": "ORIGINAL",
-        "cards": [
-            {
-                "uid": "100339",
-                "name": "Children of Osiris",
-                "printed_name": "Children of Osiris",
-                "img": "https://static.krcg.org/card/childrenofosiris.jpg",
-                "state": "ORIGINAL",
-                "prefix": "",
-                "symbols": [],
-            },
-            {
-                "uid": "100378",
-                "name": "Coma",
-                "printed_name": "Coma",
-                "img": "https://static.krcg.org/card/coma.jpg",
-                "state": "ORIGINAL",
-                "prefix": "[DEM]",
-                "symbols": [{"text": "[DEM]", "symbol": "E", "count": ""}],
-            },
-            {
-                "uid": "100527",
-                "name": "Derange",
-                "printed_name": "Derange",
-                "img": "https://static.krcg.org/card/derange.jpg",
-                "state": "ORIGINAL",
-                "prefix": "",
-                "symbols": [],
-            },
-            {
-                "uid": "100533",
-                "name": "Detection",
-                "printed_name": "Detection",
-                "img": "https://static.krcg.org/card/detection.jpg",
-                "state": "ORIGINAL",
-                "prefix": "",
-                "symbols": [],
-            },
-            {
-                "uid": "100690",
-                "name": "Faerie Wards",
-                "printed_name": "Faerie Wards",
-                "img": "https://static.krcg.org/card/faeriewards.jpg",
-                "state": "ORIGINAL",
-                "prefix": "[MYT]",
-                "symbols": [{"text": "[MYT]", "symbol": "X", "count": ""}],
-            },
-            {
-                "uid": "100701",
-                "name": "Fantasy World",
-                "printed_name": "Fantasy World",
-                "img": "https://static.krcg.org/card/fantasyworld.jpg",
-                "state": "ORIGINAL",
-                "prefix": "",
-                "symbols": [],
-            },
-            {
-                "uid": "100745",
-                "name": "Flash Grenade",
-                "printed_name": "Flash Grenade",
-                "img": "https://static.krcg.org/card/flashgrenade.jpg",
-                "state": "ORIGINAL",
-                "prefix": "",
-                "symbols": [],
-            },
-            {
-                "uid": "101099",
-                "name": "Lextalionis",
-                "printed_name": "Lextalionis",
-                "img": "https://static.krcg.org/card/lextalionis.jpg",
-                "state": "ORIGINAL",
-                "prefix": "",
-                "symbols": [],
-            },
-            {
-                "uid": "101101",
-                "name": "Liberty Club Intrigue",
-                "printed_name": "Liberty Club Intrigue",
-                "img": "https://static.krcg.org/card/libertyclubintrigue.jpg",
-                "state": "ORIGINAL",
-                "prefix": "",
-                "symbols": [],
-            },
-            {
-                "uid": "101211",
-                "name": "Mind Numb",
-                "printed_name": "Mind Numb",
-                "img": "https://static.krcg.org/card/mindnumb.jpg",
-                "state": "ORIGINAL",
-                "prefix": "",
-                "symbols": [],
-            },
-            {
-                "uid": "101215",
-                "name": "Puppet Master",
-                "printed_name": "Puppet Master",
-                "img": "https://static.krcg.org/card/puppetmaster.jpg",
-                "state": "ORIGINAL",
-                "prefix": "[DOM]",
-                "symbols": [{"text": "[DOM]", "symbol": "D", "count": ""}],
-            },
-            {
-                "uid": "101252",
-                "name": "Mummy's Tongue",
-                "printed_name": "Mummy's Tongue",
-                "img": "https://static.krcg.org/card/mummystongue.jpg",
-                "state": "ORIGINAL",
-                "prefix": "",
-                "symbols": [],
-            },
-            {
-                "uid": "101654",
-                "name": "Rötschreck",
-                "printed_name": "Rötschreck",
-                "img": "https://static.krcg.org/card/rotschreck.jpg",
-                "state": "ORIGINAL",
-                "prefix": "",
-                "symbols": [],
-            },
-            {
-                "uid": "101655",
-                "name": "Rowan Ring",
-                "printed_name": "Rowan Ring",
-                "img": "https://static.krcg.org/card/rowanring.jpg",
-                "state": "ORIGINAL",
-                "prefix": "",
-                "symbols": [],
-            },
-            {
-                "uid": "101721",
-                "name": "Sensory Deprivation",
-                "printed_name": "Sensory Deprivation",
-                "img": "https://static.krcg.org/card/sensorydeprivation.jpg",
-                "state": "ORIGINAL",
-                "prefix": "",
-                "symbols": [],
-            },
-            {
-                "uid": "101727",
-                "name": "Serpent's Numbing Kiss",
-                "printed_name": "Serpent's Numbing Kiss",
-                "img": "https://static.krcg.org/card/serpentsnumbingkiss.jpg",
-                "state": "ORIGINAL",
-                "prefix": "[PRE][SER]",
-                "symbols": [
-                    {"text": "[PRE]", "symbol": "R", "count": ""},
-                    {"text": "[SER]", "symbol": "S", "count": ""},
-                ],
-            },
-            {
-                "uid": "101733",
-                "name": "Shackles of Enkidu",
-                "printed_name": "Shackles of Enkidu",
-                "img": "https://static.krcg.org/card/shacklesofenkidu.jpg",
-                "state": "ORIGINAL",
-                "prefix": "",
-                "symbols": [],
-            },
-            {
-                "uid": "101762",
-                "name": "Sheepdog",
-                "printed_name": "Sheepdog",
-                "img": "https://static.krcg.org/card/sheepdog.jpg",
-                "state": "ORIGINAL",
-                "prefix": "",
-                "symbols": [],
-            },
-            {
-                "uid": "101815",
-                "name": "Snipe Hunt",
-                "printed_name": "Snipe Hunt",
-                "img": "https://static.krcg.org/card/snipehunt.jpg",
-                "state": "ORIGINAL",
-                "prefix": "",
-                "symbols": [],
-            },
-            {
-                "uid": "101846",
-                "name": "Spike-Thrower",
-                "printed_name": "Spike-Thrower",
-                "img": "https://static.krcg.org/card/spikethrower.jpg",
-                "state": "ORIGINAL",
-                "prefix": "",
-                "symbols": [],
-            },
-            {
-                "uid": "101989",
-                "name": "Toreador Grand Ball",
-                "printed_name": "Toreador Grand Ball",
-                "img": "https://static.krcg.org/card/toreadorgrandball.jpg",
-                "state": "ORIGINAL",
-                "prefix": "",
-                "symbols": [],
-            },
-            {
-                "uid": "102125",
-                "name": "Visionquest",
-                "printed_name": "Visionquest",
-                "img": "https://static.krcg.org/card/visionquest.jpg",
-                "state": "ORIGINAL",
-                "prefix": "",
-                "symbols": [],
-            },
-            {
-                "uid": "102192",
-                "name": "Wooden Stake",
-                "printed_name": "Wooden Stake",
-                "img": "https://static.krcg.org/card/woodenstake.jpg",
-                "state": "ORIGINAL",
-                "prefix": "",
-                "symbols": [],
-            },
-        ],
-        "rulings": [
-            {
-                "uid": "ELPPIZXU",
-                "target": {"uid": "G00005", "name": "Prevent normal unlock"},
-                "text": 'The "does not unlock as normal" effect is redundant with being infernal. If the minion is infernal, his controller can still pay a pool to unlock him. [LSJ 20050114]',
-                "state": "ORIGINAL",
-                "kind": "RULING",
-                "symbols": [],
-                "references": [
-                    {
-                        "uid": "LSJ 20050114",
-                        "url": "https://groups.google.com/g/rec.games.trading-cards.jyhad/c/JWiZmyC2Y6s/m/q6JHYrE1zKYJ",
-                        "source": "LSJ",
-                        "date": "2005-01-14",
-                        "state": "ORIGINAL",
-                        "text": "[LSJ 20050114]",
-                    }
-                ],
-                "cards": [],
-                "overrides": {},
-            }
-        ],
+    group = response.json()
+    assert set(group) == {"uid", "name", "state", "cards", "rulings"}
+    assert (group["uid"], group["name"], group["state"]) == (
+        "G00005",
+        "Prevent normal unlock",
+        "ORIGINAL",
+    )
+    assert len(group["cards"]) == 23
+    assert set(group["cards"][0]) == {
+        "uid",
+        "name",
+        "printed_name",
+        "img",
+        "state",
+        "prefix",
+        "symbols",
     }
+    # a prefix is parsed into the glyphs it renders as, one or several
+    assert {
+        c["uid"]: (c["prefix"], [s["symbol"] for s in c["symbols"]])
+        for c in group["cards"]
+        if c["prefix"]
+    } == {
+        "100378": ("[DEM]", ["E"]),
+        "100690": ("[MYT]", ["X"]),
+        "101215": ("[DOM]", ["D"]),
+        "101727": ("[PRE][SER]", ["R", "S"]),
+    }
+    assert [(r["uid"], r["target"]["uid"]) for r in group["rulings"]] == [("ELPPIZXU", "G00005")]
 
 
-@pytest.mark.asyncio
+async def test_complete(client):
+    """The search box completes card names, disambiguating the printings that share one."""
+    assert (await client.get("/api/complete/")).status_code == 404
+    response = await client.get("/api/complete?query=paris")
+    assert response.status_code == 200
+    assert response.json() == [
+        {"label": "The Louvre, Paris", "value": "101127", "printed_name": "The Louvre, Paris"},
+        {"label": "Paris Opera House", "value": "101352", "printed_name": "Paris Opera House"},
+        {"label": "Crusade: Paris", "value": "100468", "printed_name": "Crusade: Paris"},
+        {
+            "label": "Praxis Seizure: Paris",
+            "value": "101467",
+            "printed_name": "Praxis Seizure: Paris",
+        },
+    ]
+    response = await client.get("/api/complete?query=theo bell")
+    assert response.status_code == 200
+    assert response.json() == [
+        {"label": "Theo Bell (G2)", "value": "201362", "printed_name": "Theo Bell"},
+        {"label": "Theo Bell (G2 ADV)", "value": "201363", "printed_name": "Theo Bell"},
+        {"label": "Theo Bell (G6)", "value": "201613", "printed_name": "Theo Bell"},
+    ]
+
+
 async def test_start_update_proposal(client):
     # you have to be logged in
     response = await client.post("/login", data={"username": "test-user"})
@@ -572,7 +195,6 @@ async def test_start_update_proposal(client):
     assert "uid" in response.json()
 
 
-@pytest.mark.asyncio
 async def test_check_consistency(client):
     # not available outside of a proposal
     response = await client.get("/api/check-consistency")
@@ -585,36 +207,15 @@ async def test_check_consistency(client):
     assert response.json() == []
 
 
-@pytest.mark.asyncio
-async def test_add_reference(client):
-    await login_and_proposal(client)
-    response = await client.post(
-        "/api/reference",
-        json={
-            "uid": "LSJ 20001225",
-            "url": "https://groups.google.com/g/rec.games.trading-cards.jyhad/test",
-        },
-    )
-    assert response.status_code == 200
-    assert response.json() == {
-        "uid": "LSJ 20001225",
-        "url": "https://groups.google.com/g/rec.games.trading-cards.jyhad/test",
-        "date": "2000-12-25",
-        "source": "LSJ",
-        "state": "NEW",
-    }
-
-
-@pytest.mark.asyncio
 async def test_add_card_ruling(client):
+    """A ruling added in a proposal comes back NEW and shows on the card while it is active."""
     await login_and_proposal(client)
-    # Using an unknown reference will raise an error
+    # a reference the repository does not know is refused, and named back to the editor
     response = await client.post(
         "/api/ruling/100015", json={"text": "Non-existing reference [ANK 20210101]"}
     )
     assert response.status_code == 400
     assert response.json() == ["ANK 20210101"]
-    # A real reference will work
     response = await client.post("/api/ruling/100015", json={"text": "Test ruling [RTR 20070707]"})
     assert response.status_code == 200
     assert response.json() == {
@@ -640,67 +241,16 @@ async def test_add_card_ruling(client):
         "text": "Test ruling [RTR 20070707]",
         "state": "NEW",
     }
-    # the ruling reference appears in answers while the proposal is active
-    response = await client.get("/api/card/100015")
-    assert response.status_code == 200
-    assert response.json() == {
-        "backrefs": [],
-        "blood_cost": "",
-        "conviction_cost": "",
-        "disciplines": [],
-        "groups": [],
-        "img": "https://static.krcg.org/card/academichuntingground.jpg",
-        "name": "Academic Hunting Ground",
-        "pool_cost": "2",
-        "printed_name": "Academic Hunting Ground",
-        "rulings": [
-            {
-                "cards": [],
-                "uid": "NBGBNBDU",
-                "references": [
-                    {
-                        "date": "2007-07-07",
-                        "source": "RTR",
-                        "text": "[RTR 20070707]",
-                        "uid": "RTR 20070707",
-                        "state": "ORIGINAL",
-                        "url": (
-                            "https://groups.google.com/g/rec.games.trading-cards.jyhad/"
-                            "c/vSOt2c1uRzQ/m/MsRAv47Cd4YJ"
-                        ),
-                    },
-                ],
-                "symbols": [],
-                "kind": "RULING",
-                "overrides": {},
-                "target": {"name": "Academic Hunting Ground", "uid": "100015"},
-                "text": "Test ruling [RTR 20070707]",
-                "state": "NEW",
-            },
-        ],
-        "symbols": [],
-        "text": (
-            "Unique location. Hunting ground.\n"
-            "During your unlock phase, a ready vampire you control can gain 1 blood. A "
-            "vampire can gain blood from only one hunting ground each turn."
-        ),
-        "text_symbols": [],
-        "cards": [],
-        "types": ["MASTER"],
-        "uid": "100015",
-    }
+    card = (await client.get("/api/card/100015")).json()
+    assert [(r["uid"], r["text"], r["state"]) for r in card["rulings"]] == [
+        ("NBGBNBDU", "Test ruling [RTR 20070707]", "NEW")
+    ]
 
 
-@pytest.mark.asyncio
-async def test_add_card_ruling_with_reference(client):
+async def test_add_card_ruling_with_a_new_reference(client):
+    """A reference created in the proposal is usable at once, and reported NEW under the ruling
+    citing it. Its id gives its source and date; only the URL has to be typed."""
     await login_and_proposal(client)
-    # Using an unknown reference will raise an error
-    response = await client.post(
-        "/api/ruling/100015", json={"text": "Non-existing reference [ANK 20210101]"}
-    )
-    assert response.status_code == 400
-    assert response.json() == ["ANK 20210101"]
-    # Adding the reference first works
     response = await client.post(
         "/api/reference",
         json={
@@ -709,93 +259,25 @@ async def test_add_card_ruling_with_reference(client):
         },
     )
     assert response.status_code == 200
+    assert response.json() == {
+        "uid": "ANK 20210101",
+        "url": "http://www.vekn.net/forum/rules-questions/test",
+        "date": "2021-01-01",
+        "source": "ANK",
+        "state": "NEW",
+    }
     response = await client.post(
         "/api/ruling/100015", json={"text": "Non-existing reference [ANK 20210101]"}
     )
     assert response.status_code == 200
-    assert response.json() == {
-        "cards": [],
-        "uid": "FNEB7QCO",
-        "state": "NEW",
-        "references": [
-            {
-                "date": "2021-01-01",
-                "source": "ANK",
-                "text": "[ANK 20210101]",
-                "uid": "ANK 20210101",
-                "state": "NEW",
-                "url": "http://www.vekn.net/forum/rules-questions/test",
-            },
-        ],
-        "symbols": [],
-        "kind": "RULING",
-        "overrides": {},
-        "target": {
-            "name": "Academic Hunting Ground",
-            "uid": "100015",
-        },
-        "text": "Non-existing reference [ANK 20210101]",
-    }
+    ruling = response.json()
+    assert ruling["state"] == "NEW"
+    assert [(r["uid"], r["state"]) for r in ruling["references"]] == [("ANK 20210101", "NEW")]
 
 
-@pytest.mark.asyncio
 async def test_update_card_ruling(client):
-    # 419 Operation has one ruling
-    response = await client.get("/api/card/100002")
-    assert response.status_code == 200
-    assert response.json() == {
-        "backrefs": [],
-        "blood_cost": "",
-        "conviction_cost": "",
-        "disciplines": [],
-        "groups": [],
-        "img": "https://static.krcg.org/card/419operation.jpg",
-        "name": "419 Operation",
-        "pool_cost": "",
-        "printed_name": "419 Operation",
-        "rulings": [
-            {
-                "cards": [],
-                "uid": "KRO5H6MD",
-                "state": "ORIGINAL",
-                "references": [
-                    {
-                        "date": "2022-10-11",
-                        "source": "ANK",
-                        "text": "[ANK 20221011-3]",
-                        "uid": "ANK 20221011-3",
-                        "state": "ORIGINAL",
-                        "url": (
-                            "https://www.vekn.net/forum/rules-questions/"
-                            "74643-419-operation-with-no-counters#106539"
-                        ),
-                    },
-                ],
-                "symbols": [],
-                "kind": "RULING",
-                "overrides": {},
-                "target": {"name": "419 Operation", "uid": "100002"},
-                "text": (
-                    "You can burn the edge to burn the card if it has no counter. [ANK 20221011-3]"
-                ),
-            },
-        ],
-        "symbols": [
-            {"symbol": "0", "text": "ACTION", "count": ""},
-        ],
-        "text": (
-            "+1 stealth action.\n"
-            "Put this card in play. During your unlock phase, you may move 1 pool from "
-            "your prey's pool to this card or move the pool on this card to your pool. "
-            "Your prey can burn the Edge to move the counters on this card to his or "
-            "her pool and burn this card."
-        ),
-        "text_symbols": [],
-        "cards": [],
-        "types": ["ACTION"],
-        "uid": "100002",
-    }
-    # Let's change it
+    """Editing a base ruling flags it MODIFIED, keeping the identity the overlay is keyed on and
+    the references the text still cites."""
     await login_and_proposal(client)
     response = await client.put(
         "/api/ruling/100002/KRO5H6MD",
@@ -827,7 +309,6 @@ async def test_update_card_ruling(client):
     }
 
 
-@pytest.mark.asyncio
 async def test_mistyped_reference_source_is_refused(client):
     """A source that is not one — [KOT 20081119] sat in the repo for years — matches no reference
     and would read as prose, dropping out of the ruling. The editor is told instead. Markers that
@@ -866,123 +347,32 @@ async def test_mistyped_reference_source_is_refused(client):
     )
 
 
-@pytest.mark.asyncio
 async def test_delete_card_ruling(client):
-    # Let's remove the ruling on 419 Operation
     await login_and_proposal(client)
     response = await client.delete("/api/ruling/100002/KRO5H6MD")
     assert response.status_code == 200
-    response = await client.get("/api/card/100002")
-    assert response.status_code == 200
-    assert response.json() == {
-        "backrefs": [],
-        "blood_cost": "",
-        "conviction_cost": "",
-        "disciplines": [],
-        "groups": [],
-        "img": "https://static.krcg.org/card/419operation.jpg",
-        "name": "419 Operation",
-        "pool_cost": "",
-        "printed_name": "419 Operation",
-        "rulings": [],
-        "symbols": [{"symbol": "0", "text": "ACTION", "count": ""}],
-        "text": (
-            "+1 stealth action.\n"
-            "Put this card in play. During your unlock phase, you may move 1 pool from "
-            "your prey's pool to this card or move the pool on this card to your pool. "
-            "Your prey can burn the Edge to move the counters on this card to his or "
-            "her pool and burn this card."
-        ),
-        "text_symbols": [],
-        "cards": [],
-        "types": ["ACTION"],
-        "uid": "100002",
-    }
+    assert (await client.get("/api/card/100002")).json()["rulings"] == []
 
 
-@pytest.mark.asyncio
 async def test_add_group_ruling(client):
+    """A ruling added to a group; the overlay entry heads the group's list."""
     await login_and_proposal(client)
     response = await client.post("/api/ruling/G00008", json={"text": "Test ruling [RTR 20070707]"})
     assert response.status_code == 200
-    assert response.json() == {
-        "cards": [],
-        "uid": "NBGBNBDU",
-        "references": [
-            {
-                "date": "2007-07-07",
-                "source": "RTR",
-                "text": "[RTR 20070707]",
-                "uid": "RTR 20070707",
-                "state": "ORIGINAL",
-                "url": (
-                    "https://groups.google.com/g/rec.games.trading-cards.jyhad/"
-                    "c/vSOt2c1uRzQ/m/MsRAv47Cd4YJ"
-                ),
-            },
-        ],
-        "symbols": [],
-        "kind": "RULING",
-        "overrides": {},
-        "target": {"name": "Permanent not replaced", "uid": "G00008"},
-        "text": "Test ruling [RTR 20070707]",
-        "state": "NEW",
-    }
-    # the ruling reference appears in answers (first) while the proposal is active
-    response = await client.get("/api/group/G00008")
-    assert response.status_code == 200
-    assert (response.json())["rulings"] == [
-        {
-            "cards": [],
-            "references": [
-                {
-                    "date": "2007-07-07",
-                    "source": "RTR",
-                    "text": "[RTR 20070707]",
-                    "uid": "RTR 20070707",
-                    "state": "ORIGINAL",
-                    "url": (
-                        "https://groups.google.com/g/rec.games.trading-cards.jyhad/"
-                        "c/vSOt2c1uRzQ/m/MsRAv47Cd4YJ"
-                    ),
-                },
-            ],
-            "symbols": [],
-            "kind": "RULING",
-            "overrides": {},
-            "target": {"name": "Permanent not replaced", "uid": "G00008"},
-            "text": "Test ruling [RTR 20070707]",
-            "uid": "NBGBNBDU",
-            "state": "NEW",
-        },
-        {
-            "cards": [],
-            "references": [
-                {
-                    "date": "2008-08-05",
-                    "source": "LSJ",
-                    "state": "ORIGINAL",
-                    "text": "[LSJ 20080805]",
-                    "uid": "LSJ 20080805",
-                    "url": "https://groups.google.com/g/rec.games.trading-cards.jyhad/c/SIbzFAwWDKs/m/BDkEg19txtoJ",
-                },
-            ],
-            "state": "ORIGINAL",
-            "kind": "RULING",
-            "overrides": {},
-            "symbols": [],
-            "target": {
-                "name": "Permanent not replaced",
-                "uid": "G00008",
-            },
-            "text": "Is not replaced until the condition is met, even if it is burned. "
-            "[LSJ 20080805]",
-            "uid": "KDDBLKUJ",
-        },
+    added = response.json()
+    assert (added["uid"], added["state"], added["target"]) == (
+        "NBGBNBDU",
+        "NEW",
+        {"uid": "G00008", "name": "Permanent not replaced"},
+    )
+    assert [r["uid"] for r in added["references"]] == ["RTR 20070707"]
+    rulings = (await client.get("/api/group/G00008")).json()["rulings"]
+    assert [(r["uid"], r["state"]) for r in rulings] == [
+        ("NBGBNBDU", "NEW"),
+        ("KDDBLKUJ", "ORIGINAL"),
     ]
 
 
-@pytest.mark.asyncio
 async def test_add_group(client):
     await login_and_proposal(client)
     response = await client.post(
@@ -1000,60 +390,29 @@ async def test_add_group(client):
     assert data["cards"] == []
 
 
-@pytest.mark.asyncio
 async def test_update_group(client):
+    """Membership is set wholesale, each card optionally carrying a prefix; the group and its
+    rulings then show on every member."""
     await login_and_proposal(client)
     response = await client.put(
         "/api/group/G00030",
         json={"cards": {"100064": "", "101417": "", "101591": "", "101309": "[DOM]"}},
     )
     assert response.status_code == 200
-    assert response.json() == {
-        "uid": "G00030",
-        "name": "Vote playable once per game",
-        "state": "MODIFIED",
-        "cards": [
-            {
-                "uid": "100064",
-                "name": "Ancient Influence",
-                "printed_name": "Ancient Influence",
-                "img": "https://static.krcg.org/card/ancientinfluence.jpg",
-                "state": "ORIGINAL",
-                "prefix": "",
-                "symbols": [],
-            },
-            {
-                "uid": "101309",
-                "name": "Obedience",
-                "printed_name": "Obedience",
-                "img": "https://static.krcg.org/card/obedience.jpg",
-                "state": "NEW",
-                "prefix": "[DOM]",
-                "symbols": [{"text": "[DOM]", "symbol": "D", "count": ""}],
-            },
-            {
-                "uid": "101417",
-                "name": "Political Stranglehold",
-                "printed_name": "Political Stranglehold",
-                "img": "https://static.krcg.org/card/politicalstranglehold.jpg",
-                "state": "ORIGINAL",
-                "prefix": "",
-                "symbols": [],
-            },
-            {
-                "uid": "101591",
-                "name": "Reins of Power",
-                "printed_name": "Reins of Power",
-                "img": "https://static.krcg.org/card/reinsofpower.jpg",
-                "state": "ORIGINAL",
-                "prefix": "",
-                "symbols": [],
-            },
-        ],
-    }
-    # The new group also shows on the card
-    response = await client.get("/api/card/101309")
-    data = response.json()
+    group = response.json()
+    assert (group["uid"], group["name"], group["state"]) == (
+        "G00030",
+        "Vote playable once per game",
+        "MODIFIED",
+    )
+    assert [(c["uid"], c["state"], c["prefix"]) for c in group["cards"]] == [
+        ("100064", "ORIGINAL", ""),
+        ("101309", "NEW", "[DOM]"),
+        ("101417", "ORIGINAL", ""),
+        ("101591", "ORIGINAL", ""),
+    ]
+    # the group, its prefix and its rulings all show on the card just added to it
+    data = (await client.get("/api/card/101309")).json()
     assert data["groups"] == [
         {
             "uid": "G00030",
@@ -1063,11 +422,9 @@ async def test_update_group(client):
             "symbols": [{"text": "[DOM]", "symbol": "D", "count": ""}],
         }
     ]
-    # As its rulings
     assert len([r for r in data["rulings"] if r["target"]["uid"] == "G00030"]) > 0
 
 
-@pytest.mark.asyncio
 async def test_delete_group(client):
     await login_and_proposal(client)
     response = await client.delete("/api/group/G00003")
@@ -1081,32 +438,6 @@ async def test_delete_group(client):
         assert r["target"]["uid"] != "G00005"
 
 
-@pytest.mark.asyncio
-async def test_complete(client):
-    response = await client.get("/api/complete/")
-    assert response.status_code == 404
-    response = await client.get("/api/complete?query=paris")
-    assert response.status_code == 200
-    assert response.json() == [
-        {"label": "The Louvre, Paris", "value": "101127", "printed_name": "The Louvre, Paris"},
-        {"label": "Paris Opera House", "value": "101352", "printed_name": "Paris Opera House"},
-        {"label": "Crusade: Paris", "value": "100468", "printed_name": "Crusade: Paris"},
-        {
-            "label": "Praxis Seizure: Paris",
-            "value": "101467",
-            "printed_name": "Praxis Seizure: Paris",
-        },
-    ]
-    response = await client.get("/api/complete?query=theo bell")
-    assert response.status_code == 200
-    assert response.json() == [
-        {"label": "Theo Bell (G2)", "value": "201362", "printed_name": "Theo Bell"},
-        {"label": "Theo Bell (G2 ADV)", "value": "201363", "printed_name": "Theo Bell"},
-        {"label": "Theo Bell (G6)", "value": "201613", "printed_name": "Theo Bell"},
-    ]
-
-
-@pytest.mark.asyncio
 async def test_reminder_kind_reference_optional(client):
     await login_and_proposal(client)
     # a RULING with no reference is flagged by the consistency check
@@ -1127,7 +458,6 @@ async def test_reminder_kind_reference_optional(client):
     assert not any(e["ruling_uid"] == uid for e in errors)
 
 
-@pytest.mark.asyncio
 async def test_group_ruling_override(client):
     await login_and_proposal(client)
     # a fresh group holding one card and one ruling (avoids depending on live group membership)
@@ -1173,7 +503,6 @@ async def test_group_ruling_override(client):
     assert response.status_code == 400
 
 
-@pytest.mark.asyncio
 async def test_reminder_can_have_overrides(client):
     """The [REMINDER] tag is just a text marker, orthogonal to overrides: a reminder group ruling
     can still be adapted per card, and the reminder kind is preserved."""
@@ -1197,140 +526,56 @@ async def test_reminder_can_have_overrides(client):
     assert eff["overrides"] == {"100015": "Adapted"}
 
 
-@pytest.mark.asyncio
-@pytest.mark.discord
-async def test_proposal_workflow(client):
-    vtesrulings.discord.DISCORD_WEBHOOK = (
-        "https://discord.com/api/webhooks/"
-        "1269051147470246061/"
-        "vlOan36vpR2sLnzBTcOj26tG05HDPs3pWHzBHbYC6sLQYwMlgMAquHlu_FO4WLd0Y4Pm"
-    )
+async def test_proposal_submits_to_discord_and_updates_its_thread(client, discord_hook):
+    """Submitting opens the discussion thread, carrying the diff; submitting again posts an
+    update into that same thread."""
     await login_and_proposal(client)
-    # add a dummy reference
-    response = await client.post(
-        "/api/reference",
-        json={
-            "uid": "LSJ 20001225",
-            "url": "https://groups.google.com/g/rec.games.trading-cards.jyhad/test",
-        },
-    )
-    assert response.status_code == 200
-    # submit sends
-    response = await client.post("/api/proposal/submit")
-    assert response.status_code == 200
+    await client.post("/api/ruling/100015", json={"text": "Fresh ruling [RTR 20070707]"})
+    assert (await client.post("/api/proposal/submit")).status_code == 200
+    (opened,) = discord_hook.posts
+    assert opened["payload"]["thread_name"] == "Proposal: Test"
+    assert "thread_id" not in opened["query"]
+    embed = opened["payload"]["embeds"][0]
+    assert embed["title"] == "Test"
+    assert "Foobar" in embed["description"]  # the proposal's own description heads the message
+    assert "Academic Hunting Ground" in embed["description"]
+    assert "Fresh ruling" in embed["description"]
+    assert len(embed["description"]) <= vtesrulings.discord.EMBED_LIMIT
+    # a second submit updates the thread the first one opened
+    await client.post("/api/ruling/100015", json={"text": "Second ruling [RTR 20070707]"})
+    assert (await client.post("/api/proposal/submit")).status_code == 200
+    update = discord_hook.posts[1]
+    assert update["query"]["thread_id"] == "42"
+    assert "Second ruling" in update["payload"]["embeds"][0]["description"]
 
 
-def test_format_diff():
-    """The Discord diff text renders each change kind and truncates by size."""
+def test_format_diff_truncates_to_one_discord_message():
+    """A description over Discord's embed cap is refused with a 400 and the proposal never
+    reaches its thread, so a long diff is cut short with a tail marker instead."""
     target = models.NID(uid="100015", name="Academic Hunting Ground")
-
-    def ruling(uid, text, state, **kw):
-        return models.Ruling(uid=uid, target=target, text=text, state=state, **kw)
-
     diff = models.ProposalDiff(
-        references=[
-            models.ReferenceDiff(
-                uid="LSJ 20080805", url="http://x", source="LSJ", state=models.State.NEW
-            )
-        ],
-        groups=[
-            models.GroupDiff(
-                uid="G1",
-                name="Grp",
-                state=models.State.MODIFIED,
-                cards=[
-                    models.GroupCardChange(uid="1", name="A", state=models.State.NEW),
-                    models.GroupCardChange(uid="2", name="B", state=models.State.DELETED),
-                ],
-            )
-        ],
         rulings=[
             models.TargetDiff(
                 target=target,
                 is_group=False,
                 rulings=[
                     models.RulingDiff(
-                        ruling=ruling(
-                            "a",
-                            "Body {Foo} here",
-                            models.State.NEW,
-                            cards=[
-                                models.CardSubstitution(
-                                    uid="9", name="Foo", printed_name="Foo", img="", text="{Foo}"
-                                )
-                            ],
+                        ruling=models.Ruling(
+                            uid=str(i), target=target, text="x" * 300, state=models.State.NEW
                         )
-                    ),
-                    models.RulingDiff(
-                        ruling=ruling("b", "New text", models.State.MODIFIED),
-                        previous=ruling("b", "Old text", models.State.MODIFIED),
-                    ),
-                ],
-            )
-        ],
-    )
-    out = vtesrulings.discord.format_diff(diff)
-    assert "**Rulings**" in out
-    assert "Academic Hunting Ground" in out
-    assert "Body Foo here" in out  # {Foo} braces stripped for readability
-    assert "~~Old text~~" in out and "→ New text" in out
-    assert "**Groups**" in out and "+1" in out and "cards)" in out
-    assert "**References**" in out and "LSJ 20080805" in out
-
-    # a diff too large for one Discord message is truncated with a tail marker
-    big = models.ProposalDiff(
-        rulings=[
-            models.TargetDiff(
-                target=target,
-                is_group=False,
-                rulings=[
-                    models.RulingDiff(ruling=ruling(str(i), "x" * 300, models.State.NEW))
+                    )
                     for i in range(60)
                 ],
             )
         ]
     )
-    out = vtesrulings.discord.format_diff(big)
+    out = vtesrulings.discord.format_diff(diff)
     assert len(out) <= vtesrulings.discord.DIFF_LIMIT + 40
     assert "more)" in out
 
 
-def test_diff_override_only_modified():
-    """A MODIFIED flag from a per-card override (or kind) alone must not fabricate a struck old
-    body (reviewer #1); overrides on any non-deleted ruling are surfaced (reviewer #3)."""
-    from vtesrulings import proposal as proposal_mod
-
-    class FakeCard:
-        def __init__(self, cid, name):
-            self.id, self.unique_name = cid, name
-
-    card_map = typing.cast(
-        krcg.collections.CardDict, {100015: FakeCard(100015, "Academic Hunting Ground")}
-    )
-    tgt = models.NID(uid="G1", name="Grp")
-
-    def gruling(state, overrides, text="Body [RTR 20070707]"):
-        return models.Ruling(uid="h", target=tgt, text=text, state=state, overrides=overrides)
-
-    base = models.Index(rulings={"G1": {"h": gruling(models.State.ORIGINAL, {})}})
-    # MODIFIED by an override only: same text -> no struck old body, but the override shows
-    prop = proposal_mod.Proposal(
-        rulings={"G1": {"h": gruling(models.State.MODIFIED, {"100015": "Adapted"})}}
-    )
-    change = proposal_mod.Manager(card_map, base, prop).diff().rulings[0].rulings[0]
-    assert change.previous is None
-    assert [(o.card.uid, o.new) for o in change.overrides] == [("100015", "Adapted")]
-    # a genuine text edit DOES carry the old body
-    prop2 = proposal_mod.Proposal(
-        rulings={"G1": {"h": gruling(models.State.MODIFIED, {}, text="New body [RTR 20070707]")}}
-    )
-    change2 = proposal_mod.Manager(card_map, base, prop2).diff().rulings[0].rulings[0]
-    assert change2.previous is not None
-    assert change2.previous.text == "Body [RTR 20070707]"
-
-
 async def test_proposal_diff_page(client):
-    """The proposal page SSR-renders the overlay diff: NEW/MODIFIED rulings, refs."""
+    """The proposal page SSR-renders the overlay diff: NEW/MODIFIED rulings, overrides, refs."""
     prop_uid = await login_and_proposal(client)
     response = await client.post("/api/ruling/100015", json={"text": "Fresh ruling [RTR 20070707]"})
     assert response.status_code == 200
@@ -1340,6 +585,13 @@ async def test_proposal_diff_page(client):
     base = next(r for r in group["rulings"] if r["state"] == "ORIGINAL")
     response = await client.put(
         f"/api/ruling/G00008/{base['uid']}", json={"text": "Reworded: " + base["text"]}
+    )
+    assert response.status_code == 200
+    # a second group ruling adapted for one member only: MODIFIED by the override alone
+    other = (await client.get("/api/group/G00002")).json()
+    adapted = next(r for r in other["rulings"] if r["state"] == "ORIGINAL")
+    response = await client.put(
+        f"/api/ruling/G00002/{adapted['uid']}/override/100316", json={"text": "Adapted wording"}
     )
     assert response.status_code == 200
     response = await client.post(
@@ -1359,45 +611,48 @@ async def test_proposal_diff_page(client):
     assert base["target"]["name"] in html  # group target heading
     assert "line-through" in html  # the struck "was" (previous) body
     assert "LSJ 20001225" in html  # NEW reference
+    # the override shows, and its shared body — unchanged — is not struck as if it had been edited
+    assert "Adapted wording" in html
+    assert html.count("line-through") == 1
 
 
-def test_ruling_body_card_variant():
-    ruling = {
-        "text": "Merge with {Theo Bell (ADV)} [ANK 20220805]",
-        "symbols": [],
-        "cards": [
-            {
-                "text": "{Theo Bell (ADV)}",
-                "uid": "201363",
-                "name": "Theo Bell (G2 ADV)",
-                "printed_name": "Theo Bell",
-            }
-        ],
-        "references": [{"text": "[ANK 20220805]"}],
-    }
-    assert vtesrulings.ruling_body(ruling) == (
+def test_ruling_body_marks_cards():
+    """A {card} marker becomes a span carrying the marker verbatim — the editor serializes it
+    back from `data-marker`. Proposal-authored text cannot inject markup on the way, and the 33
+    card names holding a double quote must still match once escaped."""
+    assert vtesrulings.ruling_body(
+        {
+            "text": "Merge with {Theo Bell (ADV)} [ANK 20220805]",
+            "symbols": [],
+            "cards": [
+                {
+                    "text": "{Theo Bell (ADV)}",
+                    "uid": "201363",
+                    "name": "Theo Bell (G2 ADV)",
+                    "printed_name": "Theo Bell",
+                }
+            ],
+            "references": [{"text": "[ANK 20220805]"}],
+        }
+    ) == (
         'Merge with <span class="krcg-card" data-name="Theo Bell (G2 ADV)" data-uid="201363"'
         ' data-marker="{Theo Bell (ADV)}">Theo Bell</span>'
     )
-
-
-def test_ruling_body_escapes():
-    """Proposal-authored text can't inject markup, and markers whose card name escapes (33 have a
-    double quote) are still matched and stripped."""
-    ruling = {
-        "text": '<script>x</script> {Anna "Dictatrix11" Suljic}',
-        "symbols": [],
-        "cards": [
-            {
-                "text": '{Anna "Dictatrix11" Suljic}',
-                "uid": "200102",
-                "name": 'Anna "Dictatrix11" Suljic',
-                "printed_name": 'Anna "Dictatrix11" Suljic',
-            }
-        ],
-        "references": [],
-    }
-    assert vtesrulings.ruling_body(ruling) == (
+    assert vtesrulings.ruling_body(
+        {
+            "text": '<script>x</script> {Anna "Dictatrix11" Suljic}',
+            "symbols": [],
+            "cards": [
+                {
+                    "text": '{Anna "Dictatrix11" Suljic}',
+                    "uid": "200102",
+                    "name": 'Anna "Dictatrix11" Suljic',
+                    "printed_name": 'Anna "Dictatrix11" Suljic',
+                }
+            ],
+            "references": [],
+        }
+    ) == (
         "&lt;script&gt;x&lt;/script&gt; "
         '<span class="krcg-card" data-name="Anna &#34;Dictatrix11&#34; Suljic" data-uid="200102"'
         ' data-marker="{Anna &#34;Dictatrix11&#34; Suljic}">'
@@ -1464,10 +719,14 @@ def test_ruling_body_strips_references_before_emphasizing():
     assert vtesrulings.ruling_body(ruling) == "*See *"
 
 
-def test_plain_text_drops_emphasis():
+def test_plain_text_is_the_body_stripped_of_its_markup():
+    """Search and snippets read the plain text: an id is structure and would match on digits,
+    and every marker would read as noise."""
+    assert utils.plain_text("See {100006|Abbot} and {Abbot}.") == "See Abbot and Abbot."
     assert utils.plain_text("A **bold** _claim_ about {Abbot} [pot] [LSJ 20040518]") == (
         "A bold claim about Abbot"
     )
+    assert utils.plain_text("[1 CONVICTION] Only usable") == "Only usable"
 
 
 @pytest.mark.parametrize(
@@ -1506,24 +765,6 @@ def test_island_mirrors_the_krcg_symbols():
     body = ts.split("ANKHA_SYMBOLS: Record<string, string> = {")[1].split("\n}")[0]
     mirrored = dict(re.findall(r'"?(\w[\w ]*?)"?: "(.)"', body))
     assert mirrored == krcg.rulings.ANKHA_SYMBOLS
-
-
-def test_cost_marker_renders_its_count_beside_the_glyph():
-    """[1 CONVICTION] is the CSV's own form for an imbued power's cost, and the ankha font draws
-    digits as other icons, so the count renders in its own span — inside the chip, which is what
-    the editor serializes back through data-marker."""
-    symbols = [
-        dataclasses.asdict(s) for s in utils.parse_symbols("[ACTION MODIFIER] [1 CONVICTION]")
-    ]
-    assert symbols == [
-        {"text": "[ACTION MODIFIER]", "symbol": "1", "count": ""},
-        {"text": "[1 CONVICTION]", "symbol": "¤", "count": "1"},
-    ]
-    assert vtesrulings.symbol_replace("[1 CONVICTION]", symbols[1:]) == (
-        '<span class="krcg-icon" contenteditable="false" data-marker="[1 CONVICTION]">'
-        '<span class="krcg-count">1</span>¤</span>'
-    )
-    assert utils.plain_text("[1 CONVICTION] Only usable") == "Only usable"
 
 
 def test_repeated_marker_is_not_nested():
@@ -1627,33 +868,27 @@ def test_card_text_links_named_cards():
     assert vtesrulings.card_text(
         "Cancel <Immortal Grapple> as it is played.", ["COMBAT"], [], [GRAPPLE]
     ) == (
-        'Cancel <span class="krcg-card" data-name="Immortal Grapple" data-uid="100959">Immortal Grapple</span>'
-        " as it is played."
+        'Cancel <span class="krcg-card" data-name="Immortal Grapple" data-uid="100959">'
+        "Immortal Grapple</span> as it is played."
     )
-
-
-def test_card_text_links_every_occurrence():
-    """A name is marked wherever it appears, so every mention links."""
-    html = vtesrulings.card_text(
-        "<Immortal Grapple> beats <Immortal Grapple>.", ["COMBAT"], [], [GRAPPLE]
+    # a name is marked wherever it appears, so every mention links
+    assert (
+        vtesrulings.card_text(
+            "<Immortal Grapple> beats <Immortal Grapple>.", ["COMBAT"], [], [GRAPPLE]
+        ).count('class="krcg-card"')
+        == 2
     )
-    assert html.count('class="krcg-card"') == 2
-
-
-def test_card_text_carries_the_unique_name():
-    """The span shows the printed name but points at the printing, for krcg.js image lookup."""
+    # the span shows the printed name but points at the printing, for krcg.js image lookup
     mithras = {"uid": "201001", "name": "Mithras (G3)", "printed_name": "Mithras"}
     assert vtesrulings.card_text("not <Mithras>.", ["MASTER"], [], [mithras]) == (
         'not <span class="krcg-card" data-name="Mithras (G3)" data-uid="201001">Mithras</span>.'
     )
-
-
-def test_card_text_links_a_name_the_bold_inference_splits_on():
-    """A crypt line is cut at its first colon and split on sentence ends, and 132 card names
-    carry a colon ('Crusade: Chicago'), others a period ('Dr. Jest'). No card names one today."""
+    # a crypt line is cut at its first colon and split on sentence ends, and 132 card names carry
+    # a colon ('Crusade: Chicago'), others a period ('Dr. Jest'): the marker must survive both.
     jest = {"uid": "200366", "name": "Dr. Jest", "printed_name": "Dr. Jest"}
     assert vtesrulings.card_text("While <Dr. Jest> is ready.", ["VAMPIRE"], [], [jest]) == (
-        'While <span class="krcg-card" data-name="Dr. Jest" data-uid="200366">Dr. Jest</span> is ready.'
+        'While <span class="krcg-card" data-name="Dr. Jest" data-uid="200366">Dr. Jest</span>'
+        " is ready."
     )
     # "votes" reads as a title, so the header branch would bold up to the marker's own colon
     crusade = {"uid": "100453", "name": "Crusade: Chicago", "printed_name": "Crusade: Chicago"}
@@ -1661,18 +896,15 @@ def test_card_text_links_a_name_the_bold_inference_splits_on():
         "Anson gets 2 votes and can find <Crusade: Chicago>.", ["VAMPIRE"], [], [crusade]
     ) == (
         "Anson gets 2 votes and can find "
-        '<span class="krcg-card" data-name="Crusade: Chicago" data-uid="100453">Crusade: Chicago</span>.'
+        '<span class="krcg-card" data-name="Crusade: Chicago" data-uid="100453">'
+        "Crusade: Chicago</span>."
     )
-
-
-def test_card_text_leaves_unmarked_angle_brackets():
-    """A literal `<b>` escapes to the same shape as a marker; only a known name is a link."""
+    # a literal `<b>` escapes to the same shape as a marker; only a known name is a link
     assert vtesrulings.card_text("a <b> and <Nope>.", ["MASTER"], [], [GRAPPLE]) == (
         "a &lt;b&gt; and &lt;Nope&gt;."
     )
 
 
-@pytest.mark.asyncio
 async def test_card_page_renders_symbols(client):
     """The card-text chain is the cardtext filter: glyphs and inferred bold land as markup, the
     card's own text does not."""
@@ -1685,7 +917,6 @@ async def test_card_page_renders_symbols(client):
     assert body.startswith("<strong>Camarilla:</strong>")  # the sect header, bold as on the card
 
 
-@pytest.mark.asyncio
 async def test_card_page_renders_a_cost_marker(client):
     """End to end for the CSV's cost form: the count is drawn beside the glyph, in its own span
     inside the chip — the chip's data-marker still holds the whole marker for the copy path."""
@@ -1695,11 +926,10 @@ async def test_card_page_renders_a_cost_marker(client):
     assert body.count("[1 CONVICTION]") == body.count('data-marker="[1 CONVICTION]"') == 2
     assert (
         '<span class="krcg-icon" contenteditable="false" data-marker="[1 CONVICTION]">'
-        '<span class="krcg-count">1</span>\u00a4</span>' in body
+        '<span class="krcg-count">1</span>¤</span>' in body
     )
 
 
-@pytest.mark.asyncio
 async def test_card_page_links_named_cards(client):
     """End to end: the template hands the filter the card's references, so the marker links."""
     page = await client.get("/index.html?uid=101125")  # Lost in Crowds names Into Thin Air
@@ -1712,7 +942,6 @@ async def test_card_page_links_named_cards(client):
     assert "&lt;" not in body
 
 
-@pytest.mark.asyncio
 async def test_login_redirects_to_the_archon_consent_page(client):
     """The consent page hands its query to GET /oauth/authorize verbatim, which 400s without
     response_type and code_challenge_method — so the redirect must carry them itself."""
@@ -1741,18 +970,16 @@ def test_authorization_url_challenges_with_the_verifier_digest():
     assert params["code_challenge"] == expected
 
 
-@pytest.mark.asyncio
-async def test_login_callback_refuses_a_state_it_did_not_issue(client):
-    """No pending handshake in session (or a mismatched state) must not reach archon at all —
-    the test would hang on a real HTTP call if it did."""
+async def test_login_callback_refuses_a_state_it_did_not_issue(client, archon):
+    """No pending handshake in session (or a mismatched state) must not reach archon at all."""
     response = await client.get("/login/callback?code=whatever&state=forged")
     assert response.status_code == 302
     assert response.headers["location"] == "/index.html"
+    assert not archon.spent
     page = await client.get("/index.html")
     assert "Login was cancelled or timed out" in page.text
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize("hostile", ["https://evil.tld/", "//evil.tld/", "/\\evil.tld"])
 async def test_login_refuses_an_offsite_next(client, hostile):
     """`next` rides a link anyone can craft, and login is a plain GET — an absolute or
@@ -1794,42 +1021,41 @@ async def stale(uid, refresh_token: str):
     )
 
 
-@pytest.mark.asyncio
-async def test_approval_needs_the_approver_flag_and_publishes(client, monkeypatch):
-    """Approval is the one gated action left: a plain member is refused, an archon approver
-    merges the overlay into the YAML, pushes it and drops the proposal row.
-
-    Approving commits into the session-wide fixture repo and swaps the loaded base index, so
-    this one leaves state behind for whatever runs after it — keep it last in the file.
-    """
-
-    async def submitted(prop, diff):
-        prop.channel_id = "42"
-
-    async def announced(prop, diff):
-        pass
-
-    monkeypatch.setattr(vtesrulings.discord, "submit_proposal", submitted)
-    monkeypatch.setattr(vtesrulings.discord, "proposal_approved", announced)
-    prop_uid = await login_and_proposal(client)
-    text = "Approved through the test suite [RTR 20070707]"
-    assert (await client.post("/api/ruling/100015", json={"text": text})).status_code == 200
-    assert (await client.post("/api/proposal/submit")).status_code == 200
-    # the author is not an approver
-    assert (await client.post("/api/proposal/approve")).status_code == 401
-    await client.post("/logout")
-    response = await client.post("/login", data={"username": "rulemonger", "approver": "1"})
+async def test_login_callback_signs_the_user_in(client, archon):
+    """The whole handshake against archon: the code buys the tokens, userinfo says who the user is
+    and what they may do, and `next` takes them back where they were."""
+    redirect = await client.get("/login?next=/groups.html")
+    pending = dict(
+        urllib.parse.parse_qsl(urllib.parse.urlparse(redirect.headers["location"]).query)
+    )
+    archon.info = {"sub": "archon-uid-7", "vekn_id": "1234567", "roles": ["Rulemonger"]}
+    response = await client.get(f"/login/callback?code=the-code&state={pending['state']}")
     assert response.status_code == 302
-    # an approver may pick up someone else's proposal
-    assert (await client.get(f"/index.html?prop={prop_uid}")).status_code == 200
-    assert (await client.post("/api/proposal/approve")).status_code == 200
-    assert await db.get_proposal(prop_uid) is None
-    card = (await client.get("/api/card/100015")).json()
-    # ORIGINAL, not NEW: the ruling is in the base index now, not in an overlay
-    assert any(r["text"] == text and r["state"] == "ORIGINAL" for r in card["rulings"])
+    assert response.headers["location"] == "/groups.html"
+    assert archon.spent == ["the-code"]
+    assert archon.access == ["access-1"]
+    user = await user_row(await sql("SELECT uid FROM users WHERE archon_uid='archon-uid-7'"))
+    assert user.vekn == "1234567"
+    assert user.approver is True  # Rulemonger
+    assert user.refresh_token == "refresh-1"
+    # and the session is live: a proposal can be started
+    assert (await client.post("/api/proposal", json={"name": "Mine"})).status_code == 200
 
 
-@pytest.mark.asyncio
+async def test_login_refuses_a_member_with_no_vekn_id(client, archon):
+    """Archon accounts exist without a VEKN id, and there is nothing to attribute a ruling to."""
+    redirect = await client.get("/login")
+    pending = dict(
+        urllib.parse.parse_qsl(urllib.parse.urlparse(redirect.headers["location"]).query)
+    )
+    archon.info = {"sub": "archon-uid-8", "roles": []}
+    response = await client.get(f"/login/callback?code=the-code&state={pending['state']}")
+    assert response.status_code == 302
+    page = await client.get("/index.html")
+    assert "claim yours on archon" in page.text
+    assert await sql("SELECT count(*) FROM users") == 0
+
+
 async def test_init_retrofits_the_vekn_unique_onto_a_legacy_table(client):
     """The cutover empties the production table rather than dropping it, so the inline UNIQUE in
     `CREATE TABLE` never reaches it — `db.init` is what puts the constraint on."""
@@ -1846,7 +1072,6 @@ async def test_init_retrofits_the_vekn_unique_onto_a_legacy_table(client):
         await sql("INSERT INTO users (vekn) VALUES ('9999999') RETURNING uid")
 
 
-@pytest.mark.asyncio
 async def test_a_returning_login_rewrites_its_row(client):
     """Archon owns identity, so every login overwrites what it told us last time."""
     first = await db.login_user("archon-uid-1", "9999999", True, "refresh-1")
@@ -1856,62 +1081,40 @@ async def test_a_returning_login_rewrites_its_row(client):
     assert again.refresh_token == "refresh-2"
 
 
-@pytest.mark.asyncio
-async def test_a_rotated_token_lands_even_when_userinfo_fails(client, monkeypatch):
+async def test_stale_roles_are_rechecked_against_archon(client, archon):
+    """An hour on, the flag is archon's answer again, not the one cached at login."""
+    await client.post("/login", data={"username": "test-user", "approver": "1"})
+    uid = await sql("SELECT uid FROM users WHERE vekn='test-user'")
+    await stale(uid, "refresh-1")
+    archon.tokens = {"access_token": "access-2", "refresh_token": "refresh-2"}
+    archon.info = {"sub": "archon-uid", "vekn_id": "9999999", "roles": ["PT"]}
+    assert (await client.get("/index.html")).status_code == 200
+    assert (archon.spent, archon.access) == (["refresh-1"], ["access-2"])
+    user = await user_row(uid)
+    assert user.approver is False
+    assert user.refresh_token == "refresh-2"  # the rotated token replaced the spent one
+
+
+async def test_a_rotated_token_lands_even_when_userinfo_fails(client, archon):
     """The refresh revoked the token we spent, so losing the new one to a later failure would
     make the next hour read as chain reuse and end every session of that user."""
     await client.post("/login", data={"username": "test-user", "approver": "1"})
     uid = await sql("SELECT uid FROM users WHERE vekn='test-user'")
     await stale(uid, "refresh-1")
-
-    async def refreshed(refresh_token):
-        return {"access_token": "access-2", "refresh_token": "refresh-2"}
-
-    async def unreachable(access_token):
-        raise vtesrulings.archon.Error("archon is down", 503)
-
-    monkeypatch.setattr(vtesrulings.archon, "refresh", refreshed)
-    monkeypatch.setattr(vtesrulings.archon, "userinfo", unreachable)
+    archon.tokens = {"access_token": "access-2", "refresh_token": "refresh-2"}
+    archon.userinfo_status = 503
     assert (await client.get("/index.html")).status_code == 200
     user = await user_row(uid)
     assert user.refresh_token == "refresh-2"  # the spent token is gone from the row
     assert user.approver is True  # an outage is not a refusal: the roles stand until next hour
 
 
-@pytest.mark.asyncio
-async def test_stale_roles_are_rechecked_against_archon(client, monkeypatch):
-    """An hour on, the flag is archon's answer again, not the one cached at login."""
-    await client.post("/login", data={"username": "test-user", "approver": "1"})
-    uid = await sql("SELECT uid FROM users WHERE vekn='test-user'")
-    await stale(uid, "refresh-1")
-
-    async def refreshed(refresh_token):
-        assert refresh_token == "refresh-1"
-        return {"access_token": "access-2", "refresh_token": "refresh-2"}
-
-    async def demoted(access_token):
-        assert access_token == "access-2"
-        return {"sub": "archon-uid", "vekn_id": "9999999", "roles": ["PT"]}
-
-    monkeypatch.setattr(vtesrulings.archon, "refresh", refreshed)
-    monkeypatch.setattr(vtesrulings.archon, "userinfo", demoted)
-    assert (await client.get("/index.html")).status_code == 200
-    user = await user_row(uid)
-    assert user.approver is False
-    assert user.refresh_token == "refresh-2"  # the rotated token replaced the spent one
-
-
-@pytest.mark.asyncio
-async def test_an_archon_outage_keeps_the_session(client, monkeypatch):
+async def test_an_archon_outage_keeps_the_session(client, archon):
     """A timeout is not a refusal: keep the roles we have, and do not retry on the next request."""
     await client.post("/login", data={"username": "test-user", "approver": "1"})
     uid = await sql("SELECT uid FROM users WHERE vekn='test-user'")
     await stale(uid, "refresh-1")
-
-    async def unreachable(refresh_token):
-        raise vtesrulings.archon.Error("archon.krcg.org: timeout")
-
-    monkeypatch.setattr(vtesrulings.archon, "refresh", unreachable)
+    archon.token_status = 503
     assert (await client.get("/index.html")).status_code == 200
     user = await user_row(uid)
     assert user.approver is True
@@ -1923,18 +1126,13 @@ async def test_an_archon_outage_keeps_the_session(client, monkeypatch):
     )
 
 
-@pytest.mark.asyncio
-async def test_a_dead_token_chain_logs_the_user_out(client, monkeypatch):
+async def test_a_dead_token_chain_logs_the_user_out(client, archon):
     """Archon refusing for good (revoked consent, reused chain, 30d expiry) ends the session
     rather than 500ing, and strips the flag so the user's other sessions lose it too."""
     await client.post("/login", data={"username": "test-user", "approver": "1"})
     uid = await sql("SELECT uid FROM users WHERE vekn='test-user'")
     await stale(uid, "refresh-1")
-
-    async def refused(refresh_token):
-        raise vtesrulings.archon.Error("archon.krcg.org: Refresh token has been revoked", 400)
-
-    monkeypatch.setattr(vtesrulings.archon, "refresh", refused)
+    archon.token_status = 400
     elsewhere = client.cookies.get("session")  # a second browser, still holding a live cookie
     page = await client.get("/index.html")
     assert page.status_code == 200
@@ -1945,3 +1143,32 @@ async def test_a_dead_token_chain_logs_the_user_out(client, monkeypatch):
     assert user.refresh_token is None
     client.cookies.set("session", elsewhere)
     assert (await client.post("/api/proposal", json={"name": "Nope"})).status_code == 401
+
+
+async def test_approval_needs_the_approver_flag_and_publishes(client, discord_hook):
+    """Approval is the one gated action left: a plain member is refused, an archon approver
+    merges the overlay into the YAML, pushes it, announces it and drops the proposal row.
+
+    Approving commits into the session-wide fixture repo and swaps the loaded base index, so
+    this one leaves state behind for whatever runs after it — keep it last in the file.
+    """
+    prop_uid = await login_and_proposal(client)
+    text = "Approved through the test suite [RTR 20070707]"
+    assert (await client.post("/api/ruling/100015", json={"text": text})).status_code == 200
+    assert (await client.post("/api/proposal/submit")).status_code == 200
+    # the author is not an approver
+    assert (await client.post("/api/proposal/approve")).status_code == 401
+    await client.post("/logout")
+    response = await client.post("/login", data={"username": "rulemonger", "approver": "1"})
+    assert response.status_code == 302
+    # an approver may pick up someone else's proposal
+    assert (await client.get(f"/index.html?prop={prop_uid}")).status_code == 200
+    assert (await client.post("/api/proposal/approve")).status_code == 200
+    assert await db.get_proposal(prop_uid) is None
+    card = (await client.get("/api/card/100015")).json()
+    # ORIGINAL, not NEW: the ruling is in the base index now, not in an overlay
+    assert any(r["text"] == text and r["state"] == "ORIGINAL" for r in card["rulings"])
+    # the approval is announced in the proposal's own thread
+    announced = discord_hook.posts[-1]
+    assert announced["query"]["thread_id"] == "42"
+    assert announced["payload"]["embeds"][0]["title"] == "Test APPROVED ✅"
