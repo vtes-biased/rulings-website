@@ -30,7 +30,7 @@ That bought back only their proposals, which the drain removes anyway, and it
 carried a real hazard: a mistyped id that happens to be another member's real one
 hands that person the wrong row. Dropped, along with the adoption path itself
 (`UPDATE … WHERE archon_uid IS NULL AND vekn=%s`) — with no legacy rows left it
-was dead code. `login_user` is now: match on `archon_uid`, else insert.
+was dead code. `login_user` is now a single upsert on `archon_uid`.
 
 The ids were collected by hand. No procedure consumes them any more — recovery,
 if anyone ever asks, keys on `uid` — so the table below is kept as the record of
