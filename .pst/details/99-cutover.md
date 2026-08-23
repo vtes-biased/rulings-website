@@ -25,7 +25,7 @@ immediately before it, inside the same window. Everything else is a prerequisite
 | 1 | Register the OAuth client on archon, secrets into vault | you | #81 |
 | 2 | Apply the eight rulemonger VEKN ids by hand; ask people to submit drafts | you | #86 |
 | 3 | Drain the in-flight proposals on live v1 | you | #76 |
-| 4 | krcg-static to `krcg>=5.10`, merged | me | #89 |
+| 4 | ~~krcg-static to `krcg>=5.10`~~ | done | #89 |
 | 5 | Stop v1 | you | #93 |
 | 6 | Push `vtes-rulings` (4 commits) | me | #79 |
 | 7 | Tag and deploy the website | you/me | #2 |
@@ -47,9 +47,12 @@ recipe instead). Key on `uid`, never on `vekn` — the table has duplicate handl
 the base it merges against reloads renumbered: 606 of 2302 rulings change uid. Approve or discard
 what is open first. Same ask as the drafts in step 2, so do them together.
 
-**4 — #89.** krcg-static's `uv.lock` still resolves krcg 5.9, which cannot split an id-bearing
-token, and its CI runs a plain `uv sync` (so the lock wins). Its 6-hourly cron reads
-`rulings.yaml` live, so this must be merged before step 6 or the next build mangles every token.
+**4 — done, and it was never a gate.** krcg-static's floor is `krcg>=5.10` and its CLAUDE.md says
+so (`d52c2035`, on `main`). The ordering claim behind this step was wrong: `uv.lock` is *gitignored*
+there and has never been tracked, so CI's plain `uv sync` resolves fresh every run and has been
+installing 5.11 since its release. 5.11 also reads the current un-migrated file without complaint
+(`load_online` attaches 5414 rulings, bare `{Name}` tokens intact, checked), so the 6-hourly cron is
+safe either side of step 6. Step 6 waits on step 5 alone.
 
 **6 — the push.** `vtes-rulings` is 4 commits ahead of `origin/main`: the migration (`68d5a6c`), the
 krcg-3 script deletion (`1c8dd7d`), the reference-source check (`b316272`), the symbol list
@@ -66,7 +69,7 @@ gravelines. The app boots, clones the migrated file and serves it.
 - **rulings-website** — 28 commits ahead of `origin/main`, carrying **both** epics interleaved: the
   card-token change (#76) and the archon login switch (#80). One deploy ships both. That is why the
   auth prerequisites gate a release whose headline feature is the token change.
-- **krcg-static** — clean, nothing done yet (step 4).
+- **krcg-static** — done and pushed (`d52c2035`), step 4 off the critical path.
 
 ## Rollback
 
