@@ -52,6 +52,14 @@ app_env:
   DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@/{{ db_name }}?host=/var/run/postgresql"
   SITE_URL_BASE: "https://{{ domain }}"
   SESSION_SECRET_KEY: "{{ vault_session_secret_key }}"
+  # Archon OAuth2 (login + roles). archon.py derives the redirect from
+  # SITE_URL_BASE, so the client registered on archon must list
+  # https://rulings.krcg.org/login/callback verbatim (archon does no prefix
+  # matching), scope profile:read. The client id is public — it rides in every
+  # consent URL the browser sees — so only the secret is vaulted.
+  ARCHON_URL: "https://archon.krcg.org"
+  ARCHON_CLIENT_ID: "FILL-ME-after-registering-on-archon"
+  ARCHON_CLIENT_SECRET: "{{ vault_archon_client_secret }}"
   DISCORD_WEBHOOK: "{{ vault_discord_webhook }}"
   DISCORD_SERVER_ID: "887471681277399091"   # public server id, not a secret
   # GitHub App push to vtes-biased/vtes-rulings. The App ID or Client ID works as the
