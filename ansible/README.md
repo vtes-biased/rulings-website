@@ -85,24 +85,30 @@ gh api /repos/vtes-biased/vtes-rulings/installation --jq .id
 
 ## Secrets — the archon OAuth client
 
-Login is OAuth2 against archon; there is no local password. Register the client on archon
-(the CRUD is IC-or-DEV: `POST /oauth/clients`, or the Developer section of the archon profile
-page), then put the halves where they belong:
+Login is OAuth2 against archon; there is no local password. **Two archon deployments, two
+clients** — they have separate databases, so a registration on one is unknown to the other:
 
-- **Redirect URIs** — archon matches them **verbatim**, no prefix matching. Register both:
-  `https://rulings.krcg.org/login/callback` (prod, derived from `SITE_URL_BASE`) and
-  `http://127.0.0.1:5000/login/callback` (local dev, the `just serve` bind and the
-  `SITE_URL_BASE` default).
+| | archon | env var | client id | client secret |
+|---|---|---|---|---|
+| **prod** | `archon.vekn.net` | `ARCHON_URL` in `vars.yml` | `app_env.ARCHON_CLIENT_ID` | `vault_archon_client_secret` |
+| **dev** | `archon.krcg.org` (beta) | none — `archon.py` defaults to it | `.env` | `.env` |
+
+Register each one where it belongs (the CRUD is IC-or-DEV: `POST /oauth/clients`, or the
+Developer section of the archon profile page), with:
+
+- **Redirect URI** — archon matches it **verbatim**, no prefix matching. Give each client only
+  its own: `https://rulings.krcg.org/login/callback` for the prod client (derived from
+  `SITE_URL_BASE`), `http://127.0.0.1:5000/login/callback` for the dev one (the `just serve`
+  bind, and the `SITE_URL_BASE` default).
 - **Scope** — `profile:read` only. `user:impersonate` would hand us the whole archon API and
   we need nothing from it.
-- **Client ID** — public (it rides in every consent URL the browser sees): plaintext in
-  `vars.yml` under `app_env.ARCHON_CLIENT_ID`.
-- **Client secret** — displayed **once**. Have `ansible-vault edit` ready before you register,
-  and paste it in as `vault_archon_client_secret`.
+- **Client ID** — public: it rides in every consent URL the browser sees, so it sits plaintext
+  in `vars.yml` (prod) and `.env` (dev).
+- **Client secret** — displayed **once**. For prod, have `ansible-vault edit` ready *before* you
+  register.
 
-Locally, the same pair goes in `.env` as `ARCHON_CLIENT_ID` / `ARCHON_CLIENT_SECRET`. Without
-them there is no way into the dev server but `TESTING=1`, which turns `POST /login` into a
-direct session mint.
+Without the dev pair there is no way into the dev server but `TESTING=1`, which turns
+`POST /login` into a direct session mint.
 
 ## Step 0 — verify access + foundation (before deploying)
 

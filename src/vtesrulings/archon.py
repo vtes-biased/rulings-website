@@ -13,6 +13,9 @@ import urllib.parse
 import aiohttp
 
 logger = logging.getLogger()
+#: Defaults to archon's **beta** deployment: dev works out of the box without pointing at the
+#: live user base. Production is archon.vekn.net, a separate database with its own client
+#: registration, and ansible sets this explicitly.
 ARCHON_URL = os.getenv("ARCHON_URL", "https://archon.krcg.org").rstrip("/")
 CLIENT_ID = os.getenv("ARCHON_CLIENT_ID", "")
 CLIENT_SECRET = os.getenv("ARCHON_CLIENT_SECRET", "")
