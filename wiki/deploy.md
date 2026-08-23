@@ -107,4 +107,4 @@ section of the archon profile page), with:
 - **Client secret** — displayed **once**. For prod, have `ansible-vault edit` open *before* you
   register.
 
-Production nginx proxies `/oauth` as an allowlisted prefix, so the handshake works there.
+Archon's production nginx proxies `/oauth` as an allowlisted prefix, so the handshake works there.

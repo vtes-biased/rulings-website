@@ -147,7 +147,7 @@
     .nav-link { @apply rounded px-3 py-2 text-sm font-medium text-chrome-muted no-underline hover:text-chrome-text; }
     .nav-link.active { @apply text-chrome-text; }
 
-    /* list rows (group cards, admin users) */
+    /* list rows (group cards) */
     .row-item { @apply flex flex-wrap items-center gap-2 border-b border-hairline px-3 py-2 last:border-b-0; }
     /* nav list (groups picker) */
     .nav-row { @apply flex items-center justify-between gap-2 border-b border-hairline px-3 py-2 text-text no-underline last:border-b-0 hover:bg-surface-2; }

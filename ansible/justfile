@@ -8,7 +8,7 @@
 #
 # Ansible tooling comes from the repo-root project's dev group (`uv run --project`).
 # The vault password comes from ansible.cfg (vault_password_file = .vault_pass) —
-# decrypt secrets/vault-pass.age into it first (see README).
+# decrypt secrets/vault-pass.age into it first (see wiki/deploy.md).
 
 repo_root := parent_directory(justfile_directory())
 build_dir := justfile_directory() / "build"
@@ -55,7 +55,7 @@ dry-deploy: galaxy
     if [ "${SOURCE:-}" = local ]; then just build; extra="$extra -e artifact_source=local"; fi
     uv run --project {{ repo_root }} ansible-playbook -i inventories/production playbooks/deploy.yml --check --diff $extra
 
-# ansible ping — verify deploy-user SSH access + foundation reachability (Step 0)
+# ansible ping — verify deploy-user SSH access + foundation reachability (run this first)
 ping: galaxy
     uv run --project {{ repo_root }} ansible rulings -i inventories/production -m ping
 
