@@ -28,7 +28,7 @@ id, and archon OAuth login — and one deploy ships both. The switch is **hard a
 | 0 | ~~krcg 5.11 released, website pinned, every format regex bound to krcg~~ | done |
 | 1 | ~~Register the archon OAuth clients, prod and beta~~ | done 2026-08-23 |
 | **1b** | **Deploy archon-vibe with the consent fix, prod and beta** | @lip |
-| **2** | **Ask on Discord: submit any draft you care about** | @lip |
+| 2 | ~~Ask on Discord: submit any draft you care about~~ | done 2026-08-23 |
 | **3** | **Drain the in-flight proposals on live v1** | @lip |
 | 4 | ~~krcg-static to `krcg>=5.10`~~ | done, and never a gate |
 | **5** | **Stop v1** | @lip |
@@ -51,9 +51,9 @@ That fix is **not pushed**: as re-checked 2026-08-23, archon-vibe `main` is **25
 tag-triggered (`v*`) there. Beta first, to unblock dev; prod because that is where the site's users
 are.
 
-### 2 and 5b — the users
+### 5b — the users
 
-Step 2 is the Discord ask. Step 5b is one statement:
+Step 5b is one statement:
 
 ```sql
 SELECT count(*) FROM proposals;  -- must be 0: step 3 is the drain, and the FK blocks the DELETE
@@ -102,10 +102,7 @@ SELECT u.uid, u.vekn, u.category,
 
 The audit (42 rows, 2026-08-22) found **not one numeric VEKN id** — every row holds a vekn.net login
 handle, because v1.3.0 stored `params["username"]` verbatim. 11 rows owned 17 proposals, 9 of them
-submitted; the 8 unsubmitted drafts are what step 2 is for, and they sat with `Oracle.kid` (2) plus
-one each for `trydeflectingthisgrapple`, `squidalot`, `zavierazo`, `Gr33n`, `dvorax` and
-`marciohiroyuki` — name them in the ask rather than posting generically. Four people held two rows
-apiece (`Artemis`/`artemis`, `Oracle.kid`/`oracle.kid`,
+submitted. Four people held two rows apiece (`Artemis`/`artemis`, `Oracle.kid`/`oracle.kid`,
 `Trydeflectingthisgrapple`/`trydeflectingthisgrapple`, and `Hobbesgoblin` twice over), which proves
 the production table never enforced the `vekn UNIQUE` its `CREATE TABLE` declares.
 
@@ -114,7 +111,7 @@ the production table never enforced the `vekn UNIQUE` its `CREATE TABLE` declare
 A proposal is an overlay keyed on the uid a ruling had when it was edited, and the base it merges
 against reloads renumbered: **606 of 2302 rulings change uid** at the migration. Anything open on one
 of those has nothing to resolve against. Proposals are transient by design, so draining is the fix,
-not migrating payloads. Same ask as step 2 — do them together.
+not migrating payloads. The Discord ask (step 2) is posted, so the queue is what people asked for.
 
 ### 6 — the push
 

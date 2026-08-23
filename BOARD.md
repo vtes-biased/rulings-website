@@ -20,8 +20,6 @@ follow-up ("chase @lip, 12 Sep"), owned by whoever wrote it.
   tag `v1.0.7` does not contain `105bdbf`. Decide what that release carries, tag it, deploy beta then
   prod. Until then every returning user's login loops. @lip only. Done: a second login through
   `archon.vekn.net` completes without looping. [[board/cutover.md]] step 1b
-- **Ask on Discord that people submit any draft they care about**, so it reaches the queue and is
-  judged on its merits during the drain. @lip. Done: posted. [[board/cutover.md]] step 2
 - **Drain the in-flight proposals on live v1** — approve or discard every one. @lip. Done:
   `SELECT count(*) FROM proposals` returns 0 on gravelines. [[board/cutover.md]] step 3
 - **Run the cutover window**: stop v1, `DELETE FROM users`, push the four `vtes-rulings` commits,
