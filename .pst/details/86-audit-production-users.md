@@ -82,19 +82,51 @@ nothing in the data can derive them.
 | Sergio | `09dfee84-aec4-43e8-b679-98fea840af87` | RULEMONGER | 0 | 0 | |
 | lip | `fff5b489-f823-4ea1-818c-def524189e30` | ADMIN | 0 | 0 | |
 
-Apply each id to its row **before the cutover**. This only rewrites `vekn`, so it
-runs on the current schema, and `db.login_user` then adopts the row at that
-person's first archon login:
+### When it runs — inside the cutover window
+
+Decided 2026-08-23: **between stopping v1 and booting v2** (#99 step 5→7), not
+before. The statement only rewrites `vekn`, and `db.init()` leaves that column
+alone — it adds `archon_uid`/`approver`/`refresh_token`/`roles_checked_at` and
+drops `category` (`db.py:66-74`) — so it is schema-agnostic and runs identically
+either side of the migration. The only real deadline is **before that person's
+first archon login on v2**; afterwards they hold a fresh row and the fix is the
+move-proposals recipe above. The window is the cleanest slot because nothing else
+can write `users` while both engines are down.
+
+No collision risk: every existing `vekn` is a handle, so a numeric id can never
+duplicate one — and `db.init()` does not retrofit the `vekn UNIQUE` the current
+table lacks anyway.
+
+### The script — ids pending
+
+Fill the eight ids, run on gravelines as one transaction. Every statement keys on
+`uid`; **never** on `vekn` (the duplicate `Hobbesgoblin` below). Skip any line
+whose person cannot be identified — rows 5-8 own no proposal, so a skip costs
+nothing but row continuity.
 
 ```sql
-UPDATE users SET vekn = '<vekn-id>' WHERE uid = '<row-uid>';
+-- sudo -u postgres psql -d vtes-rulings -1 -f match_vekn_ids.sql
+BEGIN;
+UPDATE users SET vekn = '<the1andonlime>' WHERE uid = '30e1b2a3-92f9-487c-9f25-999373a411e7';
+UPDATE users SET vekn = '<Hobbesgoblin>'  WHERE uid = '07c05586-6583-4746-b6b7-6fd993595a35';
+UPDATE users SET vekn = '<squidalot>'     WHERE uid = '964ac13e-1c45-49eb-b738-7a4ab61a40a1';
+UPDATE users SET vekn = '<Ankha>'         WHERE uid = '5c41d803-5499-433d-9bdf-530a4b94f2db';
+UPDATE users SET vekn = '<kschaefer>'     WHERE uid = '4b3e09ec-25c5-49c8-8365-baa7e7f1811c';
+UPDATE users SET vekn = '<inm8>'          WHERE uid = '781aad7c-08a9-4a33-9f98-c4da8a23e166';
+UPDATE users SET vekn = '<Sergio>'        WHERE uid = '09dfee84-aec4-43e8-b679-98fea840af87';
+UPDATE users SET vekn = '<lip>'           WHERE uid = 'fff5b489-f823-4ea1-818c-def524189e30';
+COMMIT;
 ```
 
-Two notes. The tier itself is not worth preserving — `category` is dropped and
-who may approve comes from archon's roles — so for the four rows owning no
-proposal this buys continuity of the row and nothing else. And it must land
-before that person's first archon login: afterwards they already hold a fresh
-row, and the fix is the move-proposals recipe above instead.
+Read back before booting v2 — eight rows, each `vekn` numeric:
+
+```sql
+SELECT uid, vekn FROM users WHERE uid IN (
+  '30e1b2a3-92f9-487c-9f25-999373a411e7','07c05586-6583-4746-b6b7-6fd993595a35',
+  '964ac13e-1c45-49eb-b738-7a4ab61a40a1','5c41d803-5499-433d-9bdf-530a4b94f2db',
+  '4b3e09ec-25c5-49c8-8365-baa7e7f1811c','781aad7c-08a9-4a33-9f98-c4da8a23e166',
+  '09dfee84-aec4-43e8-b679-98fea840af87','fff5b489-f823-4ea1-818c-def524189e30');
+```
 
 Only `07c05586…` carries the `Hobbesgoblin` proposals; the second row of that name
 (`5b00b1b0…`, no proposals) must be left alone.

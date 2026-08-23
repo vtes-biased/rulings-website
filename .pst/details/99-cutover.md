@@ -22,12 +22,13 @@ immediately before it, inside the same window. Everything else is a prerequisite
 | # | What | Who | Ticket |
 |---|---|---|---|
 | 0 | ~~krcg 5.11 + bind the last regex~~ | done | #97 #98 |
-| 1 | Confirm the prod archon client; register the beta one for dev | you | #81 |
+| 1 | ~~Confirm the prod archon client; register the beta one~~ | done | #81 |
 | 1b | Deploy archon with the consent-loop fix, prod **and** beta | you | archon `105bdbf` |
-| 2 | Apply the eight rulemonger VEKN ids by hand; ask people to submit drafts | you | #86 |
+| 2 | Ask people to submit drafts (the VEKN ids now land at 5b, below) | you | #86 |
 | 3 | Drain the in-flight proposals on live v1 | you | #76 |
 | 4 | ~~krcg-static to `krcg>=5.10`~~ | done | #89 |
 | 5 | Stop v1 | you | #93 |
+| 5b | Apply the eight rulemonger VEKN ids | you | #86 |
 | 6 | Push `vtes-rulings` (4 commits) | me | #79 |
 | 7 | Tag and deploy the website | you/me | #2 |
 
@@ -35,21 +36,22 @@ immediately before it, inside the same window. Everything else is a prerequisite
 format regex now binds krcg's (`4e268eb`). Not a gate for anything below — recorded so nobody
 re-derives it.
 
-**1 — mostly done, one confirmation open.** Two archon deployments, separate databases, therefore
+**1 — done 2026-08-23, #81 closed.** Two archon deployments, separate databases, therefore
 two client registrations: **`archon.vekn.net` is prod**, `archon.krcg.org` is beta. `ARCHON_URL` now
 points prod at vekn.net and the code default stays beta for dev (`362f551`). The pair in `vars.yml` +
 vault is wired and internally consistent, and `authorization_url` emits exactly
-`https://rulings.krcg.org/login/callback`, scope `profile:read`, S256. What no local check can reach
-is archon's own client record — `GET /oauth/authorize` resolves the user before validating
-`redirect_uri`, so only a logged-in look proves the registration. **Confirm before step 5**: that the
-prod pair lives on vekn.net and lists that redirect verbatim. A typo surfaces as a 400 on the consent
-page and nobody could log in — with v1 already stopped. The beta client for dev is separate and
-blocks only local testing.
+`https://rulings.krcg.org/login/callback`, scope `profile:read`, S256. Both registrations are now in place, confirmed by @lip: the prod
+client on vekn.net carrying that redirect, and a separate beta client on `archon.krcg.org` with the
+localhost one in `.env`. No local check can reach archon's client record — `GET /oauth/authorize`
+resolves the user before validating `redirect_uri` — so the residual risk is a redirect typo, which
+would surface as a 400 on the consent page with v1 already stopped. A real login through prod after
+step 1b's deploy is the only thing that retires it.
 
-**2 — #86.** `UPDATE users SET vekn = '<vekn-id>' WHERE uid = '<row-uid>'` for the eight rows in the
-detail file's table. It only rewrites `vekn`, so it **must run on the current schema**, before those
-people's first archon login (afterwards they hold a fresh row and the fix is the move-proposals
-recipe instead). Key on `uid`, never on `vekn` — the table has duplicate handles.
+**2 and 5b — #86.** Split, 2026-08-23. The Discord ask (submit your drafts) is step 2, alongside the
+drain. The eight `UPDATE users SET vekn = …` moved **into the window, after step 5** — `db.init()`
+leaves `vekn` alone, so the statement is schema-agnostic, and its only real deadline is before those
+people's first archon login on v2. With both engines down nothing else can write `users`. The filled
+script and its read-back live in #86's detail file. Key on `uid`, never on `vekn` — duplicate handles.
 
 **3 — the drain.** A proposal is an overlay keyed on the uid a ruling had when it was edited, and
 the base it merges against reloads renumbered: 606 of 2302 rulings change uid. Approve or discard
