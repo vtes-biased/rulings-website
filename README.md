@@ -42,7 +42,7 @@ is mutated in place, the app **must run as a single worker**.
 
 ```shell
 touch .env       # local config; see wiki/operations.md for every var the app reads
-just update      # npm install --include=dev + uv sync --upgrade --group dev
+just update      # npm update + uv sync --upgrade --group dev
 ```
 
 For a working local instance you want at least `DISCORD_WEBHOOK` and `DISCORD_SERVER_ID`, plus an

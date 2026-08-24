@@ -47,7 +47,7 @@ jobs:
           node-version: "lts/*"
 
       - name: Install npm dependencies
-        run: npm install --include=dev
+        run: npm ci
 
       - name: Build frontend
         run: npm run build
@@ -94,7 +94,7 @@ jobs:
       # static/dist), so build it before uv build.
       - name: Build frontend
         run: |
-          npm install --include=dev
+          npm ci
           npm run build
 
       - name: Set up uv

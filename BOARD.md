@@ -16,11 +16,4 @@ follow-up ("chase @lip, 12 Sep"), owned by whoever wrote it.
 
 ---
 
-- **Pin the frontend deps.** `package-lock.json` has been gitignored since the scaffold commit, so
-  CI's three `npm install`s resolve fresh and the bundle v1.4.0 serves cannot be rebuilt from its
-  tag. Un-ignore it, commit it after a `just update` so the pin is current rather than stale, move
-  CI to `npm ci` and `just update` to `npm update`. Done: `package-lock.json` is tracked, no workflow
-  calls bare `npm install`, and `just deps-check` reads the lockfile. [[wiki/operations.md]]
-  [[wiki/dogmas.md]]
-
-<!-- cycles-since-upkeep: 7 -->
+<!-- cycles-since-upkeep: 8 -->

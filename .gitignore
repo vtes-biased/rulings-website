@@ -7,7 +7,6 @@ node_modules/
 .*cache/
 src/vtesrulings/static/dist/
 .venv/
-package-lock.json
 dist/
 build/
 .claude/settings.local.json

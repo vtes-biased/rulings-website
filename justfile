@@ -3,7 +3,7 @@ default:
 
 # Install / refresh dev dependencies (python + npm)
 update:
-    npm install --include=dev
+    npm update
     uv sync --upgrade --group dev
 
 # Lint
@@ -56,22 +56,45 @@ deps-check:
             printf '%s\n' "$out" | grep -vE '^[[:space:]]*$|Resolved ' | sed 's/^/      /'
         fi
     else echo "  python deps (uv)     (could not check)"; fi
-    # npm: stale only when `npm update` would move something (current != wanted).
-    # Beyond-wanted semver-majors are manual (peer caps etc.): reported, never gating.
-    npmrep=$(npm outdated --json 2>/dev/null | node -e '
+    # npm: resolve package.json fresh in a scratch dir and diff against the committed
+    # lockfile — that is what `npm update` would take. Neither `npm outdated` nor
+    # `--package-lock-only` can do this: both read node_modules, so on a fresh checkout
+    # they report the tree, never the pin.
+    scratch=$(mktemp -d); trap 'rm -rf "$scratch"' EXIT
+    cp package.json "$scratch/"
+    if npmrep=$( (cd "$scratch" && npm install --package-lock-only --silent >/dev/null 2>&1) &&
+        node -e '
+            const [fresh, cur, pkg] = process.argv.slice(1).map(f => require(f));
+            const direct = new Set(Object.keys({...pkg.dependencies, ...pkg.devDependencies}));
+            let hidden = 0;
+            for (const [path, f] of Object.entries(fresh.packages)) {
+              const c = cur.packages[path];
+              // Compare shared entries only: a bare resolve keeps optional platform
+              // branches a tree-aware install prunes, so presence differs by machine.
+              if (!path.startsWith("node_modules/") || !c || c.version === f.version) continue;
+              const name = path.slice(13);
+              if (direct.has(name)) console.log(`      ${name} ${c.version} -> ${f.version}`);
+              else hidden++;
+            }
+            if (hidden) console.log(`      (${hidden} transitive ${hidden > 1 ? "dependencies" : "dependency"} also moves)`);
+          ' "$scratch/package-lock.json" ./package-lock.json ./package.json ); then
+        if [ -n "$npmrep" ]; then
+            stale=1
+            echo "  frontend deps (npm)  updates available:"
+            printf '%s\n' "$npmrep"
+        else
+            echo "  frontend deps (npm)  current (within ranges)"
+        fi
+    else echo "  frontend deps (npm)  (could not check)"; fi
+    # Beyond-range semver-majors are manual (peer caps etc.): reported, never gating.
+    # This one does read node_modules, so it stays silent until `just update` has run.
+    npm outdated --json 2>/dev/null | node -e '
         let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
           const o=s.trim()?JSON.parse(s):{};
-          for(const [k,v] of Object.entries(o)){
-            if(v.current!==v.wanted)console.log(`TAKE ${k} ${v.current} -> ${v.wanted}`);
-            else if(v.wanted!==v.latest)console.log(`INFO ${k} ${v.current} (latest ${v.latest}: semver-major, manual bump)`);
-          }});') || true
-    if printf '%s\n' "$npmrep" | grep -q '^TAKE '; then
-        stale=1; echo "  frontend deps (npm)  updates available:"
-        printf '%s\n' "$npmrep" | grep '^TAKE ' | sed 's/^TAKE /      /'
-    else
-        echo "  frontend deps (npm)  current (within ranges)"
-    fi
-    printf '%s\n' "$npmrep" | grep '^INFO ' | sed 's/^INFO /      /' || true
+          for(const [k,v] of Object.entries(o))
+            if(v.wanted!==v.latest)
+              console.log(`      ${k} ${v.current} (latest ${v.latest}: semver-major, manual bump)`);
+        });' || true
     exit "$stale"
 
 # Cut a release: bump version, commit, tag, push. The `v*` tag push runs the suite as a
