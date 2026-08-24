@@ -128,9 +128,10 @@ and `check_rulings` (offline half) must report **0 warnings**.
 Release. **Deploy is then manual** — `cd ansible && just deploy`. The app boots, clones the migrated
 file and serves it.
 
-## State of the other repos (re-checked 2026-08-23)
+## State of the other repos (re-checked 2026-08-24)
 
-- **rulings-website** — `main` is level with `origin/main`. Nothing unpushed here.
+- **rulings-website** — `main` is 7 commits ahead of `origin/main`, all of them board and cutover
+  bookkeeping. `just release` at step 7 pushes them; nothing here needs a push of its own.
 - **krcg** — released as 5.11, on PyPI. Nothing pending.
 - **krcg-static** — done and pushed (`d52c2035`), off the critical path.
 - **vtes-rulings** — 4 commits ahead, listed under step 6.
