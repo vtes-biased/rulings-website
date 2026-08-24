@@ -29,7 +29,7 @@ id, and archon OAuth login — and one deploy ships both. The switch is **hard a
 | 1 | ~~Register the archon OAuth clients, prod and beta~~ | done 2026-08-23 |
 | 1b | ~~Deploy archon-vibe with the consent fix, prod and beta~~ | done 2026-08-24 |
 | 2 | ~~Ask on Discord: submit any draft you care about~~ | done 2026-08-23 |
-| **3** | **Drain the in-flight proposals on live v1** | @lip |
+| 3 | ~~Drain the in-flight proposals on live v1~~ | done 2026-08-24 |
 | 4 | ~~krcg-static to `krcg>=5.10`~~ | done, and never a gate |
 | **5** | **Stop v1** | @lip |
 | **5b** | **`DELETE FROM users`** — every legacy row is deprecated | @lip |
@@ -107,10 +107,10 @@ the production table never enforced the `vekn UNIQUE` its `CREATE TABLE` declare
 
 ### 3 — the drain
 
-A proposal is an overlay keyed on the uid a ruling had when it was edited, and the base it merges
-against reloads renumbered: **606 of 2302 rulings change uid** at the migration. Anything open on one
-of those has nothing to resolve against. Proposals are transient by design, so draining is the fix,
-not migrating payloads. The Discord ask (step 2) is posted, so the queue is what people asked for.
+Drained 2026-08-24. It had to happen because a proposal is an overlay keyed on the uid a ruling had
+when it was edited, and the base it merges against reloads renumbered: **606 of 2302 rulings change
+uid** at the migration. Re-check `SELECT count(*) FROM proposals` is still 0 at the window — the FK
+blocks 5b's `DELETE FROM users` otherwise, and the site stays open until step 5 stops it.
 
 ### 6 — the push
 

@@ -19,8 +19,6 @@ follow-up ("chase @lip, 12 Sep"), owned by whoever wrote it.
 - **Verify the consent fix on prod.** `v1.0.8` is deployed; nobody has logged in twice since. Until
   that is checked, every returning user's login may still loop. @lip only. Done: a second login
   through `archon.vekn.net` completes without looping. [[board/cutover.md]] step 1b
-- **Drain the in-flight proposals on live v1** — approve or discard every one. @lip. Done:
-  `SELECT count(*) FROM proposals` returns 0 on gravelines. [[board/cutover.md]] step 3
 - **Run the cutover window**: stop v1, `DELETE FROM users`, push the four `vtes-rulings` commits,
   `just release` and deploy. One-way. Done: `rulings.krcg.org` serves v2, a real archon login works,
   and `board/cutover.md` is deleted along with the links to it in `wiki/product.md` and `CLAUDE.md`.
