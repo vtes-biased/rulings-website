@@ -45,10 +45,10 @@ response, empty header list), so the page navigated to the empty string and call
 again. Fixed in archon-vibe `6197f96` — all three redirects answer `{"redirect_url": …}` like the
 approval path already did.
 
-Shipped in `v1.0.8`, tagged 2026-08-24 and deployed to both. `archon.vekn.net` and
-`new.archon.krcg.org` serve identical bundle hashes, and the deployed consent chunk reads
-`r.redirect_url` off the JSON body — no `redirect: "manual"`, no `Location`. What that does **not**
-prove is the behaviour: only a second real login does.
+Shipped in `v1.0.8`, tagged 2026-08-24 and deployed to all three hosts, which serve the identical
+bundle. Retired 2026-08-24 by a double login from a local dev server against
+`archon.krcg.org`: the second one went straight through, no consent screen. That is the deployed
+code prod runs, so what it leaves open is prod's *client record*, below.
 
 ### 5b — the users
 
@@ -146,6 +146,8 @@ before restarting v1.
 ## Residual risk
 
 No local check can reach archon's client record — `GET /oauth/authorize` resolves the user before
-validating `redirect_uri` — so a redirect-URI typo would surface as a 400 on the consent page with
-v1 already stopped. A real login through prod retires it, and the same login retires the consent
-loop; both are the board's verify line, and both must clear before step 5.
+validating `redirect_uri` — so a redirect-URI typo in prod's registration would surface as a 400 on
+the consent page with v1 already stopped. **Nothing retires this before the window**: prod's client
+points at `https://rulings.krcg.org/login/callback`, and no such route exists until v2 is the thing
+serving that domain. Step 7's first login is the test, and a mistyped URI is fixed in archon's client
+record, not by rolling back.

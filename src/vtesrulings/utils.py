@@ -21,11 +21,15 @@ RE_REMINDER = krcg.rulings.RE_REMINDER
 #: Two groups, the count a cost marker carries and the key beside it. See parse_symbols.
 RE_SYMBOL = krcg.rulings.RE_SYMBOL
 
+#: `usenet.krcg.org` is our own copy of `rec.games.trading-cards.jyhad`, where the newsgroup-era
+#: references point since Google stopped serving its archive reliably. `groups.google.com` stays:
+#: a dozen references Google's copy lost entirely have nowhere else to point.
 RULING_DOMAINS = {
     "boardgamegeek.com",
     "www.blackchantry.com",
     "www.boardgamegeek.com",
     "groups.google.com",
+    "usenet.krcg.org",
     "www.vekn.net",
 }
 
