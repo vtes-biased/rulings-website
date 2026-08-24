@@ -27,7 +27,7 @@ id, and archon OAuth login — and one deploy ships both. The switch is **hard a
 |---|---|---|
 | 0 | ~~krcg 5.11 released, website pinned, every format regex bound to krcg~~ | done |
 | 1 | ~~Register the archon OAuth clients, prod and beta~~ | done 2026-08-23 |
-| **1b** | **Deploy archon-vibe with the consent fix, prod and beta** | @lip |
+| 1b | ~~Deploy archon-vibe with the consent fix, prod and beta~~ | done 2026-08-24 |
 | 2 | ~~Ask on Discord: submit any draft you care about~~ | done 2026-08-23 |
 | **3** | **Drain the in-flight proposals on live v1** | @lip |
 | 4 | ~~krcg-static to `krcg>=5.10`~~ | done, and never a gate |
@@ -39,17 +39,16 @@ id, and archon OAuth login — and one deploy ships both. The switch is **hard a
 ### 1b — the gate found by testing the login
 
 First login worked; the second looped on archon's consent screen forever. With consent already on
-file `GET /oauth/authorize` answers a 302, but the consent page reaches it through `fetch` with a
+file `GET /oauth/authorize` answered a 302, but the consent page reaches it through `fetch` with a
 Bearer token, and a fetch cannot read `Location` off a redirect (`redirect: "manual"` → opaque
 response, empty header list), so the page navigated to the empty string and called `/authorize`
-again. Fixed in archon-vibe `105bdbf` — both remaining redirects answer `{"redirect_url": …}` like
-the approval path already did.
+again. Fixed in archon-vibe `6197f96` — all three redirects answer `{"redirect_url": …}` like the
+approval path already did.
 
-That fix is **not pushed**: as re-checked 2026-08-23, archon-vibe `main` is **25 commits ahead of
-`origin/main`** and the newest tag `v1.0.7` does not contain `105bdbf`. Tagging a release there ships
-24 other unpushed commits — what it carries is @lip's call. Releases are
-tag-triggered (`v*`) there. Beta first, to unblock dev; prod because that is where the site's users
-are.
+Shipped in `v1.0.8`, tagged 2026-08-24 and deployed to both. `archon.vekn.net` and
+`new.archon.krcg.org` serve identical bundle hashes, and the deployed consent chunk reads
+`r.redirect_url` off the JSON body — no `redirect: "manual"`, no `Location`. What that does **not**
+prove is the behaviour: only a second real login does.
 
 ### 5b — the users
 
@@ -135,7 +134,8 @@ file and serves it.
 - **krcg** — released as 5.11, on PyPI. Nothing pending.
 - **krcg-static** — done and pushed (`d52c2035`), off the critical path.
 - **vtes-rulings** — 4 commits ahead, listed under step 6.
-- **archon-vibe** — 25 commits ahead of `origin/main`, newest tag `v1.0.7`. Step 1b.
+- **archon-vibe** — `v1.0.8` deployed prod and beta; `main` carries 17 further unpushed commits,
+  none of them a gate here.
 
 ## Rollback
 
@@ -147,4 +147,5 @@ before restarting v1.
 
 No local check can reach archon's client record — `GET /oauth/authorize` resolves the user before
 validating `redirect_uri` — so a redirect-URI typo would surface as a 400 on the consent page with
-v1 already stopped. A real login through prod after 1b is the only thing that retires it.
+v1 already stopped. A real login through prod retires it, and the same login retires the consent
+loop; both are the board's verify line, and both must clear before step 5.
