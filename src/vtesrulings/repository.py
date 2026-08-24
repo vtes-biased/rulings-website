@@ -429,8 +429,11 @@ async def _commit_index(
                 data.setdefault(key, [])
                 data[key].append(serialize_ruling(ruling, card_map))
         await async_yaml_dump(f, data)
-    await asgiref.sync.SyncToAsync(yamlfix.fix_files)(  # ty: ignore[no-matching-overload]
+    # dry_run=False is not the default: omitting it makes fix_files warn about a return-type
+    # change it never applies here. Same write path, and we discard the return either way.
+    await asgiref.sync.SyncToAsync(yamlfix.fix_files)(
         [str(rulings_dir / f) for f in RULINGS_FILES],
+        dry_run=False,
         config=yamlfix.model.YamlfixConfig(
             line_length=120,
             sequence_style="block_style",
