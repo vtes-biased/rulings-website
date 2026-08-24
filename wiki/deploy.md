@@ -21,6 +21,17 @@ QUICK=1 just deploy            # artifacts only (--tags app): wheel + unit, skip
 
 If `just ping` fails on auth, the `deploy` user's key is not authorised on gravelines yet.
 
+**Wait for the release build before deploying.** `just release` only tags; the wheel and the
+frontend dist are built by CI and attached to the GitHub Release afterwards, and `just deploy`
+fetches those assets. Deploying in the gap installs an incomplete release and the site answers
+**502** — nginx is up, nothing is listening on the backend port. Deploying again once the assets are
+there fixes it; nothing needs to be undone. Check first:
+
+```shell
+gh run list --repo vtes-biased/rulings-website --limit 3   # the Release run must be `completed`
+gh release view <tag> --repo vtes-biased/rulings-website   # and the assets must be attached
+```
+
 ## One-time prerequisites
 
 1. **DNS** — `rulings.krcg.org` → `152.228.170.51` (A record).
