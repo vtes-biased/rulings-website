@@ -31,9 +31,9 @@ id, and archon OAuth login — and one deploy ships both. The switch is **hard a
 | 2 | ~~Ask on Discord: submit any draft you care about~~ | done 2026-08-23 |
 | 3 | ~~Drain the in-flight proposals on live v1~~ | done 2026-08-24 |
 | 4 | ~~krcg-static to `krcg>=5.10`~~ | done, and never a gate |
-| **5** | **Stop v1** | @lip |
+| 5 | ~~Stop v1~~ | done 2026-08-24 |
 | **5b** | **`DELETE FROM users`** — every legacy row is deprecated | @lip |
-| **6** | **Push `vtes-rulings` (5 commits)** | agent |
+| 6 | ~~Push `vtes-rulings`~~ | done 2026-08-24, `888cd79` |
 | **7** | **Tag and deploy the website** | @lip |
 
 ### 1b — the gate found by testing the login
@@ -114,43 +114,33 @@ blocks 5b's `DELETE FROM users` otherwise, and the site stays open until step 5 
 
 ### 6 — the push
 
-`vtes-rulings` is 5 commits ahead of `origin/main`: the card-token migration (`68d5a6c`), the
-krcg-3 script deletion (`1c8dd7d`), the reference-source check (`b316272`), the symbol list
-(`ad7b0b5`), and the newsgroup reference migration (`ea000ff`). The card-token migration rewrote 831
-token occurrences / 395 distinct tokens across 606 rulings, produced through `commit_index` so it is
-byte-identical with what an approval writes.
+Pushed 2026-08-24 as `ba9dd01..888cd79`, six commits on top of the four the bot approved that day.
 
-`ea000ff` re-pointed 894 references from Google Groups to `usenet.krcg.org` and renamed 28 keys, so
-55 further rulings change uid. Unlike `68d5a6c` it was written by hand, and the serializer pass is
-what caught the cost: the eight header lines it added to `references.yaml` were absent from
-`REFERENCES_COMMENT`, so the next approval would have deleted them. Folded in, together with
-`usenet.krcg.org` in `RULING_DOMAINS` — without that, `check_reference` rejects all 894 and no one
-can add or fix a newsgroup reference. Neither gates the push; **both must be in the release that
-ships at step 7.**
+It could not be a rebase. Live v1 approved four rulings between 14:07 and 15:11 UTC, and they were
+written in the **pre-migration format** — bare `{Crypt's Sons}` tokens — so rebasing `68d5a6c` onto
+them conflicted inside a machine-generated file, which is the one place a hand resolution cannot be
+trusted. The migration was **re-derived** instead: `load_base` normalises bare tokens in memory, so
+running `commit_index` over the tree *is* the migration, and it covers the four new rulings the
+original commit never saw. `68d5a6c` therefore split in two — its tooling half cherry-picked, its
+`rulings.yaml` half regenerated — and `ea000ff` cherry-picked *after* the regeneration, against the
+migrated format it was authored on, which cut its conflicts from 21 hunks to three.
 
-Re-verify before pushing: a fresh serializer pass over the tree must be a **byte-for-byte no-op**,
-and `check_rulings` (offline half) must report **0 warnings**. Verified 2026-08-24 against `ea000ff`:
-all three files serialise identical, `check_consistency` clean, no unused and no duplicate
-references.
+The three were reference-key renames colliding with approval edits: `RTR 20010710` → `RTR 20010711`
+and `TOM 19951007` → `RTR 19941006` (both merges into keys that already existed), plus the two new
+references landing inside `references.yaml`'s whole-file rewrite. Resolved by keeping the approval's
+text and applying the rename.
 
-**It is no longer a fast-forward.** Live v1 approved four rulings on 2026-08-24 between 14:07 and
-15:11 UTC (`1924e2a`…`ba9dd01`, `rulings-bot`), so `origin/main` is 4 ahead of where the five local
-commits branch from, and every hour v1 stays up can add another. A trial rebase of the five onto
-`origin/main` conflicts in two hunks of `rulings.yaml` — mechanical. What is not mechanical is that
-the bot wrote them in the **pre-migration format**: bare `{Crypt's Sons}` card tokens, and two new
-Google Groups references (`LSJ 20061211`, `LSJ 20061213`, both in thread `h3onVZ1NqpQ`, which the
-archive holds). So the tree lands mixed, and the serializer no-op above then fails on exactly those
-rulings.
+`LSJ 20061211` and `LSJ 20061213` still point at Google Groups. Their thread is in the archive
+(`h3onVZ1NqpQ`) but it holds 355 messages with a dozen LSJ posts on each cited day, and the `#mN`
+anchors are positional — that is the ambiguous class the migration sends to a reader rather than a
+guess, so they were left. `groups.google.com` stays in `RULING_DOMAINS`, so they validate; the count
+is 895 archive references against 14 Google ones.
 
-The card tokens self-heal — `load_base` normalises them in memory and the first v2 approval writes
-them out — so they cost a no-op verify, not correctness. The two references do not: they must be
-re-pointed at `usenet.krcg.org` by hand, and that thread carries 355 messages with a dozen LSJ posts
-on each cited day, so it goes through the migration's resolve/brief path rather than a guess.
+Both gates passed on the pushed tree: the serializer round-trips **byte-for-byte** (a second pass
+changed no file), and `check_rulings`'s offline half reports **0 warnings**. Zero bare card tokens
+remain.
 
-Which makes the order tighter than step 6 reads: **rebase after step 5, not before**. Rebasing while
-v1 still approves just invites another divergence, and every approval after the rebase is one more
-ruling in the old format. Sequence at the window: stop v1 → rebase the five onto `origin/main` →
-re-point the two references → re-run both verifies → push.
+The pre-derivation local tip is kept at `pre-cutover-main` (`ea000ff`) until v2 is serving.
 
 ### 7 — the release
 
