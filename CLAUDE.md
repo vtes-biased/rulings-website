@@ -54,6 +54,5 @@ Trunk-based: straight to `main`, fast-forward, no feature branches. Describe the
 
 ## Right now
 
-`rulings.krcg.org` still runs v1.3.0. `main` carries the archon-login and card-token epics, and the
-switch is a single hard one-way cutover — read [`board/cutover.md`](board/cutover.md) before touching
-login, users, the rulings format or the deploy.
+`rulings.krcg.org` runs **v1.4.0**, cut over on 2026-08-24: card tokens carry the card id, archon
+owns login, and the legacy users are gone. [`wiki/product.md`](wiki/product.md) holds the state.
