@@ -16,9 +16,9 @@ follow-up ("chase @lip, 12 Sep"), owned by whoever wrote it.
 
 ---
 
-- **Run the cutover window**: stop v1, `DELETE FROM users`, push the five `vtes-rulings` commits,
-  `just release` and deploy. One-way. Done: `rulings.krcg.org` serves v2, a real archon login works,
-  and `board/cutover.md` is deleted along with the links to it in `wiki/product.md` and `CLAUDE.md`.
-  [[board/cutover.md]] steps 5–7
+- **Finish the cutover window.** v1 is stopped and `vtes-rulings` is pushed (`888cd79`); what is
+  left is `DELETE FROM users` and the release. @lip. Done: `rulings.krcg.org` serves v2, a real
+  archon login works, and `board/cutover.md` is deleted along with the links to it in
+  `wiki/product.md` and `CLAUDE.md`. [[board/cutover.md]] steps 5b and 7
 
 <!-- cycles-since-upkeep: 2 -->
