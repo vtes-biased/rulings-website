@@ -75,11 +75,21 @@ Known limitation: a `{Card}` mentioned only inside an override body produces no 
 source prefix is one of `krcg.rulings.RULING_AUTHORS`. Two validations, both in
 `utils.check_reference`:
 
-- the URL host must be in `utils.RULING_DOMAINS` — exactly `www.vekn.net`, `groups.google.com`,
-  `boardgamegeek.com`, `www.boardgamegeek.com`, `www.blackchantry.com`. The bare `vekn.net` and
-  `blackchantry.com` are **not** accepted;
+- the URL host must be in `utils.RULING_DOMAINS` — exactly `www.vekn.net`, `usenet.krcg.org`,
+  `groups.google.com`, `boardgamegeek.com`, `www.boardgamegeek.com`, `www.blackchantry.com`. The
+  bare `vekn.net` and `blackchantry.com` are **not** accepted;
 - the date must fall inside that author's Rules Director window. `RBK` (Rulebook) and `RTR` (Rules
   Team Ruling) have no window and carry no date; every other source does.
+
+**The newsgroup lives at `usenet.krcg.org`.** 894 references cite
+`rec.games.trading-cards.jyhad`, and pointed at Google Groups until Google stopped serving that
+archive reliably; they point at our own copy now. `/t/<ThreadId>/` is the thread and `#mN` the
+message, **counted from the top of the thread** — a message inserted into a thread moves every
+anchor below it, so the archive's message order is part of the contract, not a rendering detail. A
+citation with no `#mN` means the thread survives and the cited reply does not; a dozen references
+Google's copy lost entirely still point at `groups.google.com`, where they are unlikely to resolve,
+and `vtes-rulings/references_dangling.md` lists what rests on each. The same text heads
+`references.yaml`, written from `repository.py:REFERENCES_COMMENT` on every approval.
 
 **New `RBK` references cannot be created** — the rulebooks are a closed set, all already listed, so
 `Manager.add_reference` refuses one and the editor offers them from a select instead.
@@ -107,4 +117,6 @@ one owner: a new discipline or a new Rules Director arrives here with a krcg ver
 `repository.py:RULINGS_COMMENT` is **authoritative**. The header of `rulings/rulings.yaml` is
 generated from it on every approval, and `vtes-rulings/README.md` is a hand-maintained mirror. A
 format change edits `RULINGS_COMMENT` in the same commit as the serializer, or the next approval
-pushes a stale header back over the file.
+pushes a stale header back over the file. `REFERENCES_COMMENT` heads `references.yaml` the same way
+and carries the same hazard: text hand-edited into either file upstream is deleted by the next
+approval unless it lands in the constant too.

@@ -13,7 +13,7 @@ id, and archon OAuth login — and one deploy ships both. The switch is **hard a
    so once the migrated file is on `main`, **v1 cannot boot** — it survives only on its in-memory
    index until something restarts it.
 2. **It cannot come late either.** `load_base` normalises bare tokens in memory, so the first
-   approval after v2 deploys serialises all 606 rewritten rulings plus the new header anyway, as a
+   approval after v2 deploys serialises all 606 rewritten rulings plus the new headers anyway, as a
    side effect of whatever unrelated proposal it was. And an approval pushing from an index cloned
    before the data push hits a non-fast-forward.
 3. Therefore the push goes **after v1 is stopped, before v2 boots** — which is the hard switch the
@@ -33,7 +33,7 @@ id, and archon OAuth login — and one deploy ships both. The switch is **hard a
 | 4 | ~~krcg-static to `krcg>=5.10`~~ | done, and never a gate |
 | **5** | **Stop v1** | @lip |
 | **5b** | **`DELETE FROM users`** — every legacy row is deprecated | @lip |
-| **6** | **Push `vtes-rulings` (4 commits)** | agent |
+| **6** | **Push `vtes-rulings` (5 commits)** | agent |
 | **7** | **Tag and deploy the website** | @lip |
 
 ### 1b — the gate found by testing the login
@@ -108,19 +108,49 @@ the production table never enforced the `vekn UNIQUE` its `CREATE TABLE` declare
 ### 3 — the drain
 
 Drained 2026-08-24. It had to happen because a proposal is an overlay keyed on the uid a ruling had
-when it was edited, and the base it merges against reloads renumbered: **606 of 2302 rulings change
-uid** at the migration. Re-check `SELECT count(*) FROM proposals` is still 0 at the window — the FK
+when it was edited, and the base it merges against reloads renumbered: **651 of 2302 ruling texts
+change, carrying 622 distinct uids** across the five commits. Re-check `SELECT count(*) FROM proposals` is still 0 at the window — the FK
 blocks 5b's `DELETE FROM users` otherwise, and the site stays open until step 5 stops it.
 
 ### 6 — the push
 
-`vtes-rulings` is 4 commits ahead of `origin/main`: the migration (`68d5a6c`), the krcg-3 script
-deletion (`1c8dd7d`), the reference-source check (`b316272`), the symbol list (`ad7b0b5`). The
-migration rewrote 831 token occurrences / 395 distinct tokens across 606 rulings, produced through
-`commit_index` so it is byte-identical with what an approval writes.
+`vtes-rulings` is 5 commits ahead of `origin/main`: the card-token migration (`68d5a6c`), the
+krcg-3 script deletion (`1c8dd7d`), the reference-source check (`b316272`), the symbol list
+(`ad7b0b5`), and the newsgroup reference migration (`ea000ff`). The card-token migration rewrote 831
+token occurrences / 395 distinct tokens across 606 rulings, produced through `commit_index` so it is
+byte-identical with what an approval writes.
+
+`ea000ff` re-pointed 894 references from Google Groups to `usenet.krcg.org` and renamed 28 keys, so
+55 further rulings change uid. Unlike `68d5a6c` it was written by hand, and the serializer pass is
+what caught the cost: the eight header lines it added to `references.yaml` were absent from
+`REFERENCES_COMMENT`, so the next approval would have deleted them. Folded in, together with
+`usenet.krcg.org` in `RULING_DOMAINS` — without that, `check_reference` rejects all 894 and no one
+can add or fix a newsgroup reference. Neither gates the push; **both must be in the release that
+ships at step 7.**
 
 Re-verify before pushing: a fresh serializer pass over the tree must be a **byte-for-byte no-op**,
-and `check_rulings` (offline half) must report **0 warnings**.
+and `check_rulings` (offline half) must report **0 warnings**. Verified 2026-08-24 against `ea000ff`:
+all three files serialise identical, `check_consistency` clean, no unused and no duplicate
+references.
+
+**It is no longer a fast-forward.** Live v1 approved four rulings on 2026-08-24 between 14:07 and
+15:11 UTC (`1924e2a`…`ba9dd01`, `rulings-bot`), so `origin/main` is 4 ahead of where the five local
+commits branch from, and every hour v1 stays up can add another. A trial rebase of the five onto
+`origin/main` conflicts in two hunks of `rulings.yaml` — mechanical. What is not mechanical is that
+the bot wrote them in the **pre-migration format**: bare `{Crypt's Sons}` card tokens, and two new
+Google Groups references (`LSJ 20061211`, `LSJ 20061213`, both in thread `h3onVZ1NqpQ`, which the
+archive holds). So the tree lands mixed, and the serializer no-op above then fails on exactly those
+rulings.
+
+The card tokens self-heal — `load_base` normalises them in memory and the first v2 approval writes
+them out — so they cost a no-op verify, not correctness. The two references do not: they must be
+re-pointed at `usenet.krcg.org` by hand, and that thread carries 355 messages with a dozen LSJ posts
+on each cited day, so it goes through the migration's resolve/brief path rather than a guess.
+
+Which makes the order tighter than step 6 reads: **rebase after step 5, not before**. Rebasing while
+v1 still approves just invites another divergence, and every approval after the rebase is one more
+ruling in the old format. Sequence at the window: stop v1 → rebase the five onto `origin/main` →
+re-point the two references → re-run both verifies → push.
 
 ### 7 — the release
 
@@ -134,14 +164,15 @@ file and serves it.
   bookkeeping. `just release` at step 7 pushes them; nothing here needs a push of its own.
 - **krcg** — released as 5.11, on PyPI. Nothing pending.
 - **krcg-static** — done and pushed (`d52c2035`), off the critical path.
-- **vtes-rulings** — 4 commits ahead, listed under step 6.
+- **vtes-rulings** — 5 commits ahead and, since v1 kept approving today, **4 behind**. Both
+  listed under step 6.
 - **archon-vibe** — `v1.0.8` deployed prod and beta; `main` carries 17 further unpushed commits,
   none of them a gate here.
 
 ## Rollback
 
 Steps 1–4 are reversible on their own terms. From step 5 it is one-way in practice: v1 cannot read
-the migrated data, so a rollback means reverting the four `vtes-rulings` commits and pushing that
+the migrated data, so a rollback means reverting the five `vtes-rulings` commits and pushing that
 before restarting v1.
 
 ## Residual risk
