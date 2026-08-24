@@ -52,12 +52,25 @@ code prod runs, so what it leaves open is prod's *client record*, below.
 
 ### 5b — the users
 
-Step 5b is one statement:
+Step 5b is two statements, and the first one is not optional:
 
 ```sql
-SELECT count(*) FROM proposals;  -- must be 0: step 3 is the drain, and the FK blocks the DELETE
-DELETE FROM users;
+DELETE FROM proposals;  -- the drain never reached these; see below
+DELETE FROM users;      -- `usr UUID REFERENCES users(uid)`, no CASCADE, so proposals go first
 ```
+
+**The drain does not empty the table, and step 3 never claimed to.** The approver's queue is
+`WHERE data->>'channel_id' <> ''` (`db.py:228`) — proposals *sent to Discord*. An unsubmitted draft
+has an empty `channel_id`, so it is not in the queue and no amount of approving or discarding
+removes it. After the queue was drained on 2026-08-24 the table still held **8 rows**: the eight
+drafts the 2026-08-22 audit counted, owned by seven people (`Oracle.kid` two, then `dvorax`,
+`Gr33n`, `squidalot`, `trydeflectingthisgrapple`, `zavierazo`, `marciohiroyuki`). They are what the
+Discord ask was for, and nobody submitted them.
+
+Deleting them costs nothing that survived the push anyway: a proposal is an overlay keyed on the
+ruling uid it was edited against, and 651 ruling texts changed uid at `888cd79`. There is no
+retention — `delete_proposal` is a plain `DELETE ... WHERE uid=%s`, so nothing is held for a grace
+period either way.
 
 **Every legacy row is deprecated** (decided 2026-08-23). Archon owns identity; a legacy row is worth
 keeping only for what hangs off it, and the drain takes that away. `category` is dropped by
