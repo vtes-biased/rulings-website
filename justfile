@@ -62,7 +62,7 @@ deps-check:
     # they report the tree, never the pin.
     scratch=$(mktemp -d); trap 'rm -rf "$scratch"' EXIT
     cp package.json "$scratch/"
-    if npmrep=$( (cd "$scratch" && npm install --package-lock-only --silent >/dev/null 2>&1) &&
+    if npmrep=$( (cd "$scratch" && npm install --package-lock-only >/dev/null 2>&1) &&
         node -e '
             const [fresh, cur, pkg] = process.argv.slice(1).map(f => require(f));
             const direct = new Set(Object.keys({...pkg.dependencies, ...pkg.devDependencies}));
@@ -76,7 +76,7 @@ deps-check:
               if (direct.has(name)) console.log(`      ${name} ${c.version} -> ${f.version}`);
               else hidden++;
             }
-            if (hidden) console.log(`      (${hidden} transitive ${hidden > 1 ? "dependencies" : "dependency"} also moves)`);
+            if (hidden) console.log(`      (${hidden} transitive ${hidden > 1 ? "dependencies move" : "dependency moves"} too)`);
           ' "$scratch/package-lock.json" ./package-lock.json ./package.json ); then
         if [ -n "$npmrep" ]; then
             stale=1

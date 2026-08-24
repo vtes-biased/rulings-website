@@ -1,4 +1,6 @@
 {
+    "name": "rulings-website",
+    "private": true,
     "type": "module",
     "scripts": {
         "front": "vite build --watch",

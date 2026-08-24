@@ -10,7 +10,7 @@ Tooling is `just` + `uv`, npm for the frontend. `just` with no recipe lists them
 | `just lint` / `just fmt` | ruff check + format (line length 100, py313) |
 | `just typecheck` | `ty check --error-on-warning` — warnings are errors, so a stale ignore fails |
 | `just test` | `TESTING=1 uv run pytest` — the whole suite, no opt-outs |
-| `just deps-check` | read-only: would `just update` pull anything? Non-zero if so. Reads the lockfiles, not `node_modules` |
+| `just deps-check` | read-only: would `just update` pull anything? Non-zero if so. The gate reads the lockfiles, so a fresh clone reports truthfully |
 | `just release [minor\|major]` | bump, commit, tag, push. Versioning is `major.minor` only |
 | `just clean` | drop build artifacts and caches |
 
