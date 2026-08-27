@@ -598,7 +598,7 @@ async def test_proposal_diff_page(client):
         "/api/reference",
         json={
             "uid": "LSJ 20001225",
-            "url": "https://groups.google.com/g/rec.games.trading-cards.jyhad/diff-test",
+            "url": "https://usenet.krcg.org/t/diff-test/",
         },
     )
     assert response.status_code == 200

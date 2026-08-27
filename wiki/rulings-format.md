@@ -76,20 +76,25 @@ source prefix is one of `krcg.rulings.RULING_AUTHORS`. Two validations, both in
 `utils.check_reference`:
 
 - the URL host must be in `utils.RULING_DOMAINS` — exactly `www.vekn.net`, `usenet.krcg.org`,
-  `groups.google.com`, `boardgamegeek.com`, `www.boardgamegeek.com`, `www.blackchantry.com`. The
-  bare `vekn.net` and `blackchantry.com` are **not** accepted;
+  `boardgamegeek.com`, `www.boardgamegeek.com`, `www.blackchantry.com`. The bare `vekn.net` and
+  `blackchantry.com` are **not** accepted, and neither is `groups.google.com`;
 - the date must fall inside that author's Rules Director window. `RBK` (Rulebook) and `RTR` (Rules
   Team Ruling) have no window and carry no date; every other source does.
 
-**The newsgroup lives at `usenet.krcg.org`.** 894 references cite
+**The newsgroup lives at `usenet.krcg.org`.** 908 references cite
 `rec.games.trading-cards.jyhad`, and pointed at Google Groups until Google stopped serving that
-archive reliably; they point at our own copy now. `/t/<ThreadId>/` is the thread and `#mN` the
-message, **counted from the top of the thread** — a message inserted into a thread moves every
-anchor below it, so the archive's message order is part of the contract, not a rendering detail. A
-citation with no `#mN` means the thread survives and the cited reply does not; a dozen references
-Google's copy lost entirely still point at `groups.google.com`, where they are unlikely to resolve,
-and `vtes-rulings/references_dangling.md` lists what rests on each. The same text heads
-`references.yaml`, written from `repository.py:REFERENCES_COMMENT` on every approval.
+archive reliably; every one of them points at our own copy now, which is why `groups.google.com` is
+no longer a reference domain. `/t/<ThreadId>/` is the thread and `#mN` the message, **counted from
+the top of the thread** — a message inserted into a thread moves every anchor below it, so the
+archive's message order is part of the contract, not a rendering detail. A citation with no `#mN`
+means the thread survives and the cited reply does not. The same text heads `references.yaml`,
+written from `repository.py:REFERENCES_COMMENT` on every approval.
+
+Nothing checks that the cited message's own date matches the reference id: the id carries the
+**ruling's** date, and the message it points at is only its best surviving witness — sometimes a
+later post quoting it. `vtes-rulings/scripts/check_rulings.py` checks a newsgroup citation for
+thread existence and anchor range and no more; only VEKN forum URLs get their date and author read
+back, in `scraper.py` here (to propose an id) and in that script (to flag a mismatch).
 
 **New `RBK` references cannot be created** — the rulebooks are a closed set, all already listed, so
 `Manager.add_reference` refuses one and the editor offers them from a select instead.

@@ -68,8 +68,7 @@ REFERENCES_COMMENT = """# Rulings always have a reference, they come from somewh
 # Rulings from the rec.games.trading-cards.jyhad newsgroup point to https://usenet.krcg.org/, a preserved copy of it,
 # rather than to Google Groups: `/t/<ThreadId>/` is the thread, `#m0` the first message, `#m1` the second, and so on.
 # Those anchors are positional, so the message order in the archive is part of the contract.
-# A link with no anchor means the thread survives but the cited reply does not; a handful of references Google's own
-# copy lost entirely still point at Google Groups, where they are unlikely to resolve.
+# A link with no anchor means the thread survives but the cited reply does not.
 """
 
 RULINGS_COMMENT = """# ## Design notes
