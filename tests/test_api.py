@@ -275,6 +275,38 @@ async def test_add_card_ruling_with_a_new_reference(client):
     assert [(r["uid"], r["state"]) for r in ruling["references"]] == [("ANK 20210101", "NEW")]
 
 
+async def test_reference_url_must_come_from_a_reference_domain(client):
+    """A reference is only as durable as the site it points at, so `check_reference` accepts a
+    closed set of hosts and nothing else — not a host that merely ends in one. The newsgroup and
+    the BoardGameGeek threads both live at usenet.krcg.org now, so the sites they used to be read
+    from are refused, on the creation path and on the edit path alike."""
+    await login_and_proposal(client)
+    for url in [
+        "https://boardgamegeek.com/thread/609699/article/6142361#6142361",
+        "https://www.boardgamegeek.com/thread/648695/article/6701545",
+        "https://groups.google.com/g/rec.games.trading-cards.jyhad/c/kijV8VfB56s",
+        "https://vekn.net/forum/rules-questions/test",  # the bare host is not the reference one
+        "https://usenet.krcg.org.evil.tld/t/bgg-609699/#6142361",
+        "https://blackchantry.com/faq/test",
+    ]:
+        response = await client.post("/api/reference", json={"uid": "LSJ 20010121", "url": url})
+        assert response.status_code == 400, url
+        assert "not from a reference domain" in response.json()[0]
+    response = await client.post(
+        "/api/reference",
+        json={"uid": "LSJ 20010121", "url": "https://usenet.krcg.org/t/bgg-609699/#6142361"},
+    )
+    assert response.status_code == 200
+    # editing a reference validates the same way: an accepted URL cannot be walked back to a
+    # refused one, which would write a host the file is no longer allowed to hold
+    response = await client.put(
+        "/api/reference/LSJ 20010121",
+        json={"url": "https://boardgamegeek.com/thread/609699/article/6142361#6142361"},
+    )
+    assert response.status_code == 400
+    assert "not from a reference domain" in response.json()[0]
+
+
 async def test_update_card_ruling(client):
     """Editing a base ruling flags it MODIFIED, keeping the identity the overlay is keyed on and
     the references the text still cites."""

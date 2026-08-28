@@ -91,11 +91,13 @@ means the thread survives and the cited reply does not. The same text heads `ref
 written from `repository.py:REFERENCES_COMMENT` on every approval.
 
 The archive holds more than the newsgroup, whose own posts stop in 2010: a cited VEKN forum topic
-the forum has since dropped is copied in beside them, which is how `ANK 20210529` still resolves,
-and so are the fifty-seven BoardGameGeek threads L. Scott Johnson took part in, under
-`/t/bgg-<ThreadId>/`. A thread copied from a forum keeps the number that forum gave each post, so
-the four citations into those threads anchor on that number (`#6142361`) rather than on a
-positional `#mN` — which is why `boardgamegeek.com` is no longer a reference domain either.
+the forum has since dropped is copied in beside them under `/t/vekn-<TopicId>/`, which is how
+`ANK 20210529` still resolves, and so are the fifty-seven BoardGameGeek threads L. Scott Johnson
+took part in, under `/t/bgg-<ThreadId>/` — which is why `boardgamegeek.com` is no longer a
+reference domain either. A message in a copied thread answers to two anchors: its positional `#mN`,
+and the number its own forum gave the post, carried as an `<a class="alias">`. A citation keeps the
+one it was written against — `ANK 20210529` is `#m1`, the four BoardGameGeek ones are post numbers
+(`#6142361`).
 
 Nothing checks that the cited message's own date matches the reference id: the id carries the
 **ruling's** date, and the message it points at is only its best surviving witness — sometimes a
