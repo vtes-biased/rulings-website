@@ -1,5 +1,7 @@
+import contextlib
 import datetime
 import html.parser
+import re
 import urllib.parse
 
 import aiohttp
@@ -9,6 +11,26 @@ VEKN_AUTHORS = {
     "213-ankha": "ANK",
     "74-pascal-bertrand": "PIB",
 }
+
+USENET_URL: str = "https://usenet.krcg.org"
+
+#: How the newsgroup archive spells a Rules Director in `class="who"` — several spellings
+#: each, none of them the full name krcg.rulings.RULING_AUTHORS carries. Pascal Bertrand is
+#: absent on purpose: the archive stops in 2010, a year before he took the seat, and the bare
+#: "Pascal" it does hold is somebody else.
+USENET_AUTHORS = {
+    "Tom Wylie": "TOM",
+    "Thomas R Wylie": "TOM",
+    "Shawn F. Carnes": "SFC",
+    "Jon Wilkie": "JON",
+    "L. Scott Johnson": "LSJ",
+    "LSJ": "LSJ",
+    "LSJ (VtES Rep)": "LSJ",
+    "Ankha": "ANK",
+}
+
+RE_USENET_THREAD = re.compile(r"^/t/([A-Za-z0-9_-]+)/$")
+RE_USENET_ANCHOR = re.compile(r"^m\d+$")
 
 
 class SmartParser(html.parser.HTMLParser):
@@ -83,3 +105,65 @@ async def get_vekn_reference(url: str):
     if not parser.date:
         raise ValueError("Failed to find the message date")
     return f"{parser.author} {parser.date:%Y%m%d}"
+
+
+class UsenetParser(SmartParser):
+    """One message of an archive thread page: `<article class="msg" id="mN">` holding an
+    `<h2 class="who">` author and a `<p class="when"><time datetime>`."""
+
+    def __init__(self, msg_id: str, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.msg_id: str = msg_id
+        self.author: str = ""
+        self.date: datetime.date | None = None
+        self.count: int = 0
+
+    def on_tag(self, tag: str, attrs: dict[str, str | None]) -> None:
+        if tag == "article" and "msg" in (attrs.get("class") or ""):
+            self.count += 1
+            if attrs.get("id") == self.msg_id:
+                self.set_state("MESSAGE")
+        if "MESSAGE" not in self.state:
+            return
+        if tag == "h2" and "who" in (attrs.get("class") or ""):
+            self.set_state("WHO")
+        if tag == "time" and not self.date:
+            with contextlib.suppress(ValueError):
+                self.date = datetime.date.fromisoformat((attrs.get("datetime") or "")[:10])
+
+    def handle_data(self, data: str) -> None:
+        # The permalink `<a>` sits inside the `<h2>`, so only the first chunk is the author.
+        if "WHO" in self.state and not self.author:
+            self.author = data.strip()
+
+
+async def get_usenet_reference(url: str) -> str:
+    """Propose a reference id from a newsgroup archive message URL — `/t/<thread>/#mN`.
+
+    Empty when there is nothing to propose: no `#mN` (the thread survives and the cited reply
+    does not) or a poster who is no Rules Director (a citation may point at a later message
+    quoting a ruling never archived under its author's name). Both are legitimate citations, so
+    the caller must answer 404 and leave the id to be typed — the modal locks the label field on
+    a 400, which would make the reference unaddable.
+
+    Raise ValueError only on a URL the archive contradicts: unknown thread, anchor past the end.
+    """
+    parsed_url = urllib.parse.urlparse(url)
+    thread = RE_USENET_THREAD.match(parsed_url.path)
+    if not thread or not RE_USENET_ANCHOR.match(parsed_url.fragment):
+        return ""
+    parser = UsenetParser(parsed_url.fragment)
+    async with (
+        aiohttp.ClientSession() as session,
+        session.get(f"{USENET_URL}/t/{thread.group(1)}/") as response,
+    ):
+        if response.status != 200:
+            raise ValueError(f"No thread {thread.group(1)} in the newsgroup archive")
+        parser.feed(await response.text())
+    if not parser.author:
+        raise ValueError(f"No #{parser.msg_id}: the thread holds {parser.count} messages")
+    if parser.author not in USENET_AUTHORS:
+        return ""
+    if not parser.date:
+        raise ValueError("Failed to find the message date")
+    return f"{USENET_AUTHORS[parser.author]} {parser.date:%Y%m%d}"

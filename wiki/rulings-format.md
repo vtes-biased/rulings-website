@@ -93,13 +93,23 @@ written from `repository.py:REFERENCES_COMMENT` on every approval.
 Nothing checks that the cited message's own date matches the reference id: the id carries the
 **ruling's** date, and the message it points at is only its best surviving witness — sometimes a
 later post quoting it. `vtes-rulings/scripts/check_rulings.py` checks a newsgroup citation for
-thread existence and anchor range and no more; only VEKN forum URLs get their date and author read
-back, in `scraper.py` here (to propose an id) and in that script (to flag a mismatch).
+thread existence and anchor range and no more, and only a VEKN forum URL is read back there to
+flag a mismatch. Reading a URL back to *propose* an id is a different job, and `scraper.py` here
+does it for both the forum and the newsgroup archive.
 
 **New `RBK` references cannot be created** — the rulebooks are a closed set, all already listed, so
 `Manager.add_reference` refuses one and the editor offers them from a select instead.
 
-`scraper.py` derives a reference id from a pasted VEKN forum URL.
+`scraper.py` derives a reference id from a pasted VEKN forum URL, and from a
+`/t/<thread>/#mN` archive URL: `USENET_AUTHORS` maps the archive's `class="who"` spelling to a
+source prefix — `LSJ`, `L. Scott Johnson` and `LSJ (VtES Rep)` are one man, `Tom Wylie` and
+`Thomas R Wylie` another — and `<time datetime>` gives the date. Pascal Bertrand is deliberately
+absent: the archive stops in 2010, a year before he took the seat.
+
+Two answers are not errors and must stay **404**, not 400: an archive URL with no `#mN`, and a
+message by someone who was never Rules Director. Both are legitimate citations — a thread whose
+cited reply is gone, a post quoting a ruling its own author never archived — and the editor's
+modal locks the label field on a 400, which would leave the reference unaddable.
 
 ## The ruling uid
 

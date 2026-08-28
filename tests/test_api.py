@@ -347,6 +347,46 @@ async def test_mistyped_reference_source_is_refused(client):
     )
 
 
+async def test_reference_id_proposed_from_a_newsgroup_url(client):
+    """A pasted archive message URL proposes the id its poster and date make. The archive spells
+    the same Rules Director several ways, and the anchor is positional — `#mN` is the N-th message
+    of the thread, so the id follows the message, not the thread."""
+    await login_and_proposal(client)
+    for anchor, uid in [("m1", "LSJ 19970225"), ("m2", "LSJ 19980303")]:
+        response = await client.post(
+            "/api/reference/search",
+            json={"url": f"https://usenet.krcg.org/t/xcp3faFaHZ8/#{anchor}"},
+        )
+        assert response.status_code == 200
+        assert response.json() == {"computed_uid": uid}
+
+
+async def test_newsgroup_url_the_archive_contradicts_is_refused(client):
+    """A thread the archive never held, or an anchor past its last message, is a broken citation:
+    the URL itself is wrong and the editor is told so."""
+    await login_and_proposal(client)
+    for url, message in [
+        ("https://usenet.krcg.org/t/nosuchthread/#m1", "No thread nosuchthread"),
+        ("https://usenet.krcg.org/t/xcp3faFaHZ8/#m9", "the thread holds 3 messages"),
+    ]:
+        response = await client.post("/api/reference/search", json={"url": url})
+        assert response.status_code == 400
+        assert message in response.json()[0]
+
+
+async def test_newsgroup_url_with_nothing_to_propose_leaves_the_id_to_type(client):
+    """Two legitimate citations the archive cannot name: a thread whose cited reply is gone (no
+    `#mN`), and a message quoting a ruling its own author never posted. Neither is an error — 404
+    is the "no proposal" answer, and the id is typed by hand."""
+    await login_and_proposal(client)
+    for url in [
+        "https://usenet.krcg.org/t/xcp3faFaHZ8/",
+        "https://usenet.krcg.org/t/xcp3faFaHZ8/#m0",
+    ]:
+        response = await client.post("/api/reference/search", json={"url": url})
+        assert response.status_code == 404
+
+
 async def test_delete_card_ruling(client):
     await login_and_proposal(client)
     response = await client.delete("/api/ruling/100002/KRO5H6MD")

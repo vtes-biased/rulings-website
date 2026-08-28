@@ -19,7 +19,7 @@ import pytest
 import pytest_asyncio
 
 import vtesrulings
-from vtesrulings import archon, db, discord, repository
+from vtesrulings import archon, db, discord, repository, scraper
 
 FIXTURES = pathlib.Path(__file__).parent / "fixtures" / "rulings"
 
@@ -70,10 +70,10 @@ async def _app(_test_database, rulings_remote):
 
 
 @pytest_asyncio.fixture(name="client")
-async def _client(app, fake_archon, fake_discord):
+async def _client(app, fake_archon, fake_discord, _usenet_server):
     """A fresh client (fresh cookie jar) per test, sharing the session-wide app. Truncates the DB
-    on teardown so a test's users/proposals never leak into the next, and takes the two fake
-    services so no test can reach the real archon or Discord, named or not."""
+    on teardown so a test's users/proposals never leak into the next, and takes the fake services
+    so no test can reach the real archon, Discord or newsgroup archive, named or not."""
     transport = httpx.ASGITransport(app=app)
     try:
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
@@ -110,6 +110,46 @@ class FakeArchon:
         if self.userinfo_status != 200:
             return aiohttp.web.json_response({"detail": "no"}, status=self.userinfo_status)
         return aiohttp.web.json_response(self.info)
+
+
+#: One thread page in the newsgroup archive's own markup, trimmed to the three elements the
+#: scraper reads. Two spellings of the same Rules Director, and a poster who is none.
+USENET_THREAD = """<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Reverend Blackwood</title></head>
+<body>
+<main>
+<h1>Reverend Blackwood</h1>
+<p class="meta">3 messages from 2 participants &middot; 25 February 1997 &ndash; 3 March 1998</p>
+<article class="msg" id="m0">
+<h2 class="who">Trimegisto<a class="permalink" href="#m0" aria-label="permalink to message 1">#</a></h2>
+<p class="when"><time datetime="1997-02-25T09:00:00">25 February 1997, 09:00</time></p>
+<div class="body">If i use a walk of flame with Reverend Blackwood what would happen?</div>
+</article>
+<article class="msg" id="m1">
+<h2 class="who">L. Scott Johnson<a class="permalink" href="#m1" aria-label="permalink to message 2">#</a></h2>
+<p class="when"><time datetime="1997-02-25T09:00:00">25 February 1997, 09:00</time></p>
+<div class="body">The latter. Normal damage is always applied first.</div>
+</article>
+<article class="msg" id="m2">
+<h2 class="who">LSJ<a class="permalink" href="#m2" aria-label="permalink to message 3">#</a></h2>
+<p class="when"><time datetime="1998-03-03T14:07:51">3 March 1998, 14:07</time></p>
+<div class="body">Still the case.</div>
+</article>
+</main>
+</body>
+</html>
+"""
+
+
+class FakeUsenet:
+    """The newsgroup archive: one thread, served as the real site serves it. Any other thread id
+    404s, which is what the archive does for a citation it never held."""
+
+    async def thread(self, request):
+        if request.match_info["thread"] != "xcp3faFaHZ8":
+            return aiohttp.web.Response(status=404, text="File not found")
+        return aiohttp.web.Response(text=USENET_THREAD, content_type="text/html")
 
 
 class FakeDiscord:
@@ -150,6 +190,16 @@ async def _archon_server():
     archon.ARCHON_URL = url
     yield fake
     archon.ARCHON_URL = original
+    await runner.cleanup()
+
+
+@pytest_asyncio.fixture(name="_usenet_server", scope="session")
+async def _usenet_server():
+    url, runner = await _serve([aiohttp.web.get("/t/{thread}/", FakeUsenet().thread)])
+    original = scraper.USENET_URL
+    scraper.USENET_URL = url
+    yield url
+    scraper.USENET_URL = original
     await runner.cleanup()
 
 

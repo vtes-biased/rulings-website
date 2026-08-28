@@ -336,12 +336,16 @@ async def search_reference(
             ret = manager.get_reference_by_url(params.get("url", ""))
         return {"reference": asdict(ret)}
     except KeyError:
-        if params.get("url", "").startswith("https://www.vekn.net/forum/"):
-            try:
-                uid = await scraper.get_vekn_reference(params["url"])
-                return {"computed_uid": uid}
-            except Exception as e:  # noqa: BLE001 - surface any scrape/network failure as a 400
-                return JSONResponse(e.args[:1], status_code=400)
+        url = params.get("url", "")
+        try:
+            if url.startswith("https://www.vekn.net/forum/"):
+                return {"computed_uid": await scraper.get_vekn_reference(url)}
+            if urllib.parse.urlparse(url).hostname == "usenet.krcg.org":
+                uid = await scraper.get_usenet_reference(url)
+                if uid:
+                    return {"computed_uid": uid}
+        except Exception as e:  # noqa: BLE001 - surface any scrape/network failure as a 400
+            return JSONResponse(e.args[:1], status_code=400)
         raise HTTPException(404)
 
 
