@@ -16,4 +16,12 @@ follow-up ("chase @lip, 12 Sep"), owned by whoever wrote it.
 
 ---
 
+- **Propose the reference id from a pasted `usenet.krcg.org` URL**, as `scraper.py` does for VEKN
+  forum URLs: `/t/<id>/#mN` → that message's `<time datetime>` and `class="who"` author, mapped to a
+  source prefix (the archive writes both `LSJ` and `L. Scott Johnson`). Server-side only —
+  `api.py:search_reference` gains the branch, `ReferenceModal` already takes `computed_uid`. The id
+  stays editable and nothing is checked against it: the id is the ruling's date, the post only its
+  witness (`wiki/rulings-format.md`). Done: the endpoint returns `computed_uid` for a `#mN` URL and
+  400 for an unknown thread or out-of-range anchor.
+
 <!-- cycles-since-upkeep: 8 -->
