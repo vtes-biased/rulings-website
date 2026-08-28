@@ -115,8 +115,11 @@ archive URL: `USENET_AUTHORS` maps the `class="who"` spelling the archive uses �
 director, only some of them the `RULING_AUTHORS` full name — to a source prefix, and
 `<time datetime>` gives the date. Only ever a **proposal**, so the editor leaves the id typable:
 the cited post may be a director relaying an `RTR`, or quoting a ruling older than his own term.
-It reads the positional `#mN` only, so an archive URL anchored on a forum-copied thread's post
-number proposes nothing and the id is typed by hand. A proposal the editor never touched dies with
+A copied thread spells him as its own forum did, which is why the map holds
+`L. Scott Johnson (Rulemonger)`: BoardGameGeek knew him by that handle alone, and the archive
+annotates it rather than leave it to be recognised. It reads the positional `#mN` only, so an
+archive URL anchored on a forum-copied thread's post number proposes nothing and the id is typed by
+hand. A proposal the editor never touched dies with
 the URL it was read from — the next URL that proposes nothing blanks it, because an id left
 standing beside a replaced URL writes a reference whose id and URL disagree, and `check_reference`
 validates neither against the other.

@@ -19,10 +19,12 @@ VEKN_AUTHORS = {
 USENET_HOST = "usenet.krcg.org"
 USENET_URL: str = f"https://{USENET_HOST}"
 
-#: How the newsgroup archive spells a Rules Director in `class="who"`: several spellings each,
-#: only some of them the full name krcg.rulings.RULING_AUTHORS carries — hence a map written out
-#: here rather than derived. Pascal Bertrand is absent because no reference cites the archive for
-#: him: his term opens in 2011, after the newsgroup's own posts stop.
+#: How the archive spells a Rules Director in `class="who"`: several spellings each, only some of
+#: them the full name krcg.rulings.RULING_AUTHORS carries — hence a map written out here rather
+#: than derived. A thread copied from a forum spells him as that forum did, which is where
+#: "L. Scott Johnson (Rulemonger)" comes from: BoardGameGeek knew him by the handle alone, and the
+#: archive annotates it (newsgroup-archive 48ad293) rather than leave it to be recognised.
+#: Pascal Bertrand is absent because no reference cites the archive for him at all.
 USENET_AUTHORS = {
     "Tom Wylie": "TOM",
     "Thomas R Wylie": "TOM",
@@ -31,6 +33,7 @@ USENET_AUTHORS = {
     "L. Scott Johnson": "LSJ",
     "LSJ": "LSJ",
     "LSJ (VtES Rep)": "LSJ",
+    "L. Scott Johnson (Rulemonger)": "LSJ",
     "Ankha": "ANK",
 }
 

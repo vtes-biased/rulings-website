@@ -144,18 +144,51 @@ USENET_THREAD = """<!DOCTYPE html>
 """
 
 
+#: A thread copied from BoardGameGeek, served as the archive serves those: the Rules Director under
+#: the handle that forum knew him by, annotated with his name, and each message carrying the
+#: forum's own post number as a second anchor beside its positional one.
+BGG_THREAD = """<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Mandatory and optional effects</title></head>
+<body>
+<main>
+<h1>Mandatory and optional effects</h1>
+<p class="meta">2 messages from 2 participants &middot; 21 January 2011</p>
+<article class="msg" id="m0">
+<a class="alias" id="6142360"></a>
+<h2 class="who">ira212<a class="permalink" href="#m0" aria-label="permalink to message 1">#</a></h2>
+<p class="when"><time datetime="2011-01-21T01:12:00">21 January 2011, 01:12</time></p>
+<div class="body">I thought that all mandatory effects had to be resolved before optional ones.</div>
+</article>
+<article class="msg" id="m1">
+<a class="alias" id="6142361"></a>
+<h2 class="who">L. Scott Johnson (Rulemonger)<a class="permalink" href="#m1" aria-label="permalink to message 2">#</a></h2>
+<p class="when"><time datetime="2011-01-21T01:59:23">21 January 2011, 01:59</time></p>
+<div class="body">No. They just have to be resolved.</div>
+</article>
+</main>
+</body>
+</html>
+"""
+
+
+ARCHIVE_THREADS = {"xcp3faFaHZ8": USENET_THREAD, "bgg-609699": BGG_THREAD}
+
+
 class FakeUsenet:
-    """The newsgroup archive: one thread, served as the real site serves it. Any other thread id
-    404s, which is what the archive does for a citation it never held.
+    """The newsgroup archive: two threads, served as the real site serves them — one from the
+    newsgroup itself, one copied from BoardGameGeek. Any other thread id 404s, which is what the
+    archive does for a citation it never held.
 
     This reaches the fake only because `get_usenet_reference` rebuilds its request from
     `scraper.USENET_URL` and drops the pasted host — unlike `get_vekn_reference`, which fetches
     the pasted URL. Aligning the two would send the suite at the live archive."""
 
     async def thread(self, request):
-        if request.match_info["thread"] != "xcp3faFaHZ8":
+        page = ARCHIVE_THREADS.get(request.match_info["thread"])
+        if page is None:
             return aiohttp.web.Response(status=404, text="File not found")
-        return aiohttp.web.Response(text=USENET_THREAD, content_type="text/html")
+        return aiohttp.web.Response(text=page, content_type="text/html")
 
 
 class FakeDiscord:

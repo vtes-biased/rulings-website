@@ -393,6 +393,23 @@ async def test_reference_id_proposed_from_a_newsgroup_url(client):
         assert response.json() == {"computed_uid": uid}
 
 
+async def test_reference_id_proposed_from_a_boardgamegeek_thread(client):
+    """The archive holds the BoardGameGeek threads too, and their messages are cited the same way.
+    The forum knew the Rules Director by a handle, so the archive annotates it and the scraper maps
+    the annotated spelling — reading back the id no differently than for a newsgroup thread."""
+    await login_and_proposal(client)
+    response = await client.post(
+        "/api/reference/search", json={"url": "https://usenet.krcg.org/t/bgg-609699/#m1"}
+    )
+    assert response.status_code == 200
+    assert response.json() == {"computed_uid": "LSJ 20110121"}
+    # the poster who is no Rules Director proposes nothing, as in any other thread
+    response = await client.post(
+        "/api/reference/search", json={"url": "https://usenet.krcg.org/t/bgg-609699/#m0"}
+    )
+    assert response.status_code == 404
+
+
 async def test_newsgroup_url_the_archive_contradicts_is_refused(client):
     """A thread the archive never held, or an anchor past its last message, is a broken citation:
     the URL itself is wrong and the editor is told so."""
