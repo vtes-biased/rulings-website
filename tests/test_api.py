@@ -395,27 +395,24 @@ async def test_reference_id_proposed_from_a_newsgroup_url(client):
 async def test_reference_id_proposed_from_a_boardgamegeek_thread(client):
     """The archive holds the BoardGameGeek threads too, and their messages are cited the same way.
     The forum knew the Rules Director by a handle, so the archive annotates it and the scraper maps
-    the annotated spelling. Either anchor finds the message: the positional one the archive's own
-    permalinks offer, and the post number every reference in the file was written against."""
+    the annotated spelling — reading back the id no differently than for a newsgroup thread, and
+    off the same positional anchor, since a copied thread's post numbers are cited by nobody."""
     await login_and_proposal(client)
-    for anchor in ["m1", "6142361"]:
-        response = await client.post(
-            "/api/reference/search", json={"url": f"https://usenet.krcg.org/t/bgg-609699/#{anchor}"}
-        )
-        assert response.status_code == 200, anchor
-        assert response.json() == {"computed_uid": "LSJ 20110121"}
-    # the poster who is no Rules Director proposes nothing, by either anchor
-    for anchor in ["m0", "6141620"]:
-        response = await client.post(
-            "/api/reference/search", json={"url": f"https://usenet.krcg.org/t/bgg-609699/#{anchor}"}
-        )
-        assert response.status_code == 404, anchor
-    # a post number the thread does not hold is a broken citation, like an anchor past the end
     response = await client.post(
-        "/api/reference/search", json={"url": "https://usenet.krcg.org/t/bgg-609699/#9999999"}
+        "/api/reference/search", json={"url": "https://usenet.krcg.org/t/bgg-609699/#m1"}
     )
-    assert response.status_code == 400
-    assert "among the thread's 2 messages" in response.json()[0]
+    assert response.status_code == 200
+    assert response.json() == {"computed_uid": "LSJ 20110121"}
+    # the poster who is no Rules Director proposes nothing, as in any other thread
+    response = await client.post(
+        "/api/reference/search", json={"url": "https://usenet.krcg.org/t/bgg-609699/#m0"}
+    )
+    assert response.status_code == 404
+    # and the post number the archive also answers to is not an anchor we read
+    response = await client.post(
+        "/api/reference/search", json={"url": "https://usenet.krcg.org/t/bgg-609699/#6142361"}
+    )
+    assert response.status_code == 404
 
 
 async def test_newsgroup_url_the_archive_contradicts_is_refused(client):

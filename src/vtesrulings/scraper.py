@@ -38,8 +38,9 @@ USENET_AUTHORS = {
 
 RE_USENET_THREAD = re.compile(r"^/t/([A-Za-z0-9_-]+)/$")
 #: `#mN` is the N-th message of the thread. A thread copied from a forum answers to the number that
-#: forum gave the post as well, and every BoardGameGeek citation is written that way.
-RE_USENET_ANCHOR = re.compile(r"^(?:m\d+|\d+)$")
+#: forum gave the post as well, but no citation is written that way — one anchor form everywhere,
+#: which is what the archive's own permalinks offer (vtes-rulings 61d252f).
+RE_USENET_ANCHOR = re.compile(r"^m\d+$")
 
 
 class SmartParser(html.parser.HTMLParser):
@@ -118,9 +119,7 @@ async def get_vekn_reference(url: str):
 
 class UsenetParser(SmartParser):
     """One message of an archive thread page: `<article class="msg" id="mN">` holding an
-    `<h2 class="who">` author and a `<p class="when"><time datetime>`. A copied thread opens each
-    article on an `<a class="alias">` carrying the post number its own forum gave the message, so
-    either anchor finds it."""
+    `<h2 class="who">` author and a `<p class="when"><time datetime>`."""
 
     def __init__(self, msg_id: str, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -134,10 +133,6 @@ class UsenetParser(SmartParser):
             self.count += 1
             if attrs.get("id") == self.msg_id:
                 self.set_state("MESSAGE")
-        # The alias closes as soon as it opens, so the state has to outlive the tag carrying it
-        # rather than be popped with it — as in VEKNParser, where the anchor is a bare `<a>` too.
-        if tag == "a" and "alias" in (attrs.get("class") or "") and attrs.get("id") == self.msg_id:
-            self.state.add("MESSAGE")
         if "MESSAGE" not in self.state:
             return
         if tag == "h2" and "who" in (attrs.get("class") or ""):
@@ -153,12 +148,10 @@ class UsenetParser(SmartParser):
 
 
 async def get_usenet_reference(url: str) -> str:
-    """Propose a reference id from an archive message URL — `/t/<thread>/#mN`, or the post number
-    a copied thread carries as an alias.
+    """Propose a reference id from a newsgroup archive message URL — `/t/<thread>/#mN`.
 
-    Empty when there is nothing to propose: no anchor at all, or a poster in no USENET_AUTHORS.
-    Raise ValueError only on a URL the archive contradicts: unknown thread, anchor naming no
-    message of it.
+    Empty when there is nothing to propose: no `#mN`, or a poster in no USENET_AUTHORS.
+    Raise ValueError only on a URL the archive contradicts: unknown thread, anchor past the end.
     """
     parsed_url = urllib.parse.urlparse(url)
     thread = RE_USENET_THREAD.match(parsed_url.path)

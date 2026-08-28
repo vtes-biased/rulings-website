@@ -69,8 +69,8 @@ REFERENCES_COMMENT = """# Rulings always have a reference, they come from somewh
 # rather than to Google Groups: `/t/<ThreadId>/` is the thread, `#m0` the first message, `#m1` the second, and so on.
 # Those anchors are positional, so the message order in the archive is part of the contract.
 # The archive also holds threads copied from a forum: `/t/bgg-<ThreadId>/` for BoardGameGeek, `/t/vekn-<TopicId>/` for
-# the VEKN forum. Each of their messages answers to two anchors, the positional `#mN` and the number its own forum gave
-# the post, and a citation keeps whichever one it was written against.
+# the VEKN forum. Those answer to the number their own forum gave each post as well, but are cited by position like
+# every other thread here.
 # A link with no anchor means the thread survives but the cited reply does not.
 """
 
