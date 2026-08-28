@@ -16,4 +16,9 @@ follow-up ("chase @lip, 12 Sep"), owned by whoever wrote it.
 
 ---
 
+- Push `newsgroup-archive` 48ad293, which annotates L. Scott Johnson's BoardGameGeek handle. Until
+  the Pages build behind that push, the live archive still says bare `Rulemonger`, the spelling
+  `scraper.USENET_AUTHORS` deliberately does not hold — so those threads propose no reference id in
+  production, as they did before. Chase @lip, 29 Aug.
+
 <!-- cycles-since-upkeep: 9 -->

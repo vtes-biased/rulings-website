@@ -153,11 +153,11 @@ BGG_THREAD = """<!DOCTYPE html>
 <body>
 <main>
 <h1>Mandatory and optional effects</h1>
-<p class="meta">2 messages from 2 participants &middot; 21 January 2011</p>
+<p class="meta">2 messages from 2 participants &middot; 20 &ndash; 21 January 2011</p>
 <article class="msg" id="m0">
-<a class="alias" id="6142360"></a>
+<a class="alias" id="6141620"></a>
 <h2 class="who">ira212<a class="permalink" href="#m0" aria-label="permalink to message 1">#</a></h2>
-<p class="when"><time datetime="2011-01-21T01:12:00">21 January 2011, 01:12</time></p>
+<p class="when"><time datetime="2011-01-20T23:31:31">20 January 2011, 23:31</time></p>
 <div class="body">I thought that all mandatory effects had to be resolved before optional ones.</div>
 </article>
 <article class="msg" id="m1">

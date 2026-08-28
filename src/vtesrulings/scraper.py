@@ -21,9 +21,8 @@ USENET_URL: str = f"https://{USENET_HOST}"
 
 #: How the archive spells a Rules Director in `class="who"`: several spellings each, only some of
 #: them the full name krcg.rulings.RULING_AUTHORS carries — hence a map written out here rather
-#: than derived. A thread copied from a forum spells him as that forum did, which is where
-#: "L. Scott Johnson (Rulemonger)" comes from: BoardGameGeek knew him by the handle alone, and the
-#: archive annotates it (newsgroup-archive 48ad293) rather than leave it to be recognised.
+#: than derived — "L. Scott Johnson (Rulemonger)" is the archive's own, annotated there because
+#: BoardGameGeek knew him by the handle alone (newsgroup-archive 48ad293).
 #: Pascal Bertrand is absent because no reference cites the archive for him at all.
 USENET_AUTHORS = {
     "Tom Wylie": "TOM",
@@ -38,7 +37,9 @@ USENET_AUTHORS = {
 }
 
 RE_USENET_THREAD = re.compile(r"^/t/([A-Za-z0-9_-]+)/$")
-RE_USENET_ANCHOR = re.compile(r"^m\d+$")
+#: `#mN` is the N-th message of the thread. A thread copied from a forum answers to the number that
+#: forum gave the post as well, and every BoardGameGeek citation is written that way.
+RE_USENET_ANCHOR = re.compile(r"^(?:m\d+|\d+)$")
 
 
 class SmartParser(html.parser.HTMLParser):
@@ -117,7 +118,9 @@ async def get_vekn_reference(url: str):
 
 class UsenetParser(SmartParser):
     """One message of an archive thread page: `<article class="msg" id="mN">` holding an
-    `<h2 class="who">` author and a `<p class="when"><time datetime>`."""
+    `<h2 class="who">` author and a `<p class="when"><time datetime>`. A copied thread opens each
+    article on an `<a class="alias">` carrying the post number its own forum gave the message, so
+    either anchor finds it."""
 
     def __init__(self, msg_id: str, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -131,6 +134,10 @@ class UsenetParser(SmartParser):
             self.count += 1
             if attrs.get("id") == self.msg_id:
                 self.set_state("MESSAGE")
+        # The alias closes as soon as it opens, so the state has to outlive the tag carrying it
+        # rather than be popped with it — as in VEKNParser, where the anchor is a bare `<a>` too.
+        if tag == "a" and "alias" in (attrs.get("class") or "") and attrs.get("id") == self.msg_id:
+            self.state.add("MESSAGE")
         if "MESSAGE" not in self.state:
             return
         if tag == "h2" and "who" in (attrs.get("class") or ""):
@@ -146,10 +153,12 @@ class UsenetParser(SmartParser):
 
 
 async def get_usenet_reference(url: str) -> str:
-    """Propose a reference id from a newsgroup archive message URL — `/t/<thread>/#mN`.
+    """Propose a reference id from an archive message URL — `/t/<thread>/#mN`, or the post number
+    a copied thread carries as an alias.
 
-    Empty when there is nothing to propose: no `#mN`, or a poster in no USENET_AUTHORS.
-    Raise ValueError only on a URL the archive contradicts: unknown thread, anchor past the end.
+    Empty when there is nothing to propose: no anchor at all, or a poster in no USENET_AUTHORS.
+    Raise ValueError only on a URL the archive contradicts: unknown thread, anchor naming no
+    message of it.
     """
     parsed_url = urllib.parse.urlparse(url)
     thread = RE_USENET_THREAD.match(parsed_url.path)
@@ -164,7 +173,7 @@ async def get_usenet_reference(url: str) -> str:
             raise ValueError(f"No thread {thread.group(1)} in the newsgroup archive")
         parser.feed(await response.text())
     if not parser.author:
-        raise ValueError(f"No #{parser.msg_id}: the thread holds {parser.count} messages")
+        raise ValueError(f"No #{parser.msg_id} among the thread's {parser.count} messages")
     if parser.author not in USENET_AUTHORS:
         return ""
     if not parser.date:
