@@ -105,7 +105,7 @@ does it for both the forum and the newsgroup archive.
 
 `scraper.py` derives a reference id from a pasted VEKN forum URL, and from a `/t/<thread>/#mN`
 archive URL: `USENET_AUTHORS` maps the `class="who"` spelling the archive uses — several per
-director, none of them the full name `RULING_AUTHORS` carries — to a source prefix, and
+director, only some of them the `RULING_AUTHORS` full name — to a source prefix, and
 `<time datetime>` gives the date. Only ever a **proposal**, so the editor leaves the id typable:
 the cited post may be a director relaying an `RTR`, or quoting a ruling older than his own term.
 

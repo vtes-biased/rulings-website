@@ -17,6 +17,7 @@
     let labelReadonly = $state(false)
     let urlError = $state("")
     let existing = $state<Reference | null>(null) // set → offer "Add existing", else "Add new"
+    let computed = $state("") // the id the server proposed, to tell it from one the editor typed
     let rbk = $state("")
 
     async function search(body: Record<string, string>): Promise<Response> {
@@ -39,6 +40,7 @@
                     // is only its witness, so it must stay typable (an RTR quoted by a director,
                     // a director quoting a ruling made before his term).
                     label = data.computed_uid
+                    computed = data.computed_uid
                     labelReadonly = false
                     existing = null
                 } else {
@@ -52,7 +54,11 @@
                 labelReadonly = true
                 existing = null
             } else {
-                if (labelReadonly) { label = ""; labelReadonly = false }
+                // A proposal the editor never touched does not survive the URL it was read from.
+                if (labelReadonly || (computed && label === computed)) {
+                    label = ""
+                    labelReadonly = false
+                }
                 existing = null
             }
         } catch { /* ignore transient search errors */ }

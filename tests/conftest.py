@@ -144,7 +144,11 @@ USENET_THREAD = """<!DOCTYPE html>
 
 class FakeUsenet:
     """The newsgroup archive: one thread, served as the real site serves it. Any other thread id
-    404s, which is what the archive does for a citation it never held."""
+    404s, which is what the archive does for a citation it never held.
+
+    This reaches the fake only because `get_usenet_reference` rebuilds its request from
+    `scraper.USENET_URL` and drops the pasted host — unlike `get_vekn_reference`, which fetches
+    the pasted URL. Aligning the two would send the suite at the live archive."""
 
     async def thread(self, request):
         if request.match_info["thread"] != "xcp3faFaHZ8":

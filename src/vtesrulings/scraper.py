@@ -14,9 +14,10 @@ VEKN_AUTHORS = {
 
 USENET_URL: str = "https://usenet.krcg.org"
 
-#: How the newsgroup archive spells a Rules Director in `class="who"` — several spellings each,
-#: none of them the full name krcg.rulings.RULING_AUTHORS carries. Pascal Bertrand is absent
-#: because no reference cites the archive for him, and the bare "Pascal" it holds is someone else.
+#: How the newsgroup archive spells a Rules Director in `class="who"`: several spellings each,
+#: only some of them the full name krcg.rulings.RULING_AUTHORS carries — hence a map written out
+#: here rather than derived. Pascal Bertrand is absent because no reference cites the archive for
+#: him: his term opens in 2011, after the newsgroup's own posts stop.
 USENET_AUTHORS = {
     "Tom Wylie": "TOM",
     "Thomas R Wylie": "TOM",
