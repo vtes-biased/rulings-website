@@ -76,8 +76,8 @@ source prefix is one of `krcg.rulings.RULING_AUTHORS`. Two validations, both in
 `utils.check_reference`:
 
 - the URL host must be in `utils.RULING_DOMAINS` — exactly `www.vekn.net`, `usenet.krcg.org`,
-  `boardgamegeek.com`, `www.boardgamegeek.com`, `www.blackchantry.com`. The bare `vekn.net` and
-  `blackchantry.com` are **not** accepted, and neither is `groups.google.com`;
+  `www.blackchantry.com`. The bare `vekn.net` and `blackchantry.com` are **not** accepted, and
+  neither is `groups.google.com` nor `boardgamegeek.com`;
 - the date must fall inside that author's Rules Director window. `RBK` (Rulebook) and `RTR` (Rules
   Team Ruling) have no window and carry no date; every other source does.
 
@@ -91,14 +91,19 @@ means the thread survives and the cited reply does not. The same text heads `ref
 written from `repository.py:REFERENCES_COMMENT` on every approval.
 
 The archive holds more than the newsgroup, whose own posts stop in 2010: a cited VEKN forum topic
-the forum has since dropped is copied in beside them, which is how `ANK 20210529` still resolves.
+the forum has since dropped is copied in beside them, which is how `ANK 20210529` still resolves,
+and so are the fifty-seven BoardGameGeek threads L. Scott Johnson took part in, under
+`/t/bgg-<ThreadId>/`. A thread copied from a forum keeps the number that forum gave each post, so
+the four citations into those threads anchor on that number (`#6142361`) rather than on a
+positional `#mN` — which is why `boardgamegeek.com` is no longer a reference domain either.
 
 Nothing checks that the cited message's own date matches the reference id: the id carries the
 **ruling's** date, and the message it points at is only its best surviving witness — sometimes a
 later post quoting it. `vtes-rulings/scripts/check_rulings.py` checks a newsgroup citation for
-thread existence and anchor range and no more, and only a VEKN forum URL is read back there to
-flag a mismatch. Reading a URL back to *propose* an id is a different job, and `scraper.py` here
-does it for both the forum and the newsgroup archive.
+thread existence and anchor validity — a positional anchor against the message count, a
+forum-copied one against the thread's post numbers — and no more, and only a VEKN forum URL is read
+back there to flag a mismatch. Reading a URL back to *propose* an id is a different job, and
+`scraper.py` here does it for both the forum and the newsgroup archive.
 
 **New `RBK` references cannot be created** — the rulebooks are a closed set, all already listed, so
 `Manager.insert_reference` refuses one and the editor offers them from a select instead.
@@ -108,15 +113,18 @@ archive URL: `USENET_AUTHORS` maps the `class="who"` spelling the archive uses �
 director, only some of them the `RULING_AUTHORS` full name — to a source prefix, and
 `<time datetime>` gives the date. Only ever a **proposal**, so the editor leaves the id typable:
 the cited post may be a director relaying an `RTR`, or quoting a ruling older than his own term.
-A proposal the editor never touched dies with the URL it was read from — the next URL that proposes
-nothing blanks it, because an id left standing beside a replaced URL writes a reference whose id
-and URL disagree, and `check_reference` validates neither against the other.
+It reads the positional `#mN` only, so an archive URL anchored on a forum-copied thread's post
+number proposes nothing and the id is typed by hand. A proposal the editor never touched dies with
+the URL it was read from — the next URL that proposes nothing blanks it, because an id left
+standing beside a replaced URL writes a reference whose id and URL disagree, and `check_reference`
+validates neither against the other.
 
-Three answers are not errors and must stay **404**, not 400: an *archive* URL with no `#mN`, an
-archive message by someone in no `USENET_AUTHORS`, and a site that will not answer. The first two
-are legitimate citations and the third is an outage — none of them contradicts the URL, and a 400
-blanks *and locks* the editor's label field, which would leave the reference unaddable. A 400 is
-for the URL the archive does contradict: an unknown thread, an anchor past the last message.
+Three answers are not errors and must stay **404**, not 400: an *archive* URL with no `#mN` to
+read, an archive message by someone in no `USENET_AUTHORS`, and a site that will not answer. The
+first two are legitimate citations and the third is an outage — none of them contradicts the URL,
+and a 400 blanks *and locks* the editor's label field, which would leave the reference unaddable. A
+400 is for the URL the archive does contradict: an unknown thread, an anchor past the last
+message.
 
 ## The ruling uid
 

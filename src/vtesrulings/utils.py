@@ -22,12 +22,11 @@ RE_REMINDER = krcg.rulings.RE_REMINDER
 RE_SYMBOL = krcg.rulings.RE_SYMBOL
 
 #: `usenet.krcg.org` is our own copy of `rec.games.trading-cards.jyhad`, where every newsgroup-era
-#: reference points since Google stopped serving its archive reliably. `groups.google.com` is not a
-#: reference domain any more: nothing points there, and nothing new should.
+#: reference points since Google stopped serving its archive reliably. It holds the BoardGameGeek
+#: threads L. Scott Johnson took part in too, so `boardgamegeek.com` followed `groups.google.com`
+#: out: neither is a reference domain any more, nothing points at either, and nothing new should.
 RULING_DOMAINS = {
-    "boardgamegeek.com",
     "www.blackchantry.com",
-    "www.boardgamegeek.com",
     "usenet.krcg.org",
     "www.vekn.net",
 }
