@@ -36,9 +36,8 @@
             if (r.ok) {
                 const data = await r.json()
                 if (data.computed_uid) {
-                    // A proposal, not a resolution: the id carries the ruling's date and the post
-                    // is only its witness, so it must stay typable (an RTR quoted by a director,
-                    // a director quoting a ruling made before his term).
+                    // Not readonly, unlike the resolved reference below: a computed id is only a
+                    // proposal, and the one the editor wants is often not it.
                     label = data.computed_uid
                     computed = data.computed_uid
                     labelReadonly = false
@@ -54,7 +53,6 @@
                 labelReadonly = true
                 existing = null
             } else {
-                // A proposal the editor never touched does not survive the URL it was read from.
                 if (labelReadonly || (computed && label === computed)) {
                     label = ""
                     labelReadonly = false

@@ -7,12 +7,14 @@ import urllib.parse
 import aiohttp
 import arrow
 
+VEKN_FORUM_URL = "https://www.vekn.net/forum/"
 VEKN_AUTHORS = {
     "213-ankha": "ANK",
     "74-pascal-bertrand": "PIB",
 }
 
-USENET_URL: str = "https://usenet.krcg.org"
+USENET_HOST = "usenet.krcg.org"
+USENET_URL: str = f"https://{USENET_HOST}"
 
 #: How the newsgroup archive spells a Rules Director in `class="who"`: several spellings each,
 #: only some of them the full name krcg.rulings.RULING_AUTHORS carries — hence a map written out
@@ -165,3 +167,20 @@ async def get_usenet_reference(url: str) -> str:
     if not parser.date:
         raise ValueError("Failed to find the message date")
     return f"{USENET_AUTHORS[parser.author]} {parser.date:%Y%m%d}"
+
+
+async def get_reference(url: str) -> str:
+    """Propose a reference id from a pasted URL. Empty when there is nothing to propose — an
+    unreadable site, or an archive URL naming no ruling — which the caller answers 404.
+
+    The two sites that can be read back at all are named here. A ValueError is the editor's 400,
+    rendered by the data_error handler; a site that will not answer is one of them.
+    """
+    try:
+        if url.startswith(VEKN_FORUM_URL):
+            return await get_vekn_reference(url)
+        if urllib.parse.urlparse(url).hostname == USENET_HOST:
+            return await get_usenet_reference(url)
+    except (aiohttp.ClientError, TimeoutError) as e:
+        raise ValueError(f"Could not read {url}: {e}") from e
+    return ""
