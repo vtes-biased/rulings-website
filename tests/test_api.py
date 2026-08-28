@@ -408,7 +408,7 @@ async def test_reference_id_proposed_from_a_boardgamegeek_thread(client):
         "/api/reference/search", json={"url": "https://usenet.krcg.org/t/bgg-609699/#m0"}
     )
     assert response.status_code == 404
-    # and the post number the archive also answers to is not an anchor we read
+    # the post number the archive also answers to is no anchor of ours: not read, not fetched for
     response = await client.post(
         "/api/reference/search", json={"url": "https://usenet.krcg.org/t/bgg-609699/#6142361"}
     )

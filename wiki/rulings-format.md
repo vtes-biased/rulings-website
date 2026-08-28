@@ -96,10 +96,10 @@ the forum has since dropped is copied in beside them under `/t/vekn-<TopicId>/`,
 took part in, under `/t/bgg-<ThreadId>/` — which is why `boardgamegeek.com` is no longer a
 reference domain either. A copied thread's messages answer to a second anchor as well, the number
 their own forum gave the post, carried as an `<a class="alias">`. **Nothing is cited that way**:
-one anchor form runs through the whole file, and the four BoardGameGeek citations that used post
-numbers were moved onto `#mN` in `vtes-rulings` `61d252f`. A positional anchor is the one that can
-move, which those four traded away — forums append rather than insert, and `check_rulings.py`
-catches a thread whose length changed.
+one anchor form runs through the whole file. That form is the one that can move, and a copied
+thread is the only kind that can still gain messages — the stability the post number would have
+given is what the uniformity costs. It holds because forums append rather than insert, and
+`check_rulings.py` catches a thread whose length changed.
 
 Nothing checks that the cited message's own date matches the reference id: the id carries the
 **ruling's** date, and the message it points at is only its best surviving witness — sometimes a
