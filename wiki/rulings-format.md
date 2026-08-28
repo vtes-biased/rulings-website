@@ -90,6 +90,9 @@ archive's message order is part of the contract, not a rendering detail. A citat
 means the thread survives and the cited reply does not. The same text heads `references.yaml`,
 written from `repository.py:REFERENCES_COMMENT` on every approval.
 
+The archive holds more than the newsgroup, whose own posts stop in 2010: a cited VEKN forum topic
+the forum has since dropped is copied in beside them, which is how `ANK 20210529` still resolves.
+
 Nothing checks that the cited message's own date matches the reference id: the id carries the
 **ruling's** date, and the message it points at is only its best surviving witness — sometimes a
 later post quoting it. `vtes-rulings/scripts/check_rulings.py` checks a newsgroup citation for
@@ -100,16 +103,15 @@ does it for both the forum and the newsgroup archive.
 **New `RBK` references cannot be created** — the rulebooks are a closed set, all already listed, so
 `Manager.add_reference` refuses one and the editor offers them from a select instead.
 
-`scraper.py` derives a reference id from a pasted VEKN forum URL, and from a
-`/t/<thread>/#mN` archive URL: `USENET_AUTHORS` maps the archive's `class="who"` spelling to a
-source prefix — `LSJ`, `L. Scott Johnson` and `LSJ (VtES Rep)` are one man, `Tom Wylie` and
-`Thomas R Wylie` another — and `<time datetime>` gives the date. Pascal Bertrand is deliberately
-absent: the archive stops in 2010, a year before he took the seat.
+`scraper.py` derives a reference id from a pasted VEKN forum URL, and from a `/t/<thread>/#mN`
+archive URL: `USENET_AUTHORS` maps the `class="who"` spelling the archive uses — several per
+director, none of them the full name `RULING_AUTHORS` carries — to a source prefix, and
+`<time datetime>` gives the date. Only ever a **proposal**, so the editor leaves the id typable:
+the cited post may be a director relaying an `RTR`, or quoting a ruling older than his own term.
 
-Two answers are not errors and must stay **404**, not 400: an archive URL with no `#mN`, and a
-message by someone who was never Rules Director. Both are legitimate citations — a thread whose
-cited reply is gone, a post quoting a ruling its own author never archived — and the editor's
-modal locks the label field on a 400, which would leave the reference unaddable.
+Two answers are not errors and must stay **404**, not 400: an *archive* URL with no `#mN`, and an
+archive message by someone in no `USENET_AUTHORS`. Both are legitimate citations, and a 400 blanks
+and locks the editor's label field, which would leave the reference unaddable.
 
 ## The ruling uid
 

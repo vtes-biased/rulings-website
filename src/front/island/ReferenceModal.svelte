@@ -35,8 +35,11 @@
             if (r.ok) {
                 const data = await r.json()
                 if (data.computed_uid) {
+                    // A proposal, not a resolution: the id carries the ruling's date and the post
+                    // is only its witness, so it must stay typable (an RTR quoted by a director,
+                    // a director quoting a ruling made before his term).
                     label = data.computed_uid
-                    labelReadonly = true
+                    labelReadonly = false
                     existing = null
                 } else {
                     label = data.reference.uid

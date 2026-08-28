@@ -602,8 +602,8 @@ class Manager:
 
     def insert_reference(self, uid: str = "", url: str = "") -> models.Reference:
         """Insert a new reference. uid suffixes are handled automatically.
-        If the URL is from www.vekn.net, the UID is computed automatically.
-        Raise ValueError in case of issues, aiohttp.HTTPException on bad VEKN urls.
+        The uid is required: proposing one from the URL is the search endpoint's job.
+        Raise ValueError in case of issues.
         It checks the URL domains are valid reference domains,
         the reference prefix matches a valid source,
         and that the dates make sense depending on the source.

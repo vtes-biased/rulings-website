@@ -14,10 +14,9 @@ VEKN_AUTHORS = {
 
 USENET_URL: str = "https://usenet.krcg.org"
 
-#: How the newsgroup archive spells a Rules Director in `class="who"` — several spellings
-#: each, none of them the full name krcg.rulings.RULING_AUTHORS carries. Pascal Bertrand is
-#: absent on purpose: the archive stops in 2010, a year before he took the seat, and the bare
-#: "Pascal" it does hold is somebody else.
+#: How the newsgroup archive spells a Rules Director in `class="who"` — several spellings each,
+#: none of them the full name krcg.rulings.RULING_AUTHORS carries. Pascal Bertrand is absent
+#: because no reference cites the archive for him, and the bare "Pascal" it holds is someone else.
 USENET_AUTHORS = {
     "Tom Wylie": "TOM",
     "Thomas R Wylie": "TOM",
@@ -140,11 +139,9 @@ class UsenetParser(SmartParser):
 async def get_usenet_reference(url: str) -> str:
     """Propose a reference id from a newsgroup archive message URL — `/t/<thread>/#mN`.
 
-    Empty when there is nothing to propose: no `#mN` (the thread survives and the cited reply
-    does not) or a poster who is no Rules Director (a citation may point at a later message
-    quoting a ruling never archived under its author's name). Both are legitimate citations, so
-    the caller must answer 404 and leave the id to be typed — the modal locks the label field on
-    a 400, which would make the reference unaddable.
+    Empty when there is nothing to propose: no `#mN`, or a poster in no USENET_AUTHORS. The
+    caller must answer 404 and never 400 — the editor's modal blanks and locks its label field on
+    a 400, and both cases are citations someone still has to type an id for.
 
     Raise ValueError only on a URL the archive contradicts: unknown thread, anchor past the end.
     """
