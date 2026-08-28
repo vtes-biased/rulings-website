@@ -101,17 +101,22 @@ flag a mismatch. Reading a URL back to *propose* an id is a different job, and `
 does it for both the forum and the newsgroup archive.
 
 **New `RBK` references cannot be created** — the rulebooks are a closed set, all already listed, so
-`Manager.add_reference` refuses one and the editor offers them from a select instead.
+`Manager.insert_reference` refuses one and the editor offers them from a select instead.
 
 `scraper.py` derives a reference id from a pasted VEKN forum URL, and from a `/t/<thread>/#mN`
 archive URL: `USENET_AUTHORS` maps the `class="who"` spelling the archive uses — several per
 director, only some of them the `RULING_AUTHORS` full name — to a source prefix, and
 `<time datetime>` gives the date. Only ever a **proposal**, so the editor leaves the id typable:
 the cited post may be a director relaying an `RTR`, or quoting a ruling older than his own term.
+A proposal the editor never touched dies with the URL it was read from — the next URL that proposes
+nothing blanks it, because an id left standing beside a replaced URL writes a reference whose id
+and URL disagree, and `check_reference` validates neither against the other.
 
-Two answers are not errors and must stay **404**, not 400: an *archive* URL with no `#mN`, and an
-archive message by someone in no `USENET_AUTHORS`. Both are legitimate citations, and a 400 blanks
-and locks the editor's label field, which would leave the reference unaddable.
+Three answers are not errors and must stay **404**, not 400: an *archive* URL with no `#mN`, an
+archive message by someone in no `USENET_AUTHORS`, and a site that will not answer. The first two
+are legitimate citations and the third is an outage — none of them contradicts the URL, and a 400
+blanks *and locks* the editor's label field, which would leave the reference unaddable. A 400 is
+for the URL the archive does contradict: an unknown thread, an anchor past the last message.
 
 ## The ruling uid
 

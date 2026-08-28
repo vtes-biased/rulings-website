@@ -73,7 +73,9 @@ async def _app(_test_database, rulings_remote):
 async def _client(app, fake_archon, fake_discord, _usenet_server):
     """A fresh client (fresh cookie jar) per test, sharing the session-wide app. Truncates the DB
     on teardown so a test's users/proposals never leak into the next, and takes the fake services
-    so no test can reach the real archon, Discord or newsgroup archive, named or not."""
+    so no test can reach the real archon, Discord or newsgroup archive, named or not. The VEKN
+    forum has no fake: `get_vekn_reference` fetches the pasted URL, so a test that posts a
+    `www.vekn.net/forum/` URL to /api/reference/search would go out to the real site."""
     transport = httpx.ASGITransport(app=app)
     try:
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:

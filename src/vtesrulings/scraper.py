@@ -1,13 +1,16 @@
 import contextlib
 import datetime
 import html.parser
+import logging
 import re
 import urllib.parse
 
 import aiohttp
 import arrow
 
-VEKN_FORUM_URL = "https://www.vekn.net/forum/"
+logger = logging.getLogger()
+
+VEKN_HOST = "www.vekn.net"
 VEKN_AUTHORS = {
     "213-ankha": "ANK",
     "74-pascal-bertrand": "PIB",
@@ -142,10 +145,7 @@ class UsenetParser(SmartParser):
 async def get_usenet_reference(url: str) -> str:
     """Propose a reference id from a newsgroup archive message URL — `/t/<thread>/#mN`.
 
-    Empty when there is nothing to propose: no `#mN`, or a poster in no USENET_AUTHORS. The
-    caller must answer 404 and never 400 — the editor's modal blanks and locks its label field on
-    a 400, and both cases are citations someone still has to type an id for.
-
+    Empty when there is nothing to propose: no `#mN`, or a poster in no USENET_AUTHORS.
     Raise ValueError only on a URL the archive contradicts: unknown thread, anchor past the end.
     """
     parsed_url = urllib.parse.urlparse(url)
@@ -170,17 +170,22 @@ async def get_usenet_reference(url: str) -> str:
 
 
 async def get_reference(url: str) -> str:
-    """Propose a reference id from a pasted URL. Empty when there is nothing to propose — an
-    unreadable site, or an archive URL naming no ruling — which the caller answers 404.
+    """Propose a reference id from a pasted URL — the two sites that can be read back at all are
+    named here.
 
-    The two sites that can be read back at all are named here. A ValueError is the editor's 400,
-    rendered by the data_error handler; a site that will not answer is one of them.
+    Empty when there is nothing to propose, which the caller answers 404: a site that cannot be
+    read back, an archive URL naming no ruling, or a site that would not answer. A ValueError is
+    the editor's 400, rendered by the data_error handler.
     """
+    parsed_url = urllib.parse.urlparse(url)
     try:
-        if url.startswith(VEKN_FORUM_URL):
+        if parsed_url.hostname == VEKN_HOST and parsed_url.path.startswith("/forum/"):
             return await get_vekn_reference(url)
-        if urllib.parse.urlparse(url).hostname == USENET_HOST:
+        if parsed_url.hostname == USENET_HOST:
             return await get_usenet_reference(url)
-    except (aiohttp.ClientError, TimeoutError) as e:
-        raise ValueError(f"Could not read {url}: {e}") from e
+    except (aiohttp.ClientError, TimeoutError):
+        # An outage contradicts no URL, so it proposes nothing rather than raising: a 400 blanks
+        # and locks the editor's label field, which would cost the reference for as long as the
+        # site is down.
+        logger.exception("failed to read a reference id from %s", url)
     return ""

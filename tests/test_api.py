@@ -16,7 +16,7 @@ import pytest
 import vtesrulings
 import vtesrulings.archon
 import vtesrulings.discord
-from vtesrulings import db, models, utils
+from vtesrulings import db, models, scraper, utils
 
 #: The response contracts the Svelte editor island reads. Asserted by key, never by value: the
 #: printed text, image, types and costs are krcg's, and restating them here would break the suite
@@ -385,6 +385,18 @@ async def test_newsgroup_url_with_nothing_to_propose_leaves_the_id_to_type(clien
     ]:
         response = await client.post("/api/reference/search", json={"url": url})
         assert response.status_code == 404
+
+
+async def test_newsgroup_outage_proposes_nothing(client, monkeypatch):
+    """An archive that will not answer contradicts no URL, so it joins the 404s: the id is typed
+    by hand. A 400 blanks and locks the label field, costing the reference for the whole outage."""
+    await login_and_proposal(client)
+    monkeypatch.setattr(scraper, "USENET_URL", "http://127.0.0.1:1")
+    response = await client.post(
+        "/api/reference/search",
+        json={"url": "https://usenet.krcg.org/t/xcp3faFaHZ8/#m1"},
+    )
+    assert response.status_code == 404
 
 
 async def test_delete_card_ruling(client):
