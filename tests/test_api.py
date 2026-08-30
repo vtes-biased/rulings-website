@@ -680,6 +680,76 @@ def test_format_diff_truncates_to_one_discord_message():
     assert "more)" in out
 
 
+def test_format_diff_marks_groups_and_names_their_members():
+    """A group target used to reach Discord as a bare name, reading as an edit on a card of
+    that name, and a membership change reached it as a count: nothing said which cards moved,
+    and a brand new group listed none of its own."""
+    group = models.NID(uid="G00008", name="Damage before range is determined")
+    card = models.NID(uid="100015", name="Academic Hunting Ground")
+    diff = models.ProposalDiff(
+        rulings=[
+            models.TargetDiff(
+                target=group,
+                is_group=True,
+                rulings=[
+                    models.RulingDiff(
+                        ruling=models.Ruling(
+                            uid="1", target=group, text="Group wording", state=models.State.NEW
+                        )
+                    )
+                ],
+            ),
+            models.TargetDiff(
+                target=card,
+                is_group=False,
+                rulings=[
+                    models.RulingDiff(
+                        ruling=models.Ruling(
+                            uid="2", target=card, text="Card wording", state=models.State.NEW
+                        )
+                    )
+                ],
+            ),
+        ],
+        groups=[
+            models.GroupDiff(
+                uid="P0001",
+                name="Freshly categorized",
+                state=models.State.NEW,
+                cards=[
+                    models.GroupCardChange(uid=str(i), name=f"Card {i}", state=models.State.NEW)
+                    for i in range(vtesrulings.discord.GROUP_CARDS_LIMIT + 2)
+                ],
+            ),
+            models.GroupDiff(
+                uid="G00008",
+                name="Damage before range is determined",
+                state=models.State.MODIFIED,
+                cards=[
+                    models.GroupCardChange(uid="1", name="Joiner", state=models.State.NEW),
+                    models.GroupCardChange(uid="2", name="Leaver", state=models.State.DELETED),
+                    models.GroupCardChange(
+                        uid="3", name="Reprefixed", state=models.State.MODIFIED, prefix="But"
+                    ),
+                ],
+            ),
+        ],
+    )
+    out = vtesrulings.discord.format_diff(diff)
+    # the ruling target says which kind it is; a card target stays bare
+    assert "__Damage before range is determined__ *(group)*" in out
+    assert "__Academic Hunting Ground__\n" in out
+    assert "Academic Hunting Ground__ *(group)*" not in out
+    # a new group lists the members it categorizes, bounded by GROUP_CARDS_LIMIT
+    assert "· added: Card 0, Card 1," in out
+    assert "+2 more" in out
+    assert "Card 9" not in out
+    # an existing group names what joined, what left, and what only changed prefix
+    assert "· added: Joiner" in out
+    assert "· removed: Leaver" in out
+    assert "· prefix: Reprefixed" in out
+
+
 async def test_proposal_diff_page(client):
     """The proposal page SSR-renders the overlay diff: NEW/MODIFIED rulings, overrides, refs."""
     prop_uid = await login_and_proposal(client)
@@ -715,6 +785,8 @@ async def test_proposal_diff_page(client):
     assert "Academic Hunting Ground" in html  # card target heading
     assert "Reworded:" in html  # MODIFIED group ruling new body
     assert base["target"]["name"] in html  # group target heading
+    # that heading is a group, not a card of the same name — the chip says so
+    assert ">group</span>" in html
     assert "line-through" in html  # the struck "was" (previous) body
     assert "LSJ 20001225" in html  # NEW reference
     # the override shows, and its shared body — unchanged — is not struck as if it had been edited

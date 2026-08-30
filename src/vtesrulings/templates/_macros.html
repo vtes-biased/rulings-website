@@ -22,10 +22,16 @@
 
 {% macro group_name(name) %}{% if name %}{{ name }}{% else %}<span class="font-normal italic text-text-muted">Unnamed group</span>{% endif %}{%- endmacro %}
 
-{# State→text-color class, and a small colored state label (proposal diff page). #}
+{# State→text-color class, a small colored state label, and the sign a membership change
+   carries so the badge reads without decoding its color (proposal diff page). #}
+{% set _chip = "font-mono text-[0.65rem] font-semibold uppercase tracking-wide" %}
 {% set _state_text = {"ORIGINAL": "text-state-original", "NEW": "text-state-new", "MODIFIED": "text-state-modified", "DELETED": "text-state-deleted"} %}
+{% set _state_sign = {"ORIGINAL": "", "NEW": "+", "MODIFIED": "±", "DELETED": "−"} %}
 {% macro state_class(state) %}{{ _state_text[state] }}{%- endmacro %}
-{% macro state_chip(state) %}<span class="font-mono text-[0.65rem] font-semibold uppercase tracking-wide {{ _state_text[state] }}">{{ state|lower }}</span>{%- endmacro %}
+{% macro state_sign(state) %}{{ _state_sign[state] }}{%- endmacro %}
+{% macro state_chip(state) %}<span class="{{ _chip }} {{ _state_text[state] }}">{{ state|lower }}</span>{%- endmacro %}
+{# A group target is otherwise indistinguishable from a card name in the diff. #}
+{% macro group_chip() %}<span class="{{ _chip }} text-text-muted">group</span>{%- endmacro %}
 
 {# Inline SVG icons (paths from bootstrap-icons). #}
 {% set _icons = {

@@ -17,6 +17,9 @@ EMBED_LIMIT = 4096
 DIFF_LIMIT = 3800
 #: Per-ruling body text is truncated so one long ruling can't swallow the whole message.
 RULING_TEXT_LIMIT = 240
+#: Member names listed per group before falling back to a count: a post-release proposal
+#: can move dozens of cards into a single group.
+GROUP_CARDS_LIMIT = 8
 
 
 def _plain(ruling: models.Ruling) -> str:
@@ -34,13 +37,23 @@ def _clip(text: str, limit: int = RULING_TEXT_LIMIT) -> str:
     return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
 
 
+def _card_names(cards: list[models.GroupCardChange]) -> str:
+    """Member names, bounded — the tail carries the count the names no longer show."""
+    names = [card.name for card in cards]
+    head = names[:GROUP_CARDS_LIMIT]
+    rest = len(names) - len(head)
+    return ", ".join(head) + (f" +{rest} more" if rest else "")
+
+
 def _diff_lines(diff: models.ProposalDiff) -> list[str]:
     """Grouped markdown bullet lines for a proposal diff, most-scannable first."""
     lines: list[str] = []
     if diff.rulings:
         lines.append("**Rulings**")
         for target in diff.rulings:
-            lines.append(f"__{target.target.name}__")
+            # a group target reads as a card name otherwise — say which it is
+            suffix = " *(group)*" if target.is_group else ""
+            lines.append(f"__{target.target.name or '(unnamed)'}__{suffix}")
             for change in target.rulings:
                 ruling = change.ruling
                 tag = ruling.state.lower()
@@ -54,15 +67,17 @@ def _diff_lines(diff: models.ProposalDiff) -> list[str]:
     if diff.groups:
         lines.append("**Groups**")
         for group in diff.groups:
-            detail = ""
-            if group.state == models.State.MODIFIED and group.cards:
-                added = sum(1 for c in group.cards if c.state == models.State.NEW)
-                removed = sum(1 for c in group.cards if c.state == models.State.DELETED)
-                bits = [
-                    b for b in (f"+{added}" if added else "", f"−{removed}" if removed else "") if b
-                ]
-                detail = f" ({', '.join(bits)} cards)" if bits else ""
-            lines.append(f"• *{group.state.lower()}* {group.name or '(unnamed)'}{detail}")
+            lines.append(f"• *{group.state.lower()}* {group.name or '(unnamed)'}")
+            # membership by name, a new group's own members included: that categorization is
+            # the substance of a post-release proposal, and a bare count doesn't review.
+            for label, state in (
+                ("added", models.State.NEW),
+                ("removed", models.State.DELETED),
+                ("prefix", models.State.MODIFIED),
+            ):
+                members = [c for c in group.cards if c.state == state]
+                if members:
+                    lines.append(f"  · {label}: {_card_names(members)}")
     if diff.references:
         lines.append("**References**")
         for ref in diff.references:

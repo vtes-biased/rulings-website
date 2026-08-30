@@ -1,5 +1,5 @@
 {% extends "layout.html" %}
-{% from "_macros.html" import ruling_card, state_chip, state_class, icon, group_name with context %}
+{% from "_macros.html" import ruling_card, state_chip, state_class, state_sign, group_chip, icon, group_name with context %}
 
 {% block scripts %}
 <script async src="/static/dist/js/proposal.js?v={{ version }}" type="module"></script>
@@ -61,7 +61,9 @@
     {% for target in diff.rulings %}
     <div class="my-3">
         <h4 class="text-base">
-            <a href="{{ 'groups.html?uid=' if target.is_group else 'index.html?uid=' }}{{ target.target.uid }}{{ search_params_2 }}">{{ target.target.name }}</a>
+            {% if target.is_group %}{{ group_chip() }}
+            <a href="groups.html?uid={{ target.target.uid }}{{ search_params_2 }}">{{ group_name(target.target.name) }}</a>
+            {% else %}<a href="index.html?uid={{ target.target.uid }}{{ search_params_2 }}">{{ target.target.name }}</a>{% endif %}
         </h4>
         {% for change in target.rulings %}
         {% if change.previous %}
@@ -97,7 +99,7 @@
         {% if group.cards %}
         <div class="mt-2 flex flex-wrap gap-2">
             {% for card in group.cards %}
-            <span class="badge {{ state_class(card.state) }}">{{ card.name }}{% if card.prefix %} · <span class="font-mono">{{ card.prefix }}</span>{% endif %}</span>
+            <span class="badge {{ state_class(card.state) }}">{{ state_sign(card.state) }}{{ card.name }}{% if card.prefix %} · <span class="font-mono">{{ card.prefix }}</span>{% endif %}</span>
             {% endfor %}
         </div>
         {% endif %}
