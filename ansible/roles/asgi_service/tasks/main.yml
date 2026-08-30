@@ -78,6 +78,9 @@
   register: _uv_python_install
   changed_when: "'Installed' in _uv_python_install.stderr"
 
+# Reading the interpreter's version changes nothing, so it runs under --check too:
+# skipped, it still registers rc 0 with an empty stdout, and the removal below then
+# reads as a dry run about to delete the live venv.
 - name: Detect existing venv Python version
   ansible.builtin.command:
     argv:
@@ -87,6 +90,7 @@
   register: _venv_pyver
   changed_when: false
   failed_when: false
+  check_mode: false
 
 # The 'creates:' guard makes venv creation a one-time artifact, so a python_version
 # bump would otherwise leave a stale interpreter that requires-python wheels can't

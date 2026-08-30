@@ -21,6 +21,13 @@ QUICK=1 just deploy            # artifacts only (--tags app): wheel + unit, skip
 
 If `just ping` fails on auth, the `deploy` user's key is not authorised on gravelines yet.
 
+**A read-only `command` in a deploy role carries `check_mode: false`.** Ansible skips `command`
+under `--check`, and a skipped one still registers `rc: 0` with an empty stdout — so a task that
+reads a version and a task that acts on it either kill the dry run outright or make it report a
+change that would never happen. Both have bitten this deploy: `nginx_site`'s nginx-version probe
+(server-setup 1.0.7) and `asgi_service`'s venv-interpreter probe, which had `just dry-deploy`
+announcing it would delete the live venv. Reading changes nothing; let it read.
+
 **Wait for the release build before deploying.** `just release` only tags; the wheel and the
 frontend dist are built by CI and attached to the GitHub Release afterwards, and `just deploy`
 fetches those assets. Deploying in the gap installs an incomplete release and the site answers
