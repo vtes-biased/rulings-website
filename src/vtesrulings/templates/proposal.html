@@ -99,7 +99,7 @@
         {% if group.cards %}
         <div class="mt-2 flex flex-wrap gap-2">
             {% for card in group.cards %}
-            <span class="badge {{ state_class(card.state) }}">{{ state_sign(card.state) }}{{ card.name }}{% if card.prefix %} · <span class="font-mono">{{ card.prefix }}</span>{% endif %}</span>
+            <span class="badge {{ state_class(card.state) }}">{{ state_sign(card.state) }}{{ card.name }}{% if card.old_prefix %} · <span class="font-mono text-text-muted line-through">{{ card.old_prefix }}</span>{% endif %}{% if card.prefix %} · <span class="font-mono">{{ card.prefix }}</span>{% endif %}</span>
             {% endfor %}
         </div>
         {% endif %}

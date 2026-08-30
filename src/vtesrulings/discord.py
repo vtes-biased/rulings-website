@@ -37,9 +37,13 @@ def _clip(text: str, limit: int = RULING_TEXT_LIMIT) -> str:
     return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
 
 
-def _card_names(cards: list[models.GroupCardChange]) -> str:
-    """Member names, bounded — the tail carries the count the names no longer show."""
-    names = [card.name for card in cards]
+def _card_names(cards: list[models.GroupCardChange], prefixes: bool = False) -> str:
+    """Member names, optionally with their prefix change, bounded — the tail carries the count
+    the names no longer show."""
+    names = [
+        f"{c.name} {c.old_prefix or '(none)'} → {c.prefix or '(none)'}" if prefixes else c.name
+        for c in cards
+    ]
     head = names[:GROUP_CARDS_LIMIT]
     rest = len(names) - len(head)
     return ", ".join(head) + (f" +{rest} more" if rest else "")
@@ -51,7 +55,6 @@ def _diff_lines(diff: models.ProposalDiff) -> list[str]:
     if diff.rulings:
         lines.append("**Rulings**")
         for target in diff.rulings:
-            # a group target reads as a card name otherwise — say which it is
             suffix = " *(group)*" if target.is_group else ""
             lines.append(f"__{target.target.name or '(unnamed)'}__{suffix}")
             for change in target.rulings:
@@ -68,8 +71,6 @@ def _diff_lines(diff: models.ProposalDiff) -> list[str]:
         lines.append("**Groups**")
         for group in diff.groups:
             lines.append(f"• *{group.state.lower()}* {group.name or '(unnamed)'}")
-            # membership by name, a new group's own members included: that categorization is
-            # the substance of a post-release proposal, and a bare count doesn't review.
             for label, state in (
                 ("added", models.State.NEW),
                 ("removed", models.State.DELETED),
@@ -77,7 +78,8 @@ def _diff_lines(diff: models.ProposalDiff) -> list[str]:
             ):
                 members = [c for c in group.cards if c.state == state]
                 if members:
-                    lines.append(f"  · {label}: {_card_names(members)}")
+                    names = _card_names(members, prefixes=state == models.State.MODIFIED)
+                    lines.append(f"  · {label}: {names}")
     if diff.references:
         lines.append("**References**")
         for ref in diff.references:
@@ -93,8 +95,11 @@ def format_diff(diff: models.ProposalDiff, limit: int = DIFF_LIMIT) -> str:
     out: list[str] = []
     total = 0
     for i, line in enumerate(lines):
-        if total + len(line) + 1 > limit:
-            out.append(f"…(+{len(lines) - i} more)")
+        # reserve the tail: appended after the budget was spent, it overran EMBED_LIMIT and
+        # Discord 400s the embed. Tails only shrink as i grows, so the current one bounds them.
+        tail = f"…(+{len(lines) - i} more)"
+        if total + len(line) + 1 > limit - len(tail):
+            out.append(tail)
             break
         out.append(line)
         total += len(line) + 1

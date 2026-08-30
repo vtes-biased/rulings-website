@@ -676,8 +676,39 @@ def test_format_diff_truncates_to_one_discord_message():
         ]
     )
     out = vtesrulings.discord.format_diff(diff)
-    assert len(out) <= vtesrulings.discord.DIFF_LIMIT + 40
+    assert len(out) <= vtesrulings.discord.DIFF_LIMIT
     assert "more)" in out
+    # the tail counts against the budget too: appended after it was spent, it overran the cap
+    dense = models.ProposalDiff(
+        rulings=[
+            models.TargetDiff(
+                target=target,
+                is_group=False,
+                rulings=[
+                    models.RulingDiff(
+                        ruling=models.Ruling(
+                            uid=str(i), target=target, text="x" * 50, state=models.State.NEW
+                        )
+                    )
+                    for i in range(200)
+                ],
+            )
+        ]
+    )
+    assert len(vtesrulings.discord._compose("d" * 300, dense)) <= vtesrulings.discord.EMBED_LIMIT
+
+
+async def test_submitting_a_new_group_names_its_members_to_discord(client, fake_discord):
+    """A post-release proposal is mostly categorization: the thread must say which cards the
+    new group holds, not that a group changed."""
+    await login_and_proposal(client)
+    group = (await client.post("/api/group", json={"name": "Freshly categorized"})).json()
+    await client.put(f"/api/group/{group['uid']}", json={"cards": {"100015": "", "100002": "But"}})
+    assert (await client.post("/api/proposal/submit")).status_code == 200
+    description = fake_discord.posts[0]["payload"]["embeds"][0]["description"]
+    assert "*new* Freshly categorized" in description
+    assert "Academic Hunting Ground" in description
+    assert "· added:" in description
 
 
 def test_format_diff_marks_groups_and_names_their_members():
@@ -747,7 +778,7 @@ def test_format_diff_marks_groups_and_names_their_members():
     # an existing group names what joined, what left, and what only changed prefix
     assert "· added: Joiner" in out
     assert "· removed: Leaver" in out
-    assert "· prefix: Reprefixed" in out
+    assert "· prefix: Reprefixed (none) → But" in out
 
 
 async def test_proposal_diff_page(client):

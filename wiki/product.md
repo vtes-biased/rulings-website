@@ -24,7 +24,9 @@ prefixes. A proposal has a name and a description, carries a consistency check, 
 Discord — which opens a thread on it.
 
 **Approve, for an approver.** Anyone holding `IC` or `Rulemonger` on archon sees everyone's
-proposals, reads the diff of one, and approves it. Approval merges the overlay, regenerates all
+proposals, reads the diff of one, and approves it. The diff marks a group target as a group
+rather than a card of that name, and names the cards a group gained, lost or reprefixed, new
+groups included. Approval merges the overlay, regenerates all
 three YAML files, pushes them, posts to the proposal's Discord thread and triggers a `krcg-static`
 rebuild.
 
