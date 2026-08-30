@@ -54,5 +54,6 @@ Trunk-based: straight to `main`, fast-forward, no feature branches. Describe the
 
 ## Right now
 
-`rulings.krcg.org` runs **v1.4.0**, cut over on 2026-08-24: card tokens carry the card id, archon
-owns login, and the legacy users are gone. [`wiki/product.md`](wiki/product.md) holds the state.
+`rulings.krcg.org` runs **v1.5.0**, deployed 2026-08-30: the editor proposes a reference id from a
+pasted URL, and `boardgamegeek.com` has followed `groups.google.com` out of the reference domains —
+both archives live under `usenet.krcg.org` now. [`wiki/product.md`](wiki/product.md) holds the state.

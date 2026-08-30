@@ -46,8 +46,10 @@ A FastAPI server: Jinja-rendered pages for the read side, a JSON API under `/api
 a Svelte editor island (TypeScript, Tailwind, built by Vite) mounted on the pages that edit. Three
 deliberately separated data sources, described in [proposals.md](proposals.md).
 
-## Status (2026-08-24)
+## Status (2026-08-30)
 
-`rulings.krcg.org` runs **v1.4.0**, cut over from v1.3.0 on 2026-08-24. It carries both epics — the
-card-token id migration and the archon OAuth login — and archon is the only way in: the legacy
-`users` rows were deleted at the switch, so every account is created by its first archon login.
+`rulings.krcg.org` runs **v1.5.0**, deployed 2026-08-30. Archon is the only way in — the legacy
+`users` rows were deleted at the v1.4.0 cutover, so every account is created by its first archon
+login — and every reference now cites `www.vekn.net`, `usenet.krcg.org` or `www.blackchantry.com`,
+with the editor proposing the id from a pasted forum or archive URL. See
+[rulings-format.md](rulings-format.md).
