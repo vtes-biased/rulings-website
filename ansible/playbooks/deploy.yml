@@ -3,7 +3,7 @@
 # server-setup owns the foundation (base packages incl. Postgres + nginx + certbot,
 # ssh/ufw/tuning, PG backups, Grafana Alloy); this play only ships the app: the
 # managed DB (postgres_db), the ASGI service (our asgi_service role), and the TLS
-# vhost (nginx_site). Runs as the `deploy` user. This replaces the v1 app in place.
+# vhost (nginx_site). Runs as the `deploy` user.
 - name: Deploy rulings-website (server-setup foundation)
   hosts: rulings
   become: true
@@ -54,8 +54,7 @@
 
     # 3. TLS vhost (server-setup nginx_site): reverse proxy → the localhost hypercorn,
     #    certbot webroot + Let's Encrypt, journald tag nginx_<name>. Tagged `nginx` so the
-    #    first cutover can bring the service up (`--skip-tags nginx`), verify it, then swap
-    #    nginx over (`--tags nginx`) once v1's vhost is removed.
+    #    vhost can be converged on its own (`--tags nginx`) or left out (`--skip-tags nginx`).
     - role: lionel_panhaleux.server_setup.nginx_site
       tags: [nginx]
       vars:
