@@ -48,6 +48,10 @@ A FastAPI server: Jinja-rendered pages for the read side, a JSON API under `/api
 a Svelte editor island (TypeScript, Tailwind, built by Vite) mounted on the pages that edit. Three
 deliberately separated data sources, described in [proposals.md](proposals.md).
 
+The API's read side is public, no login (owner, 2026-11-11): `GET /api/card/<id>` (the card, its
+rulings with their ids, its groups, the rulings naming it), `/api/search?query=<text>`, `/api/group`,
+`/api/group/<id>` and `/api/reference`. Other tools read it, so these shapes are a contract.
+
 ## Status (2026-08-30)
 
 `rulings.krcg.org` runs **v1.6.0**, deployed 2026-08-30: the proposal diff no longer reads a group
