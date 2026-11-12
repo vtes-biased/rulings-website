@@ -289,6 +289,7 @@ async def test_reference_url_must_come_from_a_reference_domain(client):
         "https://usenet.krcg.org.evil.tld/t/bgg-609699/#6142361",
         "https://evilusenet.krcg.org/t/bgg-609699/#6142361",
         "https://blackchantry.com/faq/test",
+        "https://archon.vekn.net/help/rules#trifle",  # the rulebook's, for a rulebook reference only
     ]:
         response = await client.post("/api/reference", json={"uid": "LSJ 20010121", "url": url})
         assert response.status_code == 400, url
@@ -304,6 +305,28 @@ async def test_reference_url_must_come_from_a_reference_domain(client):
     )
     assert response.status_code == 400
     assert "not from a reference domain" in response.json()[0]
+
+
+async def test_rulebook_reference_links_a_heading_of_archon(client):
+    """The rulebook is archon's: a rulebook reference may be repointed at another heading of its
+    rules page, by the id archon gives it, and at nothing else — not vekn.net's older copy, not
+    another of archon's pages."""
+    await login_and_proposal(client)
+    for url in [
+        "https://www.vekn.net/rulebook#trifle",
+        "https://archon.vekn.net/help/tournament-rules#trifle",
+        "https://archon.vekn.net/help/rules",
+        "https://archon.vekn.net/help/rules#",
+    ]:
+        response = await client.put("/api/reference/RBK trifle", json={"url": url})
+        assert response.status_code == 400, url
+        assert "links a heading of https://archon.vekn.net/help/rules" in response.json()[0]
+    response = await client.put(
+        "/api/reference/RBK trifle",
+        json={"url": "https://archon.vekn.net/help/rules#other-master-cards"},
+    )
+    assert response.status_code == 200
+    assert response.json()["state"] == "MODIFIED"
 
 
 async def test_update_card_ruling(client):

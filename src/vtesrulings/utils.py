@@ -31,6 +31,11 @@ RULING_DOMAINS = {
     "www.vekn.net",
 }
 
+#: The official rulebook: an `RBK` reference links one of its headings, by the id archon's renderer
+#: gives it, and nothing else does.
+RULEBOOK = "https://archon.vekn.net/help/rules"
+RE_RULEBOOK = re.compile(re.escape(RULEBOOK) + r"#[\w-]+")
+
 #: Same reference token, plus the whitespace ahead of it, so dedupe_references drops the gap with
 #: the marker.
 RE_DUP_RULING_REFERENCE = re.compile(r"\s*(" + RE_RULING_REFERENCE.pattern + r")")
@@ -96,6 +101,10 @@ def build_reference(
 def check_reference(reference: models.Reference) -> None:
     if not reference.url:
         raise ValueError(f"Reference {reference.uid} has no URL")
+    if reference.source == "RBK":
+        if not RE_RULEBOOK.fullmatch(reference.url):
+            raise ValueError(f"A rulebook reference links a heading of {RULEBOOK}: {reference.url}")
+        return
     if urllib.parse.urlparse(reference.url).hostname not in RULING_DOMAINS:
         raise ValueError(f"Ruling URL not from a reference domain: {reference.url}")
     name, date_from, date_to = RULING_AUTHORS[reference.source]

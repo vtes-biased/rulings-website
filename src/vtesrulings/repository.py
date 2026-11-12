@@ -59,7 +59,7 @@ REFERENCES_COMMENT = """# Rulings always have a reference, they come from somewh
 # - PIB: Pascal Bertrand, from 2011-07-06 onward
 # - ANK: Vincent Ripoll aka. "Ankha", from 2016-12-04 onward
 # - RTR: Rules Team Ruling
-# - RBK: Rulebook
+# - RBK: Rulebook, a heading of https://archon.vekn.net/help/rules by the id archon gives it
 #
 # The date must follow ISO order YYYYMMDD, with a facultative suffix after a dash `-` to avoid collisions
 # The date is the date of the ruling. The post the URL points to is its best surviving witness, which is sometimes

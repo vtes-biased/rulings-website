@@ -28,7 +28,7 @@ why we match role strings rather than a capability. (Source: `archon-vibe` audit
 | | what it owns | how we touch it |
 |---|---|---|
 | **`vtes-biased/vtes-rulings`** | the rulings YAML — the durable source of truth | cloned anonymously over HTTPS at startup; pushed as a GitHub App on approval |
-| **archon** (`archon-vibe`) | player identity: archon uid, VEKN id, roles | OAuth2 authorization-code + PKCE; `/oauth/userinfo` |
+| **archon** (`archon-vibe`) | player identity: archon uid, VEKN id, roles; the official rulebook | OAuth2 authorization-code + PKCE; `/oauth/userinfo`; every `RBK` reference links a heading of `/help/rules` |
 | **`krcg`** (python lib) | the VTES card database (VEKN CSV) and the rulings text format | `load_local` at startup; `ANKHA_SYMBOLS` and every format regex are krcg's |
 | **`krcg-static`** | the static site players actually read rulings on | `repository_dispatch` (`rulings-updated`) after each approval |
 | **vekn.net** | the member registry behind the VEKN id | never called by us any more (v1 proxied its login; v2 does not) |

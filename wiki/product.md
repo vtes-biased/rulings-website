@@ -57,7 +57,5 @@ rulings with their ids, its groups, the rulings naming it), `/api/search?query=<
 `rulings.krcg.org` runs **v1.6.0**, deployed 2026-08-30: the proposal diff no longer reads a group
 target as a card of that name, and names the cards a group gained, lost or reprefixed. Archon is the
 only way in — the legacy `users` rows were deleted at the v1.4.0 cutover, so every account is
-created by its first archon login — and every reference now cites `www.vekn.net`,
-`usenet.krcg.org` or `www.blackchantry.com`, with the editor proposing the id from a pasted forum
-or archive URL. See
-[rulings-format.md](rulings-format.md).
+created by its first archon login — and the editor proposes a reference's id from a pasted forum or
+archive URL; where a reference may point is [rulings-format.md](rulings-format.md)'s.

@@ -72,12 +72,15 @@ Known limitation: a `{Card}` mentioned only inside an override body produces no 
 ## References
 
 `references.yaml` maps a reference id to a URL. The id is `SRC YYYYMMDD` (`LSJ 20040518`); the
-source prefix is one of `krcg.rulings.RULING_AUTHORS`. Two validations, both in
-`utils.check_reference`:
+source prefix is one of `krcg.rulings.RULING_AUTHORS`. `utils.check_reference` validates it on
+one of two paths:
 
-- the URL host must be in `utils.RULING_DOMAINS` — exactly `www.vekn.net`, `usenet.krcg.org`,
-  `www.blackchantry.com`. The bare `vekn.net` and `blackchantry.com` are **not** accepted, and
-  neither is `groups.google.com` nor `boardgamegeek.com`;
+- an `RBK` reference is checked alone: its URL must link a heading of
+  `utils.RULEBOOK`, `https://archon.vekn.net/help/rules#<id>`, and no other source may link
+  `archon.vekn.net`;
+- any other reference's host must be in `utils.RULING_DOMAINS` — exactly `www.vekn.net`,
+  `usenet.krcg.org`, `www.blackchantry.com`. The bare `vekn.net` and `blackchantry.com` are **not**
+  accepted, and neither is `groups.google.com` nor `boardgamegeek.com`;
 - the date must fall inside that author's Rules Director window. `RBK` (Rulebook) and `RTR` (Rules
   Team Ruling) have no window and carry no date; every other source does.
 
@@ -109,7 +112,12 @@ flag a mismatch. Reading a URL back to *propose* an id is a different job, and
 `scraper.py` here does it for both the forum and the newsgroup archive.
 
 **New `RBK` references cannot be created** — the rulebooks are a closed set, all already listed, so
-`Manager.insert_reference` refuses one and the editor offers them from a select instead.
+`Manager.insert_reference` refuses one and the editor offers them from a select instead. Each links
+a heading of archon's rules page by the id archon's renderer gives it, the official copy of the
+rulebook; the label is still the anchor or page it had on `vekn.net/rulebook`, which every one
+linked until November 2026, kept because a ruling's id hashes its text, labels included. An id
+archon gives is the heading's text slugged, so a heading archon rewords breaks the link, and
+nothing here reads archon to notice.
 
 `scraper.py` derives a reference id from a pasted VEKN forum URL, and from a `/t/<thread>/#mN`
 archive URL: `USENET_AUTHORS` maps the `class="who"` spelling the archive uses — several per
