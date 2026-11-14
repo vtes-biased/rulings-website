@@ -42,36 +42,40 @@ gh release view <tag> --repo vtes-biased/rulings-website   # and the assets must
 ## One-time prerequisites
 
 1. **DNS** — `rulings.krcg.org` → `152.228.170.51` (A record).
-2. **The vault password**, decrypted (below).
+2. **The vault password**, decryptable with your SSH key (below).
 3. **Secrets** — `vault.yml` filled and the GitHub App key dropped in (below).
 4. **The archon OAuth client**, registered with its redirect URI verbatim (below). Nobody can log in
    without it.
 
 ## The vault password
 
-The production ansible-vault password lives **in the repo, age-encrypted**, decryptable only by the
-admins whose public keys are in `ansible/secrets/age-recipients.txt`. Install
-[`age`](https://github.com/FiloSottile/age), then:
+The production ansible-vault password lives **in the repo, sops-encrypted**, in
+`ansible/secrets/vault-pass.sops.yaml`, decryptable only by the admins whose SSH public keys
+`ansible/.sops.yaml` lists as age recipients (`ssh-ed25519` or `ssh-rsa`). `ansible.cfg`'s
+`vault_password_file` is `ansible/vault-pass.sh`, an executable ansible runs: it prints what
+[`sops`](https://getsops.io) decrypts, so the password never sits on disk. Nothing to do before a
+deploy, `just lint` or an `ansible-vault` command but have `sops` (pinned in the repo's `mise.toml`:
+`mise install`) and point it at your private key when it is not `~/.ssh/id_ed25519` or
+`~/.ssh/id_rsa`:
 
 ```shell
-age -d -i ~/.ssh/id_rsa -o .vault_pass secrets/vault-pass.age
+export SOPS_AGE_SSH_PRIVATE_KEY_FILE=~/.ssh/<your key>   # e.g. in your mise [env]
 ```
 
-`.vault_pass` is git-ignored.
-
-**Adding a recipient.** Recipients are one public key per line — an `ssh-ed25519` / `ssh-rsa` line
-(e.g. from `https://github.com/<user>.keys`) or an `age1…` key. Editing the list does not re-key
-anything; an existing recipient must re-encrypt:
+**Adding a recipient.** Add the PUBLIC key (e.g. a line of `https://github.com/<user>.keys`, without
+its comment, checked with its owner: a hijacked account can swap the keys it serves, so the list is
+pinned and reviewed, never refetched blindly) to the comma-separated `age` list of
+`ansible/.sops.yaml`, then, as an existing recipient, re-key the file:
 
 ```shell
-age -d -i ~/.ssh/id_rsa -o .vault_pass secrets/vault-pass.age   # 1. decrypt
-echo 'ssh-ed25519 AAAA… alice' >> secrets/age-recipients.txt    # 2. add the PUBLIC key
-age -R secrets/age-recipients.txt -o secrets/vault-pass.age < .vault_pass   # 3. re-encrypt
+cd ansible && sops updatekeys secrets/vault-pass.sops.yaml
 ```
 
 The password value is unchanged — you are only widening who can decrypt it. **Removing** a recipient
-is the same flow with their line deleted, but re-encrypting only stops *future* decrypts: anyone who
-already decrypted still holds the password. Revoking for cause means rotating the password itself.
+is the same flow with their key deleted, but re-keying only stops *future* decrypts: anyone who
+already decrypted still holds the password. Revoking for cause means rotating the password itself:
+`ansible-vault rekey` every vaulted file to a new one, then `sops edit secrets/vault-pass.sops.yaml`
+to store it.
 
 ## Secrets — the GitHub App
 

@@ -7,8 +7,8 @@
 # (artifacts-only via --tags app — skips db/nginx; use a full deploy for any of those).
 #
 # Ansible tooling comes from the repo-root project's dev group (`uv run --project`).
-# The vault password comes from ansible.cfg (vault_password_file = .vault_pass) —
-# decrypt secrets/vault-pass.age into it first (see wiki/deploy.md).
+# The vault password comes from ansible.cfg (vault_password_file = vault-pass.sh), which sops
+# decrypts from secrets/vault-pass.sops.yaml with your SSH key (see wiki/deploy.md).
 
 repo_root := parent_directory(justfile_directory())
 build_dir := justfile_directory() / "build"

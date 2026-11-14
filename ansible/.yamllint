@@ -18,6 +18,7 @@ rules:
     forbid-explicit-octal: true
 
 ignore: |
+  secrets/vault-pass.sops.yaml
   build/
   .ansible/
   .ansible_facts/

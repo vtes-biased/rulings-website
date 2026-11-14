@@ -1,0 +1,11 @@
+---
+# yamllint disable rule:line-length
+# Who can decrypt secrets/vault-pass.sops.yaml: the admins' SSH public keys (ssh-ed25519 or
+# ssh-rsa) as age recipients, lionel-panhaleux's two here. Public, safe to commit. After changing
+# the list, `sops updatekeys secrets/vault-pass.sops.yaml` re-keys the file (wiki/deploy.md). Keep it
+# pinned and reviewed: a hijacked GitHub account can swap the keys it serves, never refetch blindly.
+creation_rules:
+  - path_regex: secrets/vault-pass\.sops\.yaml$
+    age: >-
+      ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC4ORBtqID1uJ7yH0YdJSfkBYhwOg9UWmCOizZD6meYJ3kcjzNkh41m4x2qaDhJeACEqa08gjrnasakLp0YF7VfKgwaheNQukE/TYxa0TXvuSf+DBbkRLa7p3OVnoqXs0qs3AacGpBTNLfLJXyf0rnSEseZNeo3kb+C+b8JgvyxFXBAzN/eXz2KFc+4hYqLLixfe6q7QiRSFkO9N0VR7aMp9wTHdCzgaj6cc/sGDJ+jU7XBdSakfCw3cjefDjKRlj511vqoDab4oFtO1PvX5WOb7bzoBQ/ud00QlOqJjEYQLspBZad/cj3ku61qDcIhyCIIaLUQUkRhTbRi7fHuZu8RU++8cl0iCRurHzyMUybQaaI2G/dfCITwBbFfDQ/rF7sYVCjBWqCX4duzifILksW4uNetADLk3MI0cBTHJdyrbf1siNdLo7ndRr5Wjz3r3uC4zlzYw9gCTmSNyifxImsv1Ht3y73OfqiHwMWuwLXB+gJiWyy4SX/BMeQHph+gMEc=,
+      ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIE+Fa+dmnpPBYM0G7xPupl+GkVdF6YFmZ/NkpyqOzWoI
