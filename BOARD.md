@@ -16,4 +16,6 @@ follow-up ("chase @lip, 12 Sep"), owned by whoever wrote it.
 
 ---
 
+- **API-only proposal & thread workflow via static bot Bearer token (no SSH for `/propose`)** — add env-configured non-approver bot Bearer auth (`API_TOKEN` + `API_TOKEN_USER_ID`, stored sops-encrypted in the repo and in `ansible/` vault), `X-Proposal` header selection, `GET /api/proposal` & `GET /api/proposal/{uid}` (own proposals unless approver), and Discord thread read/comment endpoints (`GET`/`POST /api/proposal/{uid}/comments`), then cut `.agents/skills/propose/SKILL.md` over to HTTPS-only. Done when `mise run test`, `lint`, `typecheck` pass, `vault.yml`/`vars.yml` + sops secret are wired, and `/propose` Phase 1 runs with zero SSH. *(Doc-impact: `wiki/auth.md`, `wiki/proposals.md`, `wiki/operations.md`, `wiki/deploy.md`.)*
+
 <!-- cycles-since-upkeep: 10 -->
