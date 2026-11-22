@@ -271,7 +271,7 @@ async def _get_owned_proposal(proposal_id: str, user: db.User) -> proposal.Propo
     if not data:
         raise HTTPException(404)
     prop = proposal.Proposal(**data)
-    if prop.usr != str(user.uid) and not user.approver:
+    if prop.usr != str(user.uid) and not (user.approver and prop.channel_id):
         raise HTTPException(403)
     return prop
 

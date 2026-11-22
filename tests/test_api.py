@@ -1392,10 +1392,12 @@ async def test_bearer_token_and_header_driven_proposal_workflow(
     monkeypatch.setattr(vtesrulings.api, "API_TOKEN", "secret-bot-token")
     monkeypatch.setattr(vtesrulings.api, "API_TOKEN_USER_ID", bot_uid)
 
-    # wrong Bearer token is refused and never falls back to a cookie session
+    # wrong Bearer token is refused and never falls back to an active cookie session
+    await client.post("/login", data={"username": "cookie-user"})
     assert (
         await client.get("/api/proposal", headers={"Authorization": "Bearer wrong"})
     ).status_code == 401
+    await client.post("/logout")
 
     auth = {"Authorization": "Bearer secret-bot-token"}
     created = await client.post(
@@ -1530,6 +1532,7 @@ async def test_proposal_list_and_comments_respect_ownership_and_approver_role(cl
     listed = (await client.get("/api/proposal")).json()
     assert [p["uid"] for p in listed] == [prop_uid]
     assert draft_uid not in {p["uid"] for p in listed}
+    assert (await client.get(f"/api/proposal/{draft_uid}")).status_code == 403
     assert (await client.get(f"/api/proposal/{prop_uid}")).status_code == 200
     assert (await client.get(f"/api/proposal/{prop_uid}/comments")).status_code == 200
     assert (

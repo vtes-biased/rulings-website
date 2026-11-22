@@ -1,9 +1,9 @@
 ---
 # yamllint disable rule:line-length
-# Who can decrypt secrets/vault-pass.sops.yaml: the admins' SSH public keys (ssh-ed25519 or
-# ssh-rsa) as age recipients, lionel-panhaleux's two here. Public, safe to commit. After changing
-# the list, `sops updatekeys secrets/vault-pass.sops.yaml` re-keys the file (wiki/deploy.md). Keep it
-# pinned and reviewed: a hijacked GitHub account can swap the keys it serves, never refetch blindly.
+# Who can decrypt secrets/*.sops.yaml: the admins' SSH public keys (ssh-ed25519 or ssh-rsa) as age
+# recipients, lionel-panhaleux's two here. Public, safe to commit. After changing the list,
+# `sops updatekeys secrets/*.sops.yaml` re-keys them (wiki/deploy.md). Keep it pinned and reviewed:
+# a hijacked GitHub account can swap the keys it serves, never refetch blindly.
 creation_rules:
   - path_regex: secrets/.*\.sops\.yaml$
     age: >-
