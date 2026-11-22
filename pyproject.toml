@@ -85,7 +85,7 @@ extend-immutable-calls = ["fastapi.Depends"]
 python-version = "3.13"
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]   # don't recurse into ansible/galaxy_collections/ (vendored by `just galaxy`)
+testpaths = ["tests"]   # don't recurse into ansible/galaxy_collections/ (vendored by `mise run ansible:galaxy`)
 addopts = "-vvs --strict-markers"
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"

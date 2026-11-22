@@ -50,4 +50,8 @@ amendment that would have prevented all three: a line in `wiki/dogmas.md`, a cla
 charter, a lint rule, an edit to one of these skills, a hook. Put it through `/intake` like any other
 work.
 
+Also compact the style guide in `.claude/skills/propose/SKILL.md` (Phase 3): keep at most 8 core
+rules and 10 `Bad → Good (Why)` examples, folding in generalizable lessons from recent Discord
+proposal reviews and evicting stale examples.
+
 Then reset the counter: `<!-- cycles-since-upkeep: 0 -->` at the bottom of `BOARD.md`.

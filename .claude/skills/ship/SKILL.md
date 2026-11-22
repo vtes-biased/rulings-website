@@ -31,7 +31,7 @@ mocks banned, tests at the boundary.
 
 One unit of work is **one landing**, all three parts together:
 
-1. **Code** changed and green — `just lint`, `just typecheck`, `just test`, and `npm run build` if
+1. **Code** changed and green — `mise run lint`, `mise run typecheck`, `mise run test`, and `npm run build` if
    the frontend moved.
 2. **Wiki** — every page named in the line's doc-impact updated, or the absence justified in a
    sentence. A pivot is an edit: the wiki never keeps a deprecated fact, git keeps the history. If

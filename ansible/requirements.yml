@@ -8,7 +8,7 @@ collections:
     version: ">=1.6.2,<3.0.0"
   # Shared server foundation: the lionel_panhaleux.server_setup collection
   # (nginx_site / postgres_db roles). Installed from git into galaxy_collections/
-  # (git-ignored) by `just galaxy`.
+  # (git-ignored) by `mise run ansible:galaxy`.
   - name: https://github.com/lionel-panhaleux/server-setup.git
     type: git
     version: ansible-final

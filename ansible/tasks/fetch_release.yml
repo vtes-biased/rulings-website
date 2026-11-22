@@ -68,7 +68,7 @@
     fail_msg: >-
       build/ is missing the wheel or requirements.txt. For artifact_source=release the
       Release has no attached wheel yet (run the release workflow); for SOURCE=local
-      run `just build` first.
+      run `mise run ansible:build` first.
   delegate_to: localhost
   become: false
   run_once: true

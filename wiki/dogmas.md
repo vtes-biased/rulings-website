@@ -73,7 +73,7 @@ refactors.
 
 Prefer what is already here, then a few lines, then a dependency. krcg is the exception in the other
 direction: anything about cards or the rulings format belongs upstream in krcg, not reimplemented
-here. `just deps-check` reports in-range drift; `just update` takes it.
+here. `mise run deps-check` reports in-range drift; `mise run update` takes it.
 
 ## Commits and branches
 

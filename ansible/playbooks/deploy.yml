@@ -12,7 +12,7 @@
   vars_files:
     - ../vars/release_artifacts.yml
 
-  # Quick lane: `--tags app` (QUICK=1 in the justfile) ships the wheel + unit only;
+  # Quick lane: `--tags app` (QUICK=1 in `mise run ansible:deploy`) ships the wheel + unit only;
   # any db/nginx/TLS change needs the full (default, untagged) deploy.
   pre_tasks:
     - name: Fetch release artifacts (shared)

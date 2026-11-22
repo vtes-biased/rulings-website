@@ -3,7 +3,7 @@ name: Release
 # Tag-driven artifact publishing. Pushing a `v*` tag runs the test suite, then (only
 # if green) builds the wheel + sdist + pinned requirements and attaches them to a
 # GitHub Release. Deploy is manual (`ansible/`): the deploy playbook fetches this
-# Release's wheel itself. `just release` wraps the tag-and-push step.
+# Release's wheel itself. `mise run release` wraps the tag-and-push step.
 on:
   push:
     tags: ["v*"]

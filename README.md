@@ -32,7 +32,7 @@ is mutated in place, the app **must run as a single worker**.
 ### Prerequisites
 
 - [Python](https://www.python.org) ≥ 3.13 and [Node.js](https://nodejs.org)
-- [`uv`](https://docs.astral.sh/uv/) (Python env + deps) and [`just`](https://just.systems) (task runner)
+- [`uv`](https://docs.astral.sh/uv/) (Python env + deps) and [`mise`](https://mise.jdx.dev) (tools + task runner)
 - **PostgreSQL** running locally with database `vtes-rulings` and role `vtes-rulings`. The role
   needs `CREATEDB` and access to the `postgres` maintenance DB (the test harness creates and drops
   a throwaway `vtes-rulings-test` database per session). Override the DB name with `DB_NAME`, creds
@@ -42,7 +42,7 @@ is mutated in place, the app **must run as a single worker**.
 
 ```shell
 touch .env       # local config; see wiki/operations.md for every var the app reads
-just update      # npm update + uv sync --upgrade --group dev
+mise run update  # npm update + uv sync --upgrade --group dev
 ```
 
 For a working local instance you want at least `DISCORD_WEBHOOK` and `DISCORD_SERVER_ID`, plus an
@@ -56,11 +56,11 @@ but `TESTING=1`, which turns `POST /login` into a direct session mint.
 ### Run locally
 
 ```shell
-just serve   # Vite watcher (pm2) + hypercorn on 127.0.0.1:5000, --reload --workers 1
-just stop    # stop the pm2 frontend process
+mise run serve   # Vite watcher (pm2) + hypercorn on 127.0.0.1:5000, --reload --workers 1
+mise run stop    # stop the pm2 frontend process
 ```
 
-`just` with no recipe lists the rest: `lint`, `fmt`, `typecheck`, `test`, `clean`, `deps-check`.
+`mise tasks` lists the rest: `lint`, `fmt`, `typecheck`, `test`, `clean`, `deps-check`.
 Single test: `TESTING=1 uv run pytest tests/test_api.py::test_get_card`. Frontend only:
 `npm run build`, or `npm run front` to watch.
 
@@ -74,12 +74,12 @@ Who may approve is archon's call, not a local one: hold the `IC` or `Rulemonger`
 ## Release & deploy
 
 ```shell
-just release [minor|major]   # bump version (major.minor only), commit, tag, push
+mise run release [minor|major]   # bump version (major.minor only), commit, tag, push
 ```
 
 Pushing the `v*` tag runs the suite as a gate and, if green, attaches the wheel, sdist and pinned
-`requirements.txt` to a GitHub Release. **Deploy is a separate, manual step** — `cd ansible && just
-deploy` fetches that Release and ships it to gravelines (systemd, nginx, managed Postgres, GitHub
+`requirements.txt` to a GitHub Release. **Deploy is a separate, manual step** — `mise run
+ansible:deploy` fetches that Release and ships it to gravelines (systemd, nginx, managed Postgres, GitHub
 App secrets). The operator runbook — vault password, secrets layout, OAuth client registration — is
 [`wiki/deploy.md`](wiki/deploy.md).
 

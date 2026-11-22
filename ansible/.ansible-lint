@@ -4,7 +4,7 @@
 
 profile: production
 
-# Collections are pre-installed into galaxy_collections/ by `just galaxy` and resolved
+# Collections are pre-installed into galaxy_collections/ by `mise run ansible:galaxy` and resolved
 # via ansible.cfg's collections_path — no need for ansible-lint to re-download.
 offline: true
 
@@ -13,7 +13,7 @@ exclude_paths:
   - .ansible/
   - .ansible_facts/
   - .cache/
-  - galaxy_collections/     # third-party collections installed via `just galaxy`
+  - galaxy_collections/     # third-party collections installed via `mise run ansible:galaxy`
   - inventories/production/group_vars/all/vault.yml
 
 # We deliberately pass a single `r` dict into parameterised roles (matches the reference

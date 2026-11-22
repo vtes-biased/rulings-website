@@ -1,2 +1,169 @@
 [tools]
+node = "24"
+python = "3.13"
 sops = "3.13"
+uv = "0.13"
+
+[tasks.update]
+description = "Install / refresh dev dependencies (python + npm)"
+run = ["npm update", "uv sync --upgrade --group dev"]
+
+[tasks.lint]
+description = "Lint (ruff check + format check)"
+run = ["uv run ruff check", "uv run ruff format --check"]
+
+[tasks.fmt]
+description = "Format (ruff check --fix + format)"
+run = ["uv run ruff check --fix", "uv run ruff format"]
+
+[tasks.typecheck]
+description = "Typecheck (blocking in CI: warnings are errors)"
+run = "uv run ty check --error-on-warning"
+
+[tasks.test]
+description = "Run tests (testing mode bypasses VEKN login; the whole suite, no opt-outs)"
+run = "TESTING=1 uv run pytest"
+
+[tasks.serve]
+description = "Run frontend watcher in background, then ASGI dev server on 127.0.0.1:5000 (single worker mandatory)"
+run = [
+  "pm2 --name front start npm -- run front",
+  "set -a && source .env && set +a && uv run hypercorn 'vtesrulings:app' --reload --workers 1 --bind 127.0.0.1:5000",
+]
+
+[tasks.stop]
+description = "Stop the pm2 frontend process"
+run = ["pm2 stop front || true", "pm2 delete front || true"]
+
+[tasks.clean]
+description = "Remove build artifacts and caches"
+run = "rm -rf dist *.egg-info src/*.egg-info src/vtesrulings/static/dist .pytest_cache .ruff_cache node_modules/.vite ansible/build"
+
+[tasks.deps-check]
+description = "Report whether `mise run update` would pull newer deps (read-only; non-zero if in-range updates available)"
+run = '''
+#!/usr/bin/env bash
+set -uo pipefail
+stale=0
+echo "Dependency freshness (read-only; ecosystem deps, not the tools themselves):"
+if out=$(uv lock --upgrade --dry-run 2>&1); then
+    if printf '%s\n' "$out" | grep -q 'No lockfile changes detected'; then
+        echo "  python deps (uv)     current"
+    else
+        stale=1; echo "  python deps (uv)     updates available:"
+        printf '%s\n' "$out" | grep -vE '^[[:space:]]*$|Resolved ' | sed 's/^/      /'
+    fi
+else echo "  python deps (uv)     (could not check)"; fi
+scratch=$(mktemp -d); trap 'rm -rf "$scratch"' EXIT
+cp package.json "$scratch/"
+if npmrep=$( (cd "$scratch" && npm install --package-lock-only >/dev/null 2>&1) &&
+    node -e '
+        const [fresh, cur, pkg] = process.argv.slice(1).map(f => require(f));
+        const direct = new Set(Object.keys({...pkg.dependencies, ...pkg.devDependencies}));
+        let hidden = 0;
+        for (const [path, f] of Object.entries(fresh.packages)) {
+          const c = cur.packages[path];
+          if (!path.startsWith("node_modules/") || !c || c.version === f.version) continue;
+          const name = path.slice(13);
+          if (direct.has(name)) console.log(`      ${name} ${c.version} -> ${f.version}`);
+          else hidden++;
+        }
+        if (hidden) console.log(`      (${hidden} transitive ${hidden > 1 ? "dependencies move" : "dependency moves"} too)`);
+      ' "$scratch/package-lock.json" ./package-lock.json ./package.json ); then
+    if [ -n "$npmrep" ]; then
+        stale=1
+        echo "  frontend deps (npm)  updates available:"
+        printf '%s\n' "$npmrep"
+    else
+        echo "  frontend deps (npm)  current (within ranges)"
+    fi
+else echo "  frontend deps (npm)  (could not check)"; fi
+npm outdated --json 2>/dev/null | node -e '
+    let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
+      const o=s.trim()?JSON.parse(s):{};
+      for(const [k,v] of Object.entries(o))
+        if(v.wanted!==v.latest)
+          console.log(`      ${k} ${v.current} (latest ${v.latest}: semver-major, manual bump)`);
+    });' || true
+exit "$stale"
+'''
+
+[tasks.release]
+description = "Cut a release: bump version (minor|major), commit, tag, push"
+usage = 'arg "[bump]" default="minor"'
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+bump="${usage_bump:-minor}"
+git diff --exit-code --quiet
+if mise run deps-check 2>/dev/null; then
+    prompt="Cut release (bump $bump)? [y/N] "
+else
+    echo "⚠ Dependencies are out of date — prefer 'mise run update' before cutting a release."
+    prompt="Release anyway, with stale deps? [y/N] "
+fi
+read -r -p "$prompt" ans
+[ "$ans" = y ] || [ "$ans" = Y ] || { echo "aborted"; exit 1; }
+new=$(uv version --bump "$bump" --short)
+git add pyproject.toml uv.lock
+git commit -m "release: v$new"
+git tag "v$new"
+git push origin HEAD
+git push origin "v$new"
+'''
+
+[tasks."ansible:galaxy"]
+description = "Install Ansible collection dependencies into ansible/galaxy_collections"
+dir = "ansible"
+run = "uv run --project .. ansible-galaxy collection install -r requirements.yml -p galaxy_collections"
+
+[tasks."ansible:build"]
+description = "Build the app wheel (bundles the compiled frontend) + export pinned requirements into ansible/build"
+run = [
+  "mkdir -p ansible/build",
+  "npm ci && npm run build",
+  "uv build --wheel --out-dir ansible/build",
+  "uv export --frozen --no-dev --no-hashes --no-emit-project -o ansible/build/requirements.txt",
+]
+
+[tasks."ansible:deploy"]
+description = "Deploy to gravelines (RELEASE_TAG=vX.Y / SOURCE=local / QUICK=1)"
+dir = "ansible"
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+if [ -z "${QUICK:-}" ]; then mise run ansible:galaxy; fi
+extra=""
+if [ -n "${RELEASE_TAG:-}" ]; then extra="-e release_tag=${RELEASE_TAG}"; fi
+if [ "${SOURCE:-}" = local ]; then mise run ansible:build; extra="$extra -e artifact_source=local"; fi
+if [ -n "${QUICK:-}" ]; then extra="$extra --tags app"; fi
+uv run --project .. ansible-playbook -i inventories/production playbooks/deploy.yml $extra
+'''
+
+[tasks."ansible:dry-deploy"]
+description = "Dry-run (--check --diff) of the deploy to gravelines"
+dir = "ansible"
+depends = ["ansible:galaxy"]
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+extra=""
+if [ -n "${RELEASE_TAG:-}" ]; then extra="-e release_tag=${RELEASE_TAG}"; fi
+if [ "${SOURCE:-}" = local ]; then mise run ansible:build; extra="$extra -e artifact_source=local"; fi
+uv run --project .. ansible-playbook -i inventories/production playbooks/deploy.yml --check --diff $extra
+'''
+
+[tasks."ansible:ping"]
+description = "Ansible ping — verify deploy-user SSH access to gravelines"
+dir = "ansible"
+depends = ["ansible:galaxy"]
+run = "uv run --project .. ansible rulings -i inventories/production -m ping"
+
+[tasks."ansible:lint"]
+description = "yamllint + ansible-lint on the ansible tree"
+dir = "ansible"
+depends = ["ansible:galaxy"]
+run = [
+  "uv run --project .. yamllint -s .",
+  "uv run --project .. ansible-lint",
+]

@@ -31,7 +31,7 @@ PACKAGE_DIR = os.path.dirname(__file__)
 # Single-worker in-memory index model: `app.state.rulings_index` is the live view of the
 # rulings, mutated in place on approval (see api.approve_proposal). Running more than one worker
 # would give each its own divergent index and racing repo checkouts, so the app MUST run with a
-# single worker (enforced at the ASGI/systemd layer, see `just serve` and epic #2).
+# single worker (enforced at the ASGI/systemd layer, see `mise run serve` and epic #2).
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.cards_map = await asgiref.sync.SyncToAsync(krcg.loader.load_local)()

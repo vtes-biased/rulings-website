@@ -19,7 +19,7 @@ then the whole modules the diff sits in, not just the hunks.
 ## Charter
 
 1. **Done-condition satisfied.** The board line stated one. Is it actually met? Verify it — run the
-   check if it is runnable (`just test`, `just lint`, `just typecheck`, a query, a curl).
+   check if it is runnable (`mise run test`, `mise run lint`, `mise run typecheck`, a query, a curl).
 2. **No new hazard.** KISS here means hazard-avoidance, not small diffs: non-local interdependency,
    behaviour not evident where it lives, a trap for a future agent without today's context. Could a
    fresh agent understand this from the files in front of it?

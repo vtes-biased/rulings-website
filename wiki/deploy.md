@@ -8,28 +8,28 @@ hardened systemd unit running **single-worker** hypercorn behind an nginx/TLS vh
 
 **Deploy is manual.** CI only builds and attaches the release artifacts — see
 [operations.md](operations.md). Ansible tooling comes from the repo-root project's `dev` group (the
-recipes call `uv run --project ..`); run everything from the `ansible/` directory.
+`ansible:*` tasks in `mise.toml` run from `ansible/` and call `uv run --project ..`).
 
 ```shell
-just ping          # ansible ping as the deploy user — run this first
-just dry-deploy    # --check --diff; review before applying
-just deploy        # deploy the latest GitHub Release
-RELEASE_TAG=v0.9 just deploy   # pin a specific release
-SOURCE=local just deploy       # build and deploy a local wheel (dev)
-QUICK=1 just deploy            # artifacts only (--tags app): wheel + unit, skip db/nginx
+mise run ansible:ping          # ansible ping as the deploy user — run this first
+mise run ansible:dry-deploy    # --check --diff; review before applying
+mise run ansible:deploy        # deploy the latest GitHub Release
+RELEASE_TAG=v0.9 mise run ansible:deploy   # pin a specific release
+SOURCE=local mise run ansible:deploy       # build and deploy a local wheel (dev)
+QUICK=1 mise run ansible:deploy            # artifacts only (--tags app): wheel + unit, skip db/nginx
 ```
 
-If `just ping` fails on auth, the `deploy` user's key is not authorised on gravelines yet.
+If `mise run ansible:ping` fails on auth, the `deploy` user's key is not authorised on gravelines yet.
 
 **A read-only `command` in a deploy role carries `check_mode: false`.** Ansible skips `command`
 under `--check`, and a skipped one still registers `rc: 0` with an empty stdout — so a task that
 reads a version and a task that acts on it either kill the dry run outright or make it report a
 change that would never happen. Both have bitten this deploy: `nginx_site`'s nginx-version probe
-(server-setup 1.0.7) and `asgi_service`'s venv-interpreter probe, which had `just dry-deploy`
+(server-setup 1.0.7) and `asgi_service`'s venv-interpreter probe, which had `mise run ansible:dry-deploy`
 announcing it would delete the live venv. Reading changes nothing; let it read.
 
-**Wait for the release build before deploying.** `just release` only tags; the wheel and the
-frontend dist are built by CI and attached to the GitHub Release afterwards, and `just deploy`
+**Wait for the release build before deploying.** `mise run release` only tags; the wheel and the
+frontend dist are built by CI and attached to the GitHub Release afterwards, and `mise run ansible:deploy`
 fetches those assets. Deploying in the gap installs an incomplete release and the site answers
 **502** — nginx is up, nothing is listening on the backend port. Deploying again once the assets are
 there fixes it; nothing needs to be undone. Check first:
@@ -54,7 +54,7 @@ The production ansible-vault password lives **in the repo, sops-encrypted**, in
 `ansible/.sops.yaml` lists as age recipients (`ssh-ed25519` or `ssh-rsa`). `ansible.cfg`'s
 `vault_password_file` is `ansible/vault-pass.sh`, an executable ansible runs: it prints what
 [`sops`](https://getsops.io) decrypts, so the password never sits on disk. Nothing to do before a
-deploy, `just lint` or an `ansible-vault` command but have `sops` (pinned in the repo's `mise.toml`:
+deploy, `mise run ansible:lint` or an `ansible-vault` command but have `sops` (pinned in the repo's `mise.toml`:
 `mise install`) and point it at your private key when it is not `~/.ssh/id_ed25519` or
 `~/.ssh/id_rsa`:
 
@@ -120,7 +120,7 @@ section of the archon profile page), with:
 
 - **Redirect URI** — archon matches it **verbatim**, no prefix match. Give each client only its own:
   `https://rulings.krcg.org/login/callback` for prod (derived from `SITE_URL_BASE`),
-  `http://127.0.0.1:5000/login/callback` for dev (the `just serve` bind, and the `SITE_URL_BASE`
+  `http://127.0.0.1:5000/login/callback` for dev (the `mise run serve` bind, and the `SITE_URL_BASE`
   default).
 - **Scope** — `profile:read` only. `user:impersonate` would hand us the whole archon API and we need
   nothing from it.

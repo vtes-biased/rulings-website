@@ -1,25 +1,25 @@
 # Operations — laptop to gravelines
 
-Tooling is `just` + `uv`, npm for the frontend. `just` with no recipe lists them.
+Tooling is `mise` + `uv`, npm for the frontend. `mise tasks` lists the tasks in `mise.toml`.
 
 | | |
 |---|---|
-| `just update` | `npm update` + `uv sync --upgrade --group dev` |
-| `just serve` | Vite watcher (via pm2) + hypercorn `--reload --workers 1` on `127.0.0.1:5000`; sources `.env` |
-| `just stop` | stop the pm2 frontend process |
-| `just lint` / `just fmt` | ruff check + format (line length 100, py313) |
-| `just typecheck` | `ty check --error-on-warning` — warnings are errors, so a stale ignore fails |
-| `just test` | `TESTING=1 uv run pytest` — the whole suite, no opt-outs |
-| `just deps-check` | read-only: would `just update` pull anything? Non-zero if so. The gate reads the lockfiles, so a fresh clone reports truthfully |
-| `just release [minor\|major]` | bump, commit, tag, push. Versioning is `major.minor` only |
-| `just clean` | drop build artifacts and caches |
+| `mise run update` | `npm update` + `uv sync --upgrade --group dev` |
+| `mise run serve` | Vite watcher (via pm2) + hypercorn `--reload --workers 1` on `127.0.0.1:5000`; sources `.env` |
+| `mise run stop` | stop the pm2 frontend process |
+| `mise run lint` / `mise run fmt` | ruff check + format (line length 100, py313) |
+| `mise run typecheck` | `ty check --error-on-warning` — warnings are errors, so a stale ignore fails |
+| `mise run test` | `TESTING=1 uv run pytest` — the whole suite, no opt-outs |
+| `mise run deps-check` | read-only: would `mise run update` pull anything? Non-zero if so. The gate reads the lockfiles, so a fresh clone reports truthfully |
+| `mise run release [minor\|major]` | bump, commit, tag, push. Versioning is `major.minor` only |
+| `mise run clean` | drop build artifacts and caches |
 
 Single test: `TESTING=1 uv run pytest tests/test_api.py::test_get_card`. Frontend only:
 `npm run build` (`npm run front` to watch).
 
 Both lockfiles — `uv.lock` and `package-lock.json` — are committed, and they are the pin: every
 build off a tag resolves to the versions that tag holds. CI and the ansible build install from them
-(`uv sync`, `npm ci`) and never resolve fresh; only `just update` moves them.
+(`uv sync`, `npm ci`) and never resolve fresh; only `mise run update` moves them.
 
 ## Runtime prerequisites
 
@@ -70,4 +70,4 @@ Card data is pinned by the locked krcg version.
 ## Deploy
 
 Manual, and its own page: [deploy.md](deploy.md). Nothing in this repo deploys on a tag — the release
-workflow publishes artifacts, and `cd ansible && just deploy` ships them.
+workflow publishes artifacts, and `mise run ansible:deploy` ships them.

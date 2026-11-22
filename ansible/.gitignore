@@ -1,4 +1,4 @@
-# Ansible collections installed by `just galaxy`
+# Ansible collections installed by `mise run ansible:galaxy`
 galaxy_collections/
 # Local build artifacts (SOURCE=local / release fetch)
 build/

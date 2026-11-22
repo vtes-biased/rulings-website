@@ -36,6 +36,9 @@ Context lives in the wiki, asks live on the board. Never the other way round.
   substantive changes land here.
 - **`/upkeep`** — maintenance, every 20 shipped lines or monthly: wiki lint, board eviction, harness
   ratchet.
+- **`/propose`** — weekly rulings curation: harvest and critically evaluate rulemonger feedback on
+  open proposals on `rulings.krcg.org`, draft a thematic batch of 6–8 rulings through a
+  fresh-context gatekeeper, and compact lessons into its bounded style guide.
 
 Egress review is by a fresh-context agent that has not seen the implementation conversation. Its
 findings are **blocking** or **advisory**; after two rejection rounds, escalate to the human rather
@@ -43,8 +46,8 @@ than a third.
 
 ## Commands
 
-`just` with no recipe lists them. The ones you will use: `just test`, `just lint`, `just typecheck`,
-`just serve`, `npm run build`. Details, prerequisites, env vars, CI and deploy are in
+`mise tasks` lists them. The ones you will use: `mise run test`, `mise run lint`, `mise run typecheck`,
+`mise run serve`, `npm run build`. Details, prerequisites, env vars, CI and deploy are in
 [`wiki/operations.md`](wiki/operations.md).
 
 ## Commits
