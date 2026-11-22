@@ -9,10 +9,15 @@ from . import models, proposal
 logger = logging.getLogger()
 DISCORD_WEBHOOK = os.getenv("DISCORD_WEBHOOK")
 DISCORD_SERVER_ID = os.getenv("DISCORD_SERVER_ID")
+DISCORD_API_URL = os.getenv("DISCORD_API_URL", "https://discord.com/api/v10").rstrip("/")
+DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
+DISCORD_USER_AGENT = "DiscordBot (https://rulings.krcg.org, 1.0)"
 SITE_URL_BASE = os.getenv("SITE_URL_BASE", "http://127.0.0.1:5000").rstrip("/")
 
 #: Discord's hard cap on an embed description.
 EMBED_LIMIT = 4096
+#: Discord's hard cap on a plain-text message body.
+CONTENT_LIMIT = 2000
 #: Default diff budget, kept under EMBED_LIMIT to leave room for headers.
 DIFF_LIMIT = 3800
 #: Per-ruling body text is truncated so one long ruling can't swallow the whole message.
@@ -204,3 +209,53 @@ def proposal_discussion_url(prop: proposal.Proposal):
     if not prop.channel_id:
         raise ValueError(f"Proposal {prop.uid} not submitted")
     return f"discord://discordapp.com/channels/{DISCORD_SERVER_ID}/{prop.channel_id}"
+
+
+async def get_thread_messages(channel_id: str, limit: int = 50) -> list[dict]:
+    """Read recent messages from a proposal's Discord thread, oldest first."""
+    assert DISCORD_BOT_TOKEN, "DISCORD_BOT_TOKEN not configured"
+    clamped = min(max(limit, 1), 100)
+    headers = {
+        "Authorization": f"Bot {DISCORD_BOT_TOKEN}",
+        "User-Agent": DISCORD_USER_AGENT,
+    }
+    async with (
+        aiohttp.ClientSession() as session,
+        session.get(
+            f"{DISCORD_API_URL}/channels/{channel_id}/messages",
+            params={"limit": clamped},
+            headers=headers,
+        ) as resp,
+    ):
+        resp.raise_for_status()
+        messages = await resp.json()
+    return [
+        {
+            "id": m["id"],
+            "author": m.get("author", {}).get("global_name")
+            or m.get("author", {}).get("username", ""),
+            "bot": bool(m.get("author", {}).get("bot")),
+            "timestamp": m.get("timestamp", ""),
+            "content": m.get("content", ""),
+            "embeds": [
+                {"title": e.get("title", ""), "description": e.get("description", "")}
+                for e in m.get("embeds", [])
+            ],
+        }
+        for m in reversed(messages)
+    ]
+
+
+async def post_thread_comment(channel_id: str, content: str) -> dict:
+    """Post a plain-text comment into a proposal's Discord thread via the webhook."""
+    assert DISCORD_WEBHOOK, "DISCORD_WEBHOOK not configured"
+    content = (content or "").strip()
+    if not content:
+        raise ValueError("Comment cannot be empty")
+    if len(content) > CONTENT_LIMIT:
+        raise ValueError(f"Comment exceeds Discord's {CONTENT_LIMIT}-character limit")
+    data = await _post(
+        DISCORD_WEBHOOK + f"?wait=true&thread_id={channel_id}",
+        {"content": content},
+    )
+    return {"id": data["id"], "channel_id": data.get("channel_id", channel_id)}

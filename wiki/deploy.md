@@ -68,7 +68,7 @@ pinned and reviewed, never refetched blindly) to the comma-separated `age` list 
 `ansible/.sops.yaml`, then, as an existing recipient, re-key the file:
 
 ```shell
-cd ansible && sops updatekeys secrets/vault-pass.sops.yaml
+cd ansible && sops updatekeys secrets/vault-pass.sops.yaml secrets/api-token.sops.yaml
 ```
 
 The password value is unchanged — you are only widening who can decrypt it. **Removing** a recipient
@@ -93,10 +93,17 @@ wired into the app env:
 vault_db_password: "<the vtes-rulings db password>"
 vault_session_secret_key: "<openssl rand -hex 32>"
 vault_discord_webhook: "https://discord.com/api/webhooks/..."
+vault_discord_bot_token: "<Discord bot token for reading proposal threads>"
+vault_api_token: "<openssl rand -hex 32, mirrored in ansible/secrets/api-token.sops.yaml>"
 vault_archon_client_secret: "<shown once at client registration>"
 vault_rulings_github_client_id: "Iv23li..."          # the App's Client ID (JWT issuer)
 vault_rulings_github_installation_id: "12345678"     # numeric
 ```
+
+The bot API token also lives sops-encrypted in `ansible/secrets/api-token.sops.yaml` (same
+recipients in `ansible/.sops.yaml` as the vault password) so `/propose` can decrypt it locally
+(`sops decrypt --extract '["api_token"]' ansible/secrets/api-token.sops.yaml`) without SSHing to
+gravelines. `API_TOKEN_USER_ID` is non-secret and sits in `vars.yml`.
 
 The installation id is the number in `https://github.com/settings/installations/<ID>`, or
 `gh api /repos/vtes-biased/vtes-rulings/installation --jq .id`.

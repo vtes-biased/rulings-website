@@ -1,6 +1,8 @@
 import dataclasses
 import datetime
 import logging
+import os
+import secrets
 import urllib.parse
 import uuid
 from dataclasses import asdict
@@ -16,9 +18,24 @@ logger = logging.getLogger()
 router = fastapi.APIRouter()
 #: Roles are archon's to grant and revoke: a demotion there must not wait out our session cookie.
 ROLES_MAX_AGE = datetime.timedelta(hours=1)
+#: Static bot Bearer token for non-approver API automation (e.g. /propose).
+API_TOKEN = os.getenv("API_TOKEN")
+API_TOKEN_USER_ID = os.getenv("API_TOKEN_USER_ID")
 
 
 async def get_current_user(request: Request) -> db.User | None:
+    auth = request.headers.get("authorization", "")
+    if auth.startswith("Bearer "):
+        token = auth.removeprefix("Bearer ")
+        if not API_TOKEN or not API_TOKEN_USER_ID or not secrets.compare_digest(token, API_TOKEN):
+            return None
+        try:
+            bot_uid = uuid.UUID(API_TOKEN_USER_ID)
+        except ValueError:
+            return None
+        user = await db.ensure_bot_user(bot_uid)
+        # Always non-approver: a leaked static token must never approve or read others' proposals.
+        return dataclasses.replace(user, approver=False)
     uid = request.session.get("user_id", None)
     if not uid:
         return None
@@ -116,13 +133,14 @@ class ProposalCtx:
 
 
 async def proposal_update(request: Request):
-    """Load the session proposal FOR UPDATE, run the handler, then persist it.
+    """Load the active proposal (`X-Proposal` header or session) FOR UPDATE, run the handler,
+    then persist it.
 
     If the handler raises, the exception is re-raised at the `yield` (FastAPI passes
     path-operation errors into yield dependencies), so the persist is skipped and the
     connection context rolls back.
     """
-    prop_uid = request.session.get("proposal", None)
+    prop_uid = request.headers.get("x-proposal") or request.session.get("proposal", None)
     if not prop_uid:
         raise HTTPException(405)
     user = await get_current_user(request)
@@ -141,12 +159,13 @@ async def proposal_update(request: Request):
 
 async def proposal_readonly(request: Request) -> proposal.Manager:
     prop = None
-    prop_uid = request.session.get("proposal", None)
+    header_uid = request.headers.get("x-proposal")
+    prop_uid = header_uid or request.session.get("proposal", None)
     if prop_uid:
         data = await db.get_proposal(prop_uid)
         if data:
             prop = proposal.Proposal(**data)
-        else:
+        elif not header_uid:
             request.session.pop("proposal", None)
     return build_manager(request, prop)
 
@@ -247,6 +266,68 @@ async def get_group(group_id: str, manager: proposal.Manager = Depends(proposal_
         raise HTTPException(404)
 
 
+async def _get_owned_proposal(proposal_id: str, user: db.User) -> proposal.Proposal:
+    data = await db.get_proposal(proposal_id)
+    if not data:
+        raise HTTPException(404)
+    prop = proposal.Proposal(**data)
+    if prop.usr != str(user.uid) and not user.approver:
+        raise HTTPException(403)
+    return prop
+
+
+@router.get("/proposal")
+async def list_proposals(user: db.User = Depends(require_user)):
+    rows = await db.get_user_proposals(user.uid)
+    if user.approver:
+        seen = {p["uid"] for p in rows}
+        for p in await db.get_submitted_proposals():
+            if p["uid"] not in seen:
+                rows.append(p)
+    return [
+        {
+            "uid": p["uid"],
+            "usr": p["usr"],
+            "name": p.get("name", ""),
+            "description": p.get("description", ""),
+            "channel_id": p.get("channel_id", ""),
+            "groups": len(p.get("groups", {})),
+            "rulings": sum(len(r) for r in p.get("rulings", {}).values()),
+            "references": len(p.get("references", {})),
+        }
+        for p in rows
+    ]
+
+
+@router.get("/proposal/{proposal_id}")
+async def get_proposal(proposal_id: str, request: Request, user: db.User = Depends(require_user)):
+    prop = await _get_owned_proposal(proposal_id, user)
+    ret = asdict(prop)
+    ret["diff"] = asdict(build_manager(request, prop).diff())
+    return ret
+
+
+@router.get("/proposal/{proposal_id}/comments")
+async def get_proposal_comments(
+    proposal_id: str, limit: int = 50, user: db.User = Depends(require_user)
+):
+    prop = await _get_owned_proposal(proposal_id, user)
+    if not prop.channel_id:
+        raise ValueError("Proposal must be submitted first")
+    return await discord.get_thread_messages(prop.channel_id, limit=limit)
+
+
+@router.post("/proposal/{proposal_id}/comments")
+async def post_proposal_comment(
+    proposal_id: str, request: Request, user: db.User = Depends(require_user)
+):
+    prop = await _get_owned_proposal(proposal_id, user)
+    if not prop.channel_id:
+        raise ValueError("Proposal must be submitted first")
+    params = await get_params(request)
+    return await discord.post_thread_comment(prop.channel_id, params.get("content", ""))
+
+
 @router.post("/proposal")
 async def start_proposal(request: Request, user: db.User = Depends(require_user)):
     prop = proposal.Proposal(uid=utils.random_uid8(), usr=str(user.uid))
@@ -267,7 +348,8 @@ async def update_proposal(ctx: ProposalCtx = Depends(proposal_update)):
 @router.delete("/proposal")
 async def delete_proposal(ctx: ProposalCtx = Depends(proposal_update)):
     await db.delete_proposal(ctx.conn, asdict(ctx.prop))
-    ctx.request.session.pop("proposal", None)
+    if ctx.request.session.get("proposal") == ctx.prop.uid:
+        ctx.request.session.pop("proposal", None)
     return {}
 
 
@@ -305,7 +387,8 @@ async def approve_proposal(ctx: ProposalCtx = Depends(proposal_update)):
     # the row. The post-yield update_proposal in proposal_update then no-ops (row gone).
     await db.delete_proposal(ctx.conn, asdict(ctx.prop))
     await ctx.conn.commit()
-    ctx.request.session.pop("proposal", None)
+    if ctx.request.session.get("proposal") == ctx.prop.uid:
+        ctx.request.session.pop("proposal", None)
     # Best-effort follow-ups: an announcement or index-reload failure must not resurrect the proposal.
     try:
         await discord.proposal_approved(ctx.prop, diff)

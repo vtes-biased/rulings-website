@@ -13,15 +13,29 @@ feedback contradicts the cited Rules Director.
 
 ## Phase 1: Harvest & Critically Evaluate Feedback
 
-1. **Read open proposals and their Discord threads** on gravelines (`152.228.170.51`):
-   - Query the `proposals` table in `vtes-rulings` (`sudo -u postgres psql -d vtes-rulings`) for all
-     open proposals, their `uid`, `usr`, `data->>'name'`, `data->>'channel_id'`, and full `data`.
-   - For each submitted proposal with `channel_id` set, read its Discord thread messages via
-     `GET https://discord.com/api/v10/channels/{channel_id}/messages?limit=50` using the bot token in
-     `/etc/krcg-bot/env` (`Authorization: Bot <DISCORD_TOKEN>`, `User-Agent: DiscordBot
-     (https://rulings.krcg.org, 1.0)`).
-   - Also check recent commits in `vtes-biased/vtes-rulings` (`git log -p -n 5`) to see if an
-     approver edited our wording before approving a previous proposal.
+All calls to `https://rulings.krcg.org/api/...` are **HTTPS-only (zero SSH)**. Decrypt the static
+bot Bearer token once at the start of the run:
+
+```shell
+API_TOKEN=$(sops decrypt --extract '["api_token"]' ansible/secrets/api-token.sops.yaml)
+```
+
+Pass `-H "Authorization: Bearer $API_TOKEN"` on every authenticated call, plus `-H "X-Proposal: <uid>"`
+on proposal-scoped calls (`/api/proposal` PUT/DELETE/submit, `/api/reference`, `/api/ruling/...`,
+`/api/group/...`, `/api/check-consistency`). The bot token is strictly non-approver: it can only
+list, inspect, edit, submit, and comment on its own proposals.
+
+1. **Read open proposals and their Discord threads** via the HTTPS API:
+   - `GET https://rulings.krcg.org/api/proposal` lists our open proposals (`uid`, `name`,
+     `description`, `channel_id`, and `groups`/`rulings`/`references` counts).
+   - For each proposal, `GET https://rulings.krcg.org/api/proposal/{uid}` returns the full overlay
+     and computed `diff`.
+   - For each submitted proposal (`channel_id` non-empty), read its Discord thread messages via
+     `GET https://rulings.krcg.org/api/proposal/{uid}/comments?limit=50` (returned oldest-first with
+     `author`, `bot`, `timestamp`, `content`, and `embeds`).
+   - Also check recent commits in `vtes-biased/vtes-rulings` (`gh api repos/vtes-biased/vtes-rulings/commits?per_page=5`
+     or `git log -p -n 5` on a local clone) to see if an approver edited our wording before
+     approving a previous proposal.
 2. **Critically evaluate every comment — do NOT treat rulemonger remarks as unquestionable gospel:**
    - Rulemongers can disagree with each other, misread a card, or suggest wording that contradicts
      the Rules Director's post.
@@ -33,27 +47,30 @@ feedback contradicts the cited Rules Director.
      3. the rulebook via `primogen`'s `vtes_rules_search` / `vtes_rules_read`.
    - **When feedback is valid** (editorial tightening, spotting an existing duplicate or group
      ruling, pointing out it's pure card text, flipping to a clearer negative/exception case):
-     - Apply the edits to the proposal on `http://127.0.0.1:8095/api/...` (minting an `itsdangerous.TimestampSigner` session cookie with `SESSION_SECRET_KEY` from `/etc/rulings/rulings.env` for the proposer `user_id` and `proposal` uid).
+     - Apply the edits to `https://rulings.krcg.org/api/...` with `Authorization: Bearer $API_TOKEN`
+       and `X-Proposal: <uid>`.
      - Run `GET /api/check-consistency` (which also prunes orphaned new references), then
        `POST /api/proposal/submit` to post the `— updated 🔄` embed to the Discord thread.
-     - Post a short summary comment to the thread (`POST {DISCORD_WEBHOOK}?wait=true&thread_id={channel_id}`)
-       noting how the feedback was applied.
+     - Post a short summary comment to the thread via
+       `POST https://rulings.krcg.org/api/proposal/{uid}/comments` (`{"content": "..."}`) noting how
+       the feedback was applied.
      - Distill any generalizable lesson into the Style Guide below (respecting its line budget).
    - **When feedback contradicts the Rules Director's ruling or two judges disagree:**
      - Do **not** corrupt the proposal or add a contradictory rule to the Style Guide.
-     - Post a polite clarification to the Discord thread quoting the exact Rules Director post and
-       link, or surface the deadlock to the owner.
+     - Post a polite clarification via `POST https://rulings.krcg.org/api/proposal/{uid}/comments`
+       quoting the exact Rules Director post and link, or surface the deadlock to the owner.
 
 ---
 
 ## Phase 2: Draft → Fresh-Context Gatekeeper
 
 1. **Backpressure check:**
-   - Count our open submitted proposals (`channel_id <> ''`) and their total changed rulings on
-     `rulings.krcg.org`.
+   - From `GET https://rulings.krcg.org/api/proposal`, count our open submitted proposals
+     (`channel_id != ""`) and sum their `rulings` counts.
    - If there are **more than 2 open batch proposals** or **more than 12 open ruling changes** of
      ours awaiting review, **propose 0 new rulings this week** — stop after Phase 1.
-   - Also delete any unsubmitted draft (`channel_id == ''`) we abandoned so drafts never accumulate.
+   - Also delete any unsubmitted draft (`channel_id == ""`) we abandoned (`DELETE /api/proposal`
+     with `X-Proposal: <uid>`) so drafts never accumulate.
 2. **Candidate selection (6–8 items, one thematic batch):**
    - Pull a small thematic batch of 6–8 candidate rulings (from `../primogen` `[M:rulings]` needs or
      `primogen audit -since 2017-01-01 -twda`).
@@ -71,10 +88,11 @@ feedback contradicts the cited Rules Director.
      against Gate 1 and Gate 2. Drop or rewrite anything the gatekeeper rejects before creating the
      proposal on `rulings.krcg.org`.
 4. **Create, verify, and submit:**
-   - Create the proposal (`POST /api/proposal`), add references (`POST /api/reference` — always use
-     `https://usenet.krcg.org/t/vekn-<TopicId>/#m<N>` or `www.vekn.net` / `www.blackchantry.com`, no
-     leading/trailing whitespace), add/update rulings, run `GET /api/check-consistency` (must return
-     `[]`), and `POST /api/proposal/submit`.
+   - Create the proposal (`POST https://rulings.krcg.org/api/proposal` with `name` and
+     `description`), then pass `X-Proposal: <uid>` on subsequent calls: add references
+     (`POST /api/reference` — always use `https://usenet.krcg.org/t/vekn-<TopicId>/#m<N>` or
+     `www.vekn.net` / `www.blackchantry.com`, no leading/trailing whitespace), add/update rulings,
+     run `GET /api/check-consistency` (must return `[]`), and `POST /api/proposal/submit`.
 
 ---
 

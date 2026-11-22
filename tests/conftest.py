@@ -192,17 +192,30 @@ class FakeUsenet:
 
 
 class FakeDiscord:
-    """The webhook endpoint, recording what was posted and answering as Discord does."""
+    """The webhook + REST API endpoints, recording what was sent and answering as Discord does."""
 
     def __init__(self):
         self.reset()
 
     def reset(self):
         self.posts: list[dict] = []
+        self.reads: list[dict] = []
+        self.messages: dict[str, list[dict]] = {}
 
     async def execute(self, request):
         self.posts.append({"query": dict(request.query), "payload": await request.json()})
         return aiohttp.web.json_response({"id": "1", "channel_id": "42"})
+
+    async def channel_messages(self, request):
+        channel_id = request.match_info["channel_id"]
+        self.reads.append(
+            {
+                "channel_id": channel_id,
+                "query": dict(request.query),
+                "authorization": request.headers.get("Authorization", ""),
+            }
+        )
+        return aiohttp.web.json_response(self.messages.get(channel_id, []))
 
 
 async def _serve(routes) -> tuple[str, aiohttp.web.AppRunner]:
@@ -245,11 +258,22 @@ async def _usenet_server():
 @pytest_asyncio.fixture(name="_discord_server", scope="session")
 async def _discord_server():
     fake = FakeDiscord()
-    url, runner = await _serve([aiohttp.web.post("/webhook", fake.execute)])
-    original = discord.DISCORD_WEBHOOK
+    url, runner = await _serve(
+        [
+            aiohttp.web.post("/webhook", fake.execute),
+            aiohttp.web.get("/channels/{channel_id}/messages", fake.channel_messages),
+        ]
+    )
+    orig_webhook = discord.DISCORD_WEBHOOK
+    orig_api = discord.DISCORD_API_URL
+    orig_token = discord.DISCORD_BOT_TOKEN
     discord.DISCORD_WEBHOOK = f"{url}/webhook"
+    discord.DISCORD_API_URL = url
+    discord.DISCORD_BOT_TOKEN = "test-discord-bot-token"
     yield fake
-    discord.DISCORD_WEBHOOK = original
+    discord.DISCORD_WEBHOOK = orig_webhook
+    discord.DISCORD_API_URL = orig_api
+    discord.DISCORD_BOT_TOKEN = orig_token
     await runner.cleanup()
 
 

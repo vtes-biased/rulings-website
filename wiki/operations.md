@@ -38,7 +38,8 @@ build off a tag resolves to the versions that tag holds. CI and the ansible buil
   The *read* path is anonymous HTTPS on the public repo.
 
 Env vars are read directly via `os.getenv`, no settings object: `DISCORD_WEBHOOK`,
-`DISCORD_SERVER_ID`, `ARCHON_URL`, `ARCHON_CLIENT_ID`, `ARCHON_CLIENT_SECRET`, `SESSION_SECRET_KEY`,
+`DISCORD_SERVER_ID`, `DISCORD_BOT_TOKEN`, `DISCORD_API_URL`, `API_TOKEN`, `API_TOKEN_USER_ID`,
+`ARCHON_URL`, `ARCHON_CLIENT_ID`, `ARCHON_CLIENT_SECRET`, `SESSION_SECRET_KEY`,
 `SITE_URL_BASE` (builds the redirect URI archon matches exactly), `DATABASE_URL`, `RULINGS_GIT`,
 `RULINGS_GITHUB_{APP_ID,INSTALLATION_ID,PRIVATE_KEY}`, `KRCG_STATIC_{REPO,INSTALLATION_ID}`,
 `GIT_AUTHOR_{NAME,EMAIL}`, `GIT_SSH_COMMAND` (only for an ssh `RULINGS_GIT`), `TESTING`.
@@ -52,11 +53,13 @@ handling. `tests/conftest.py` provides them all:
 - a vendored rulings snapshot (`tests/fixtures/rulings/`, commit pinned in `SOURCE`) served as a
   local bare git remote via `RULINGS_GIT`;
 - a throwaway `vtes-rulings-test` database, created and dropped per session;
-- **archon** and the **Discord webhook** as two `aiohttp` servers on ephemeral local ports, with
-  `archon.ARCHON_URL` and `discord.DISCORD_WEBHOOK` rebound at them. The `client` fixture takes both
-  and resets them per test, so no test can reach the real services whether it names them or not.
-  Tests script an answer (`fake_archon.info`, `fake_archon.token_status`) and read back what
-  was sent (`fake_archon.spent`, `fake_discord.posts`).
+- **archon** and **Discord** (webhook + `GET /channels/{id}/messages` REST API) as two `aiohttp`
+  servers on ephemeral local ports, with `archon.ARCHON_URL`, `discord.DISCORD_WEBHOOK`,
+  `discord.DISCORD_API_URL`, and `discord.DISCORD_BOT_TOKEN` rebound at them. The `client` fixture
+  takes both and resets them per test, so no test can reach the real services whether it names them
+  or not. Tests script an answer (`fake_archon.info`, `fake_archon.token_status`,
+  `fake_discord.messages`) and read back what was sent (`fake_archon.spent`, `fake_discord.posts`,
+  `fake_discord.reads`).
 
 Card data is pinned by the locked krcg version.
 

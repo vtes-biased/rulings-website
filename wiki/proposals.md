@@ -21,13 +21,25 @@ edit that lands back on the base value drops itself.
 
 ## Request lifecycle
 
-The current proposal id lives in the session (`request.session["proposal"]`). Two FastAPI
-dependencies in `api.py`:
+The active proposal id comes from the `X-Proposal` request header (stateless API callers) or the
+session (`request.session["proposal"]`, browser sessions), with the header taking precedence. Two
+FastAPI dependencies in `api.py`:
 
 - **`proposal_update`** — a yield-dependency: loads the proposal `FOR UPDATE`, yields a
   `ProposalCtx`, persists after the endpoint returns. A path-operation error is re-raised at the
   `yield`, so the persist is skipped and the connection rolls back.
-- **`proposal_readonly`** — returns a `Manager` over the base plus the session's proposal, if any.
+- **`proposal_readonly`** — returns a `Manager` over the base plus the active proposal, if any.
+
+For API inspection and Discord discussion (all require authentication; non-approvers are scoped to
+their own proposals, approvers also see submitted proposals from others):
+
+- **`GET /api/proposal`** — lists proposals with metadata and change counts (`groups`, `rulings`,
+  `references`).
+- **`GET /api/proposal/{uid}`** — returns the full proposal overlay plus its computed `diff`.
+- **`GET /api/proposal/{uid}/comments`** — reads the proposal's Discord thread via
+  `DISCORD_BOT_TOKEN`, returned oldest-first. Requires a submitted proposal (`channel_id` set).
+- **`POST /api/proposal/{uid}/comments`** — posts a plain-text comment (`{"content": …}`, max 2000
+  chars) into the proposal's Discord thread via `DISCORD_WEBHOOK`. Requires a submitted proposal.
 
 ## Approval
 

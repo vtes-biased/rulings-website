@@ -55,6 +55,21 @@ Archon refusing with a 400 is final: strip the flag and the token, which ends *e
 user. `refresh_token` NULL with `roles_checked_at` set is the dead-chain marker; both NULL just means
 never checked. Any other failure keeps the roles and defers the retry an hour.
 
+## Bot API token
+
+For headless automation (such as `/propose`), `api.get_current_user` also accepts an env-configured
+static Bearer token (`API_TOKEN` + `API_TOKEN_USER_ID`, compared in constant time):
+
+- **Dedicated bot identity**: `db.ensure_bot_user` creates the non-approver `users` row
+  (`uid=API_TOKEN_USER_ID`, `vekn='rulings-bot'`, `archon_uid='bot:rulings'`) on first use — no
+  human user row is shared and no manual DB seeding is needed.
+- **Always non-approver**: even if the backing `users` row has `approver=True`, Bearer auth returns
+  a copy with `approver=False`. A leaked token can draft, edit, submit, and comment on its own
+  proposals, but can never approve rulings or read other users' proposals.
+- **No archon round-trip**: Bearer auth skips `recheck_roles`.
+- **No cookie fallback**: a request carrying an invalid `Authorization: Bearer …` header resolves
+  to unauthenticated (`None`) rather than falling back to any session cookie.
+
 ## Traps
 
 - **`GET /{page:path}` is the last route in `__init__.py`** and swallows anything registered after

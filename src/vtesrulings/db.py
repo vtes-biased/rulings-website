@@ -125,6 +125,27 @@ async def get_user(uid: uuid.UUID) -> User | None:
         return await ret.fetchone()
 
 
+async def ensure_bot_user(uid: uuid.UUID) -> User:
+    """Return the bot user row for `uid`, creating a dedicated non-approver row on first use."""
+    user = await get_user(uid)
+    if user:
+        return user
+    async with (
+        POOL.connection() as conn,
+        conn.cursor(row_factory=psycopg.rows.class_row(User)) as cursor,
+    ):
+        await cursor.execute(
+            "INSERT INTO users (uid, vekn, archon_uid, approver) "
+            "VALUES (%s, 'rulings-bot', 'bot:rulings', FALSE) "
+            "ON CONFLICT (uid) DO NOTHING",
+            [uid],
+        )
+        ret = await cursor.execute("SELECT * FROM users WHERE uid=%s", [uid])
+        user = await ret.fetchone()
+        assert user is not None
+        return user
+
+
 async def claim_roles_check(user: User) -> bool:
     """Stamp the row as checked *before* asking archon, and report whether we got the claim.
 

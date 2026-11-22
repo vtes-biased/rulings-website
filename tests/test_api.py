@@ -1381,6 +1381,162 @@ async def test_a_dead_token_chain_logs_the_user_out(client, fake_archon):
     assert (await client.post("/api/proposal", json={"name": "Nope"})).status_code == 401
 
 
+async def test_bearer_token_and_header_driven_proposal_workflow(
+    client, fake_discord, fake_archon, monkeypatch
+):
+    """A static Bearer token authenticates as its dedicated bot user (created on first use,
+    always non-approver, never touching archon) and `X-Proposal` drives the whole API without a
+    browser session."""
+    bot_uid = "11111111-1111-4111-8111-111111111111"
+    other_user = await db.login_user("other-archon", "1000002", False, None)
+    monkeypatch.setattr(vtesrulings.api, "API_TOKEN", "secret-bot-token")
+    monkeypatch.setattr(vtesrulings.api, "API_TOKEN_USER_ID", bot_uid)
+
+    # wrong Bearer token is refused and never falls back to a cookie session
+    assert (
+        await client.get("/api/proposal", headers={"Authorization": "Bearer wrong"})
+    ).status_code == 401
+
+    auth = {"Authorization": "Bearer secret-bot-token"}
+    created = await client.post(
+        "/api/proposal", json={"name": "Bot batch", "description": "Automated"}, headers=auth
+    )
+    assert created.status_code == 200
+    uid = created.json()["uid"]
+    assert not fake_archon.spent  # bot auth never touches archon
+    # the dedicated bot user row was created on first use as a non-approver
+    bot_row = await user_row(bot_uid)
+    assert (bot_row.vekn, bot_row.approver) == ("rulings-bot", False)
+
+    # even if the backing row were marked approver in DB, Bearer auth stays non-approver
+    await run("UPDATE users SET approver=TRUE WHERE vekn='rulings-bot'")
+
+    # X-Proposal selects the proposal for both writes and reads, with no session cookie
+    headers = {**auth, "X-Proposal": uid}
+    assert (
+        await client.post(
+            "/api/ruling/100015", json={"text": "Bot ruling [RTR 20070707]"}, headers=headers
+        )
+    ).status_code == 200
+    card = (await client.get("/api/card/100015", headers=headers)).json()
+    assert any(
+        r["text"] == "Bot ruling [RTR 20070707]" and r["state"] == "NEW" for r in card["rulings"]
+    )
+    assert (await client.get("/api/check-consistency", headers=headers)).json() == []
+    assert (await client.post("/api/proposal/submit", headers=headers)).status_code == 200
+    assert fake_discord.posts[-1]["payload"]["thread_name"] == "Proposal: Bot batch"
+
+    # even though the backing user row has approver=True, Bearer auth is strictly non-approver
+    assert (await client.post("/api/proposal/approve", headers=headers)).status_code == 401
+
+    # another user's submitted proposal is hidden from the bot's list and 403 on direct read
+    await db.insert_proposal(
+        {
+            "uid": "OTHER001",
+            "usr": str(other_user.uid),
+            "name": "Someone else",
+            "description": "",
+            "channel_id": "99",
+            "groups": {},
+            "rulings": {},
+            "references": {},
+        }
+    )
+    listed = (await client.get("/api/proposal", headers=auth)).json()
+    assert [p["uid"] for p in listed] == [uid]
+    assert (listed[0]["rulings"], listed[0]["channel_id"]) == (1, "42")
+    assert (await client.get("/api/proposal/OTHER001", headers=auth)).status_code == 403
+    assert (await client.get("/api/proposal/NOPE9999", headers=auth)).status_code == 404
+
+    detail = (await client.get(f"/api/proposal/{uid}", headers=auth)).json()
+    assert detail["uid"] == uid
+    assert detail["diff"]["rulings"][0]["target"]["uid"] == "100015"
+
+    assert (await client.delete("/api/proposal", headers=headers)).status_code == 200
+    assert await db.get_proposal(uid) is None
+
+
+async def test_proposal_list_and_comments_respect_ownership_and_approver_role(client, fake_discord):
+    """Non-approvers see and comment only on their own submitted proposals; approvers also see
+    others' submitted proposals (never drafts) and can read/comment on their threads."""
+    prop_uid = await login_and_proposal(client)
+    # comments require the proposal to have a Discord thread first
+    assert (await client.get(f"/api/proposal/{prop_uid}/comments")).status_code == 400
+    assert (
+        await client.post(f"/api/proposal/{prop_uid}/comments", json={"content": "Too early"})
+    ).status_code == 400
+
+    assert (await client.post("/api/proposal/submit")).status_code == 200
+    # Discord returns newest-first; the API returns oldest-first with normalized fields
+    fake_discord.messages["42"] = [
+        {
+            "id": "m2",
+            "author": {"username": "rulemonger", "global_name": "Ankha", "bot": False},
+            "timestamp": "2026-11-22T12:05:00+00:00",
+            "content": "Trim the last clause.",
+            "embeds": [],
+        },
+        {
+            "id": "m1",
+            "author": {"username": "Rulings Bot", "bot": True},
+            "timestamp": "2026-11-22T12:00:00+00:00",
+            "content": "",
+            "embeds": [{"title": "Test", "description": "Initial diff"}],
+        },
+    ]
+    comments = (await client.get(f"/api/proposal/{prop_uid}/comments")).json()
+    assert [c["id"] for c in comments] == ["m1", "m2"]
+    assert (comments[0]["bot"], comments[0]["embeds"][0]["title"]) == (True, "Test")
+    assert (comments[1]["author"], comments[1]["bot"], comments[1]["content"]) == (
+        "Ankha",
+        False,
+        "Trim the last clause.",
+    )
+    assert fake_discord.reads[-1]["authorization"] == "Bot test-discord-bot-token"
+
+    # posting a comment validates content and forwards to the webhook thread
+    assert (
+        await client.post(f"/api/proposal/{prop_uid}/comments", json={"content": "   "})
+    ).status_code == 400
+    assert (
+        await client.post(f"/api/proposal/{prop_uid}/comments", json={"content": "x" * 2001})
+    ).status_code == 400
+    posted = await client.post(
+        f"/api/proposal/{prop_uid}/comments", json={"content": "Applied, thanks!"}
+    )
+    assert posted.status_code == 200
+    assert posted.json() == {"id": "1", "channel_id": "42"}
+    assert fake_discord.posts[-1] == {
+        "query": {"wait": "true", "thread_id": "42"},
+        "payload": {"content": "Applied, thanks!"},
+    }
+
+    # an unsubmitted draft of the same author
+    draft_uid = (await client.post("/api/proposal", json={"name": "Draft"})).json()["uid"]
+
+    # another non-approver cannot read or comment
+    await client.post("/logout")
+    await client.post("/login", data={"username": "other-player"})
+    assert (await client.get("/api/proposal")).json() == []
+    assert (await client.get(f"/api/proposal/{prop_uid}")).status_code == 403
+    assert (await client.get(f"/api/proposal/{prop_uid}/comments")).status_code == 403
+    assert (
+        await client.post(f"/api/proposal/{prop_uid}/comments", json={"content": "Intruder"})
+    ).status_code == 403
+
+    # an approver sees submitted proposals (not drafts) and can inspect + comment
+    await client.post("/logout")
+    await client.post("/login", data={"username": "rulemonger", "approver": "1"})
+    listed = (await client.get("/api/proposal")).json()
+    assert [p["uid"] for p in listed] == [prop_uid]
+    assert draft_uid not in {p["uid"] for p in listed}
+    assert (await client.get(f"/api/proposal/{prop_uid}")).status_code == 200
+    assert (await client.get(f"/api/proposal/{prop_uid}/comments")).status_code == 200
+    assert (
+        await client.post(f"/api/proposal/{prop_uid}/comments", json={"content": "LGTM"})
+    ).status_code == 200
+
+
 async def test_approval_needs_the_approver_flag_and_publishes(client, fake_discord):
     """Approval is the one gated action left: a plain member is refused, an archon approver
     merges the overlay into the YAML, pushes it, announces it and drops the proposal row.
