@@ -45,10 +45,14 @@
     --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
 }
 
-/* auto-follow the OS; the toggle overrides by stamping data-theme on <html> */
+/* auto-follow the OS; the toggle cycles auto → light → dark by stamping data-theme on <html> */
 :root { color-scheme: light dark; }
 :root[data-theme="light"] { color-scheme: light; }
 :root[data-theme="dark"] { color-scheme: dark; }
+[data-theme-icon] { display: none; }
+:root:not([data-theme]) [data-theme-icon="auto"],
+:root[data-theme="light"] [data-theme-icon="light"],
+:root[data-theme="dark"] [data-theme-icon="dark"] { display: inline; }
 
 @layer base {
     body { @apply bg-bg font-text text-text antialiased; }

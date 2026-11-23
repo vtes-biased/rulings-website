@@ -51,16 +51,35 @@ function navActivateCurrent() {
     }
 }
 
+const THEME_CYCLE = ["auto", "light", "dark"] as const
+const THEME_LABELS = {
+    auto: "Theme: auto (follows OS) — click for light",
+    light: "Theme: light — click for dark",
+    dark: "Theme: dark — click for auto",
+} as const
+
 function setupThemeToggle() {
     const toggle = document.getElementById("themeToggle")
     if (!toggle) return
+    const root = document.documentElement
+    const current = (): (typeof THEME_CYCLE)[number] =>
+        root.dataset.theme === "light" || root.dataset.theme === "dark" ? root.dataset.theme : "auto"
+    const syncLabel = () => {
+        const label = THEME_LABELS[current()]
+        toggle.title = label
+        toggle.setAttribute("aria-label", label)
+    }
+    syncLabel()
     toggle.addEventListener("click", () => {
-        const root = document.documentElement
-        const effective = root.dataset.theme
-            || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
-        const next = effective === "dark" ? "light" : "dark"
-        root.dataset.theme = next
-        try { localStorage.setItem("theme", next) } catch (e) { /* ignore */ }
+        const next = THEME_CYCLE[(THEME_CYCLE.indexOf(current()) + 1) % THEME_CYCLE.length]
+        if (next === "auto") {
+            delete root.dataset.theme
+            try { localStorage.removeItem("theme") } catch (e) { /* ignore */ }
+        } else {
+            root.dataset.theme = next
+            try { localStorage.setItem("theme", next) } catch (e) { /* ignore */ }
+        }
+        syncLabel()
     })
 }
 

@@ -29,7 +29,7 @@
     <meta name="theme-color" content="#101017">
     <script>
         // stamp the saved theme before paint to avoid a flash
-        try { var t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t } catch (e) { }
+        try { var t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t } catch (e) { }
         // hide session-dismissed alerts before paint (the alert markup is server-rendered visible)
         try {
             var keys = [];
@@ -60,8 +60,10 @@
             </a>
             {% endif %}
             <div class="ml-auto flex items-center gap-2">
-                <button type="button" id="themeToggle" class="nav-link" aria-label="Toggle theme">
-                    {{ icon("circle-half") }}
+                <button type="button" id="themeToggle" class="nav-link" aria-label="Theme: auto (follows OS) — click for light" title="Theme: auto (follows OS) — click for light">
+                    <span data-theme-icon="auto">{{ icon("circle-half") }}</span>
+                    <span data-theme-icon="light">{{ icon("sun-fill") }}</span>
+                    <span data-theme-icon="dark">{{ icon("moon-fill") }}</span>
                 </button>
                 {% if user %}
                 <form method="post" action="/logout" id="logoutForm">

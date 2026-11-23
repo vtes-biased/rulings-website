@@ -13,7 +13,8 @@ desaturated blue / purple / teal / green, crimson only as the tiny capacity badg
 reaches for any of them is reversing a decision, not exercising taste.
 
 Light is the default theme, a cool quasi-white document; dark flips the semantic tokens via
-`prefers-color-scheme` and a `[data-theme]` override. Chrome (navbar, footer) stays dark in both.
+`prefers-color-scheme`, and the navbar toggle cycles `auto` (OS) → `light` → `dark` via
+`[data-theme]`. Chrome (navbar, footer) stays dark in both.
 
 Accents: dusk amethyst `--primary`, petrol `--secondary`, orchid. Card names in ruling text are
 petrol and italic (`.krcg-card`). **Discipline and type glyphs are not** — `.krcg-icon` inherits the
